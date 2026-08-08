@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Entry } from '@napi-rs/keyring';
-import { setSecret, getSecret, deleteSecret, VaultOperationError, type AuthRef } from './vault.ts';
+import { VaultError } from '@chimera/core';
+import { setSecret, getSecret, deleteSecret, type AuthRef } from './vault.ts';
 
 // Real OS keychain, not a mock — the ticket asks for this to be "skipped,
 // not faked" when no keychain daemon is available (e.g. some CI runners).
@@ -94,11 +95,11 @@ function randomSuffix(): string {
 }
 
 test('getSecret rejects a malformed handle without touching the keychain', () => {
-  assert.throws(() => getSecret('not-a-real-handle' as AuthRef), VaultOperationError);
+  assert.throws(() => getSecret('not-a-real-handle' as AuthRef), VaultError);
 });
 
 test('deleteSecret rejects a malformed handle without touching the keychain', () => {
-  assert.throws(() => deleteSecret('not-a-real-handle' as AuthRef), VaultOperationError);
+  assert.throws(() => deleteSecret('not-a-real-handle' as AuthRef), VaultError);
 });
 
 test('a malformed-handle rejection never includes the offending value in details', () => {
@@ -107,7 +108,7 @@ test('a malformed-handle rejection never includes the offending value in details
     getSecret(suspiciousLookingSecret as AuthRef);
     assert.fail('expected getSecret to throw for a malformed handle');
   } catch (err) {
-    assert.ok(err instanceof VaultOperationError);
+    assert.ok(err instanceof VaultError);
     const serialized = JSON.stringify(err.details);
     assert.ok(!serialized.includes(suspiciousLookingSecret));
   }

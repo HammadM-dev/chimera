@@ -1,5 +1,6 @@
 import { Entry } from '@napi-rs/keyring';
 import { randomUUID } from 'node:crypto';
+import { VaultError } from '@chimera/core';
 
 const SERVICE_NAME = 'chimera';
 
@@ -21,29 +22,12 @@ export type AuthRef = string & { readonly [authRefBrand]: true };
 const AUTH_REF_PATTERN =
   /^vault:(connection|licence):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
-// Stand-in for docs/ARCHITECTURE.md's VaultError, which packages/core/src/
-// errors.ts doesn't define until M0-7 (this ticket lands first — M0-6
-// depends only on M0-1). M0-7's own ticket text expects vault.ts to throw
-// the real VaultError; that swap happens there, replacing this class,
-// deliberately not before — see docs/ROADMAP.md M0-7.
-export class VaultOperationError extends Error {
-  readonly code: string;
-  readonly details: Record<string, unknown>;
-
-  constructor(code: string, message: string, details: Record<string, unknown> = {}) {
-    super(message);
-    this.name = 'VaultOperationError';
-    this.code = code;
-    this.details = details;
-  }
-}
-
 function assertAuthRef(value: string): asserts value is AuthRef {
   if (!AUTH_REF_PATTERN.test(value)) {
     // Never include `value` itself in `details` — logging.ts-style
     // redaction can't help here since this error's whole payload IS the
     // suspect value; only its shape is safe to report.
-    throw new VaultOperationError('VAULT_INVALID_HANDLE', 'Value is not a valid vault handle', {
+    throw new VaultError('VAULT_INVALID_HANDLE', 'Value is not a valid vault handle', {
       length: value.length,
     });
   }
@@ -55,10 +39,7 @@ export function setSecret(scope: VaultScope, value: string): AuthRef {
     new Entry(SERVICE_NAME, handle).setPassword(value);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new VaultOperationError(
-      'VAULT_WRITE_FAILED',
-      `Failed to write to OS keychain: ${message}`,
-    );
+    throw new VaultError('VAULT_WRITE_FAILED', `Failed to write to OS keychain: ${message}`);
   }
   return handle as AuthRef;
 }
@@ -70,13 +51,9 @@ export function getSecret(handle: AuthRef): string | undefined {
     value = new Entry(SERVICE_NAME, handle).getPassword();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new VaultOperationError(
-      'VAULT_READ_FAILED',
-      `Failed to read from OS keychain: ${message}`,
-      {
-        handle,
-      },
-    );
+    throw new VaultError('VAULT_READ_FAILED', `Failed to read from OS keychain: ${message}`, {
+      handle,
+    });
   }
   return value ?? undefined;
 }
@@ -87,10 +64,8 @@ export function deleteSecret(handle: AuthRef): void {
     new Entry(SERVICE_NAME, handle).deletePassword();
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    throw new VaultOperationError(
-      'VAULT_DELETE_FAILED',
-      `Failed to delete from OS keychain: ${message}`,
-      { handle },
-    );
+    throw new VaultError('VAULT_DELETE_FAILED', `Failed to delete from OS keychain: ${message}`, {
+      handle,
+    });
   }
 }

@@ -1,3 +1,4 @@
 // packages/core — engine, Governor, and agent runtime.
-// Populated starting M0-7 (error taxonomy). See docs/ARCHITECTURE.md.
-export {};
+// Rest of the surface (Governor, engine, runtime) populated starting M2.
+// See docs/ARCHITECTURE.md.
+export * from './errors.ts';
