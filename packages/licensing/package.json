@@ -1,0 +1,13 @@
+{
+  "name": "@chimera/licensing",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Licence activation and validation. See docs/LICENSING.md — this package is the public/private repo split boundary.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test"
+  }
+}

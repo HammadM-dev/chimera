@@ -10,3 +10,11 @@ release/
 data/
 *.sqlite
 *.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+*.tsbuildinfo
+.eslintcache
+coverage/
+.vite/
+playwright-report/
+test-results/

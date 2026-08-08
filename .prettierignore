@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+out
+release
+coverage
+.vite
+docs
+*.md
+package-lock.json
+.claude/

@@ -1,0 +1,13 @@
+{
+  "name": "@chimera/providers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Provider registry, adapters, and the capability matrix.",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "node --test"
+  }
+}
