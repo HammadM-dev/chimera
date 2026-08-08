@@ -29,3 +29,22 @@ jobs:
       - run: npm run typecheck
 
       - run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      # Electron needs a real (if virtual) display server on Linux even
+      # sandboxed and headless — there is no true headless mode for a
+      # BrowserWindow the way there is for a headless browser.
+      - run: xvfb-run --auto-servernum npm run test:e2e --workspace apps/desktop

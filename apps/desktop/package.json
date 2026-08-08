@@ -1,0 +1,19 @@
+{
+  "name": "@chimera/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Electron main process and preload bridge.",
+  "main": "dist/main.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.e2e.json",
+    "test": "node --test",
+    "build": "vite build --config vite.main.config.ts",
+    "postbuild": "node -e \"require('fs').copyFileSync('src/placeholder.html','dist/placeholder.html')\"",
+    "start": "npm run build && electron .",
+    "test:e2e": "npm run build && playwright test"
+  },
+  "dependencies": {
+    "electron": "^43.3.0"
+  }
+}

@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>csp-violation fixture</title>
+  </head>
+  <body>
+    <!-- Same-origin: allowed under script-src 'self', runs first to arm the listener. -->
+    <script src="./csp-violation-detector.js"></script>
+    <!-- Remote: must be blocked by script-src 'self' with no 'unsafe-inline'/host allowance. -->
+    <script src="https://example.com/should-be-blocked.js"></script>
+  </body>
+</html>

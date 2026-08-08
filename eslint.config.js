@@ -23,11 +23,24 @@ module.exports = [
   js.configs.recommended,
   {
     // Root-level tooling config files (this file, scripts/*) run as plain
-    // Node CommonJS, not part of any TypeScript workspace package.
-    files: ['*.js', '*.cjs', 'scripts/**/*.mjs'],
+    // Node CommonJS, not part of any TypeScript workspace package. Listed
+    // explicitly rather than a bare '*.js'/'*.cjs' glob, which minimatch
+    // matches at any depth — that would also catch renderer-context fixture
+    // .js files elsewhere in the tree and wrongly hand them Node globals.
+    files: ['eslint.config.js', 'scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,
+      },
+    },
+  },
+  {
+    // Fixture pages loaded into the Electron renderer under test (M0-3 e2e) —
+    // real browser globals, not Node's.
+    files: ['apps/desktop/e2e/fixtures/**/*.js'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
       },
     },
   },
@@ -72,6 +85,17 @@ module.exports = [
           ],
         },
       ],
+    },
+  },
+  {
+    // E2E specs mix Node-side Playwright APIs with page.evaluate() callbacks
+    // that run in the browser — both global sets are legitimately in play
+    // in the same file.
+    files: ['apps/desktop/e2e/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.browser,
+      },
     },
   },
   {

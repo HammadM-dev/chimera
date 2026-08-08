@@ -1,0 +1,24 @@
+import { defineConfig } from 'vite';
+import { builtinModules } from 'node:module';
+
+const nodeBuiltins = [...builtinModules, ...builtinModules.map((m) => `node:${m}`)];
+
+export default defineConfig({
+  build: {
+    outDir: 'dist',
+    emptyOutDir: false,
+    target: 'node22',
+    minify: false,
+    lib: {
+      entry: 'src/main.ts',
+      formats: ['es'],
+      fileName: () => 'main.js',
+    },
+    rollupOptions: {
+      // Native modules and Electron itself are resolved at runtime from
+      // node_modules, never bundled — they ship compiled .node addons that
+      // a JS bundle can't inline. See docs/ARCHITECTURE.md.
+      external: [...nodeBuiltins, 'electron', 'better-sqlite3', '@napi-rs/keyring'],
+    },
+  },
+});
