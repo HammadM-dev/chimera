@@ -2,7 +2,7 @@
 
 Desktop application for businesses to build, run, and govern teams of AI agents across any model provider, with a visual workflow builder and supervised machine control.
 
-Read `docs/ARCHITECTURE.md` and `docs/WORKFLOW_SCHEMA.md` before changing anything in `crates/chimera-core` or `crates/chimera-providers`.
+Read `docs/ARCHITECTURE.md` and `docs/WORKFLOW_SCHEMA.md` before changing anything in `packages/core` or `packages/providers`.
 
 ## Stack
 
@@ -11,7 +11,7 @@ Read `docs/ARCHITECTURE.md` and `docs/WORKFLOW_SCHEMA.md` before changing anythi
 - UI: React + TypeScript, React Flow for the canvas
 - Store: SQLite (WAL) via better-sqlite3, sqlite-vec for embeddings
 - Tools: MCP TypeScript SDK plus internal MCP servers
-- Secrets: OS keychain only (keytar or equivalent)
+- Secrets: OS keychain only (`@napi-rs/keyring` — Windows Credential Manager, macOS Keychain, libsecret on Linux; see `docs/ROADMAP.md` M0-6 for why this was chosen over `keytar`)
 - Native machine control (M8+): a small Rust sidecar binary the main process spawns and talks to over stdio. Rust is confined to that binary and nowhere else
 
 ## Layout
