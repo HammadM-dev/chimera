@@ -20,6 +20,8 @@ jobs:
 
       - run: npm run check:layout
 
+      - run: npm run docs:check-links
+
       - run: npm run lint
 
       - run: npm run format

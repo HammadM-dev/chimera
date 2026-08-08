@@ -18,7 +18,8 @@
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
     "build": "npm run build --workspaces --if-present",
-    "check:layout": "node scripts/check-repo-layout.mjs"
+    "check:layout": "node scripts/check-repo-layout.mjs",
+    "docs:check-links": "node scripts/check-doc-links.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",
