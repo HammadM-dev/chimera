@@ -99,6 +99,39 @@ module.exports = [
     },
   },
   {
+    // apps/ui doesn't exist until M0-8, but ships now for the same reason
+    // as the Governor rule above: it can never be introduced without the
+    // guard already in place. The renderer talks to main only through
+    // window.chimera.* (apps/desktop/src/preload.ts) — CLAUDE.md, docs/
+    // ARCHITECTURE.md section 4. No file under apps/ui/src may import
+    // electron or child_process directly, sandboxed or not.
+    files: ['apps/ui/src/**/*.ts', 'apps/ui/src/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          paths: [
+            {
+              name: 'electron',
+              message:
+                'apps/ui must never import electron directly — use window.chimera.* from the preload bridge. See CLAUDE.md: "Renderer talks to main only through the typed preload bridge."',
+            },
+            {
+              name: 'child_process',
+              message:
+                'apps/ui must never import child_process directly — it has no Node access at all (nodeIntegration: false, contextIsolation: true).',
+            },
+            {
+              name: 'node:child_process',
+              message:
+                'apps/ui must never import child_process directly — it has no Node access at all (nodeIntegration: false, contextIsolation: true).',
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
     // Belt-and-braces: the Governor no-bypass rule applies specifically to the
     // runtime and engine, which don't exist until M2. Scoping it here now means
     // it can never be accidentally introduced later without the guard already

@@ -26,6 +26,7 @@ export function createWindow(): BrowserWindow {
       sandbox: true,
       webSecurity: true,
       webviewTag: false,
+      preload: path.join(moduleDir, 'preload.cjs'),
     },
   });
 

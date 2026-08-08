@@ -1,7 +1,9 @@
 import { app, BrowserWindow } from 'electron';
 import { createWindow } from './windows.ts';
+import { registerIpcMainHandlers } from './ipc/mainDispatch.ts';
 
 void app.whenReady().then(() => {
+  registerIpcMainHandlers();
   createWindow();
 
   app.on('activate', () => {
