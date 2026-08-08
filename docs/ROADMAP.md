@@ -89,7 +89,7 @@ Acceptance criteria:
 - Fresh app launch on an empty data directory creates the SQLite file, applies `0001_init.sql`, and `_migrations` contains one row.
 - Re-launching against an already-migrated database applies zero migrations and does not error.
 - `PRAGMA journal_mode` reads `wal` after init.
-- All eleven tables from the kernel schema exist with the exact column lists specified in `docs/ARCHITECTURE.md` §5; a unit test introspects `sqlite_master` and asserts column names/types per table.
+- All twelve tables from the kernel schema (this ticket's own description undercounted them as eleven — `evals` and `eval_runs` are separate tables, see `docs/ARCHITECTURE.md` §5) exist with the exact column lists specified there; a unit test introspects `sqlite_master` and asserts column names/types per table.
 - No file outside `packages/store/src` contains a raw SQL string (grep-based CI check), enforcing "all SQLite access through `packages/store`."
 
 Dependencies: M0-1.
