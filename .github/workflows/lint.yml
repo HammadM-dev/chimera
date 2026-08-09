@@ -24,6 +24,8 @@ jobs:
 
       - run: npm run check:design-tokens
 
+      - run: npm run check:boundaries
+
       - run: npm run docs:check-links
 
       - run: npm run lint

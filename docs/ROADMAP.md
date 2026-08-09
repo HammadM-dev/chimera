@@ -228,6 +228,16 @@ Acceptance criteria:
 - A unit test feeds a representative request through the normalised shape and asserts every field required by the interface is present and typed (no `any`).
 - CI check confirms `packages/providers/src` contains zero imports of anything under `packages/core/src`.
 
+DECISION: **adapters receive a vault handle, not a key.** `AdapterCallOptions` carries an `AuthRef` and the adapter resolves it with `getSecret()` at the moment of the call. The obvious alternative — the caller resolves the secret and passes a string — would put a plaintext credential in a long-lived options object that crosses a call boundary above `packages/providers` and shows up in any heap snapshot taken between calls. `packages/providers` is the lowest layer that legitimately touches a plaintext key; with this shape it holds one only for the duration of a fetch, and no layer above it ever holds one at all.
+
+DECISION: **the normalised response has no `raw` field.** Carrying the provider's original payload upward would be convenient for debugging and is precisely how CLAUDE.md hard rule 7 erodes: once the raw response is reachable above this package, the first `if (raw.anthropic_specific_field)` in the engine is a small, reasonable-looking commit. An adapter that needs to record a provider payload for the audit trace emits it from inside the adapter, where provider specifics are allowed to exist.
+
+DECISION: **`streamChat` guarantees an envelope.** Every stream yields exactly one `start` first and one `finish` last regardless of how the underlying provider shapes its own stream. Normalising that is the adapter's job, so consumers never write "if this provider, expect no start event" — which is the same rule-7 erosion in a different place.
+
+The CI check landed as `scripts/check-package-boundaries.mjs`, grep-based per this ticket's "madge-or-equivalent-free" requirement, resolving relative specifiers against their own file so `../../core/src/errors.ts` is recognised as the same forbidden edge as `@chimera/core`. It covers `packages/tools` as well, since the rule and the reasoning are identical. Verified in both directions: it passes on the tree and fails on a planted `@chimera/core` import.
+
+KNOWN TENSION, resolved in the commit that follows this ticket: the error taxonomy lives in `packages/core/src/errors.ts`, and this ticket's own CI check forbids `packages/providers` from importing it — but M1-4 requires adapters to raise `ProviderError`/`ProviderAuthError`/`ProviderRateLimitError`. Both constraints are correct, so the taxonomy moves to a leaf package that every layer may depend on and which depends on nothing. That also removes a pre-existing `packages/store` → `packages/core` edge that inverted the stated dependency direction.
+
 Dependencies: M1-1.
 
 ### M1-3: Capability matrix
