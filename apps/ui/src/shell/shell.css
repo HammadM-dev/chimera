@@ -1,0 +1,68 @@
+/* The five regions of docs/DESIGN.md section 4, at their stated default
+ * proportions. Structure only — the rail has no navigation, the canvas has no
+ * graph, the inspector has no form. M4-5 replaces the canvas and inspector
+ * bodies with React Flow and the real config forms; this exists now so M0-8's
+ * "proceeds to the app shell" and M0-11's demo have something real to proceed
+ * to, and so the region geometry and hairline seams are settled before
+ * anything is built inside them. */
+
+.shell {
+  display: grid;
+  grid-template-columns: 240px 1fr 320px;
+  grid-template-rows: 1fr 28px;
+  grid-template-areas:
+    'rail canvas inspector'
+    'status status status';
+  height: 100%;
+}
+
+.shell__rail {
+  grid-area: rail;
+  background: var(--surface-panel);
+  border-right: var(--border-width) solid var(--border-hairline);
+}
+
+.shell__canvas {
+  grid-area: canvas;
+  background: var(--surface-canvas);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.shell__inspector {
+  grid-area: inspector;
+  background: var(--surface-panel);
+  border-left: var(--border-width) solid var(--border-hairline);
+}
+
+.shell__status {
+  grid-area: status;
+  background: var(--surface-panel);
+  border-top: var(--border-width) solid var(--border-hairline);
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 12px;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+.shell__region-title {
+  margin: 0;
+  padding: 12px;
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-secondary);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+}
+
+.shell__empty {
+  margin: 0;
+  padding: 12px;
+  max-width: 30ch;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+  text-align: center;
+}

@@ -1,0 +1,23 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    // Overrides the base's NodeNext pair: this package is bundled by Vite and
+    // never executed by Node, so bundler resolution is the honest description
+    // of how its imports actually resolve. Keeps the repo-wide ".ts/.tsx
+    // extension in relative imports" convention working (the base sets
+    // allowImportingTsExtensions for Node 22's native type-stripping; bundler
+    // resolution accepts the same spelling).
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    // No "node" here on purpose — the renderer is sandboxed with no Node
+    // integration (docs/ARCHITECTURE.md section 3). Giving it Node's ambient
+    // types would let a `process.env` or `Buffer` reference typecheck cleanly
+    // and then fail at runtime in the one place that failure is invisible.
+    "types": []
+  },
+  "include": ["src"]
+}

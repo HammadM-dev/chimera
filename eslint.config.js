@@ -27,7 +27,7 @@ module.exports = [
     // explicitly rather than a bare '*.js'/'*.cjs' glob, which minimatch
     // matches at any depth — that would also catch renderer-context fixture
     // .js files elsewhere in the tree and wrongly hand them Node globals.
-    files: ['eslint.config.js', 'scripts/**/*.mjs'],
+    files: ['eslint.config.js', 'scripts/**/*.mjs', 'apps/desktop/scripts/**/*.mjs'],
     languageOptions: {
       globals: {
         ...globals.node,
@@ -106,6 +106,17 @@ module.exports = [
     // ARCHITECTURE.md section 4. No file under apps/ui/src may import
     // electron or child_process directly, sandboxed or not.
     files: ['apps/ui/src/**/*.ts', 'apps/ui/src/**/*.tsx'],
+    languageOptions: {
+      globals: {
+        // Renderer context: browser globals, not Node's. Flat config merges
+        // rather than replaces, so the Node globals from the block above are
+        // still nominally in scope here — that gap is closed by TypeScript
+        // instead, where apps/ui/tsconfig.json sets `"types": []` so a
+        // `process` or `Buffer` reference fails to compile. Lint is not the
+        // enforcement point for this rule; the type checker is.
+        ...globals.browser,
+      },
+    },
     rules: {
       'no-restricted-imports': [
         'error',

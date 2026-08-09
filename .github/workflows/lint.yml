@@ -22,6 +22,8 @@ jobs:
 
       - run: npm run check:no-raw-sql
 
+      - run: npm run check:design-tokens
+
       - run: npm run docs:check-links
 
       - run: npm run lint

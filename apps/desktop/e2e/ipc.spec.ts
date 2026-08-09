@@ -1,8 +1,15 @@
-import { test, expect, _electron as electron } from '@playwright/test';
-import path from 'node:path';
+import { test, expect } from '@playwright/test';
+import { freshProfile, launchApp, removeProfile } from './support/app.ts';
 
-const desktopRoot = path.resolve(import.meta.dirname, '..');
-const mainEntry = path.join(desktopRoot, 'dist', 'main.js');
+let profile: string;
+
+test.beforeEach(() => {
+  profile = freshProfile();
+});
+
+test.afterEach(() => {
+  removeProfile(profile);
+});
 
 interface ChimeraBridge {
   invoke: (channel: string, payload: unknown) => Promise<unknown>;
@@ -13,7 +20,7 @@ interface ChimeraBridge {
 
 test.describe('M0-4 preload bridge and IPC registry', () => {
   test('calling an unregistered channel rejects with a typed error, not a silent no-op', async () => {
-    const electronApp = await electron.launch({ args: [mainEntry], cwd: desktopRoot });
+    const electronApp = await launchApp({ profile });
     try {
       const page = await electronApp.firstWindow();
       await page.waitForLoadState('domcontentloaded');
@@ -38,7 +45,7 @@ test.describe('M0-4 preload bridge and IPC registry', () => {
   });
 
   test('a registered channel round-trips through preload and main, unimplemented handler surfaces as a typed error', async () => {
-    const electronApp = await electron.launch({ args: [mainEntry], cwd: desktopRoot });
+    const electronApp = await launchApp({ profile });
     try {
       const page = await electronApp.firstWindow();
       await page.waitForLoadState('domcontentloaded');
@@ -68,7 +75,7 @@ test.describe('M0-4 preload bridge and IPC registry', () => {
   });
 
   test('an invalid payload for a registered channel is rejected by schema validation', async () => {
-    const electronApp = await electron.launch({ args: [mainEntry], cwd: desktopRoot });
+    const electronApp = await launchApp({ profile });
     try {
       const page = await electronApp.firstWindow();
       await page.waitForLoadState('domcontentloaded');
@@ -93,7 +100,7 @@ test.describe('M0-4 preload bridge and IPC registry', () => {
   });
 
   test('a genuinely non-IPC renderer error still parses to null, not a false-positive match', async () => {
-    const electronApp = await electron.launch({ args: [mainEntry], cwd: desktopRoot });
+    const electronApp = await launchApp({ profile });
     try {
       const page = await electronApp.firstWindow();
       await page.waitForLoadState('domcontentloaded');

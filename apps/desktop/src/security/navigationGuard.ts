@@ -1,9 +1,11 @@
 import type { BrowserWindow } from 'electron';
 
 // DECISION (docs/SECURITY.md section 7): allow only the app's own packaged
-// origin (file:// for the built renderer, or the dev server origin in
-// development — added here once M0-8 wires one in) inside any
-// BrowserWindow. Anything else — including a provider's OAuth login page —
+// origin — file:// for the built renderer — inside any BrowserWindow. There
+// is deliberately no dev-server origin to allow: M0-8 built the renderer as a
+// static bundle loaded over file:// rather than standing up a Vite dev server,
+// so development and production load the renderer by exactly the same path and
+// this allowlist has no environment-dependent entry to get wrong. Anything else — including a provider's OAuth login page —
 // must go through shell.openExternal to the user's default OS browser,
 // never navigated to in-app: an in-app window navigating to a real login
 // page is indistinguishable, from the user's perspective, from CHIMERA

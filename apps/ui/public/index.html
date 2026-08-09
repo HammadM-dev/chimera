@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>CHIMERA</title>
+    <!-- Both assets are same-origin and external, never inline: the CSP in
+         apps/desktop/src/security/cspPolicy.ts carries no 'unsafe-inline' for
+         script-src, and an inline <style> would need one for style-src that
+         this page has no reason to spend. -->
+    <link rel="stylesheet" href="./renderer.css" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="./renderer.js"></script>
+  </body>
+</html>

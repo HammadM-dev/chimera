@@ -1,0 +1,19 @@
+{
+  "name": "@chimera/ui",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "React renderer — the only process the user sees. Talks to main through window.chimera.* only.",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.4"
+  }
+}

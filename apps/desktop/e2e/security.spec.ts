@@ -1,17 +1,21 @@
-import { test, expect, _electron as electron, type ElectronApplication } from '@playwright/test';
+import { test, expect, type ElectronApplication } from '@playwright/test';
 import path from 'node:path';
+import { fixturesDir, freshProfile, launchApp, removeProfile } from './support/app.ts';
 
-const desktopRoot = path.resolve(import.meta.dirname, '..');
-const mainEntry = path.join(desktopRoot, 'dist', 'main.js');
-const fixturesDir = path.join(desktopRoot, 'e2e', 'fixtures');
+let profile: string;
+
+test.beforeEach(() => {
+  profile = freshProfile();
+});
+
+test.afterEach(() => {
+  removeProfile(profile);
+});
 
 async function launchWithFixture(fixture?: string): Promise<ElectronApplication> {
-  return electron.launch({
-    args: [mainEntry],
-    cwd: desktopRoot,
-    env: fixture
-      ? { ...process.env, CHIMERA_E2E_FIXTURE: path.join(fixturesDir, fixture) }
-      : { ...process.env, CHIMERA_E2E_FIXTURE: '' },
+  return launchApp({
+    profile,
+    ...(fixture ? { fixture: path.join(fixturesDir, fixture) } : {}),
   });
 }
 

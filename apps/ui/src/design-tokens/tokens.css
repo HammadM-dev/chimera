@@ -1,0 +1,85 @@
+/* Canonical token definitions — docs/DESIGN.md section 2.4.
+ *
+ * Values here are reproduced verbatim from the master plan via DESIGN.md and
+ * must not be edited in place: a value change is a design decision made in
+ * DESIGN.md, and this file follows it. No component file anywhere under
+ * apps/ui/src defines a colour, radius, or type size literal (CLAUDE.md: "no
+ * inline hex colours, use design tokens"). */
+
+:root {
+  --surface-canvas: #0d0d0c;
+  --surface-panel: #161614;
+  --surface-raised: #1e1c1a;
+  --surface-popover: #262421;
+
+  --text-primary: #f5f3ee;
+  --text-secondary: #a3a09a;
+  --text-muted: #6f6c66;
+
+  --border-hairline: rgba(245, 243, 238, 0.1);
+  --border-strong: rgba(245, 243, 238, 0.16);
+  --border-stronger: rgba(245, 243, 238, 0.24);
+  --border-width: 0.5px;
+
+  --accent-primary: #4a8fd4;
+
+  --semantic-success: #5aa76f;
+  --semantic-warning: #d9a441;
+  --semantic-danger: #d4614a;
+
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-accent-edge: 0;
+
+  --type-body: 13px;
+  --type-meta: 12px;
+  --type-floor: 11px;
+  --type-heading-max: 22px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* Italic is applied via font-style at the use site, not a separate family.
+   * DESIGN.md's decision requires this face be bundled rather than fetched;
+   * no font file ships yet, so it currently resolves to the system serif.
+   * See docs/ROADMAP.md M0-8 decisions. */
+  --font-serif-italic: 'Source Serif 4', Georgia, serif;
+
+  /* Line height — DESIGN.md section 6: 1.4 for prose, 1.2 for single-line UI. */
+  --line-height-prose: 1.4;
+  --line-height-ui: 1.2;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--surface-canvas);
+  color: var(--text-primary);
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    sans-serif;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* docs/DESIGN.md section 3 — focus is an additive outline, never a border
+ * change, so it never shifts layout. :focus-visible, not :focus, so a click
+ * doesn't flash a ring. */
+:focus-visible {
+  outline: 1px solid var(--accent-primary);
+  outline-offset: 1px;
+}

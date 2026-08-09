@@ -8,8 +8,8 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.e2e.json",
     "test": "node --test",
-    "build": "vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
-    "postbuild": "node -e \"require('fs').copyFileSync('src/placeholder.html','dist/placeholder.html')\"",
+    "build": "npm run build --workspace @chimera/ui && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
+    "postbuild": "node scripts/copy-renderer.mjs",
     "start": "npm run build && electron .",
     "test:e2e": "npm run build && playwright test"
   },

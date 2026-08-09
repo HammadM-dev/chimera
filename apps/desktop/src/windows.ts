@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { applyCsp } from './security/cspPolicy.ts';
 import { applyPermissionHandler } from './security/permissionHandler.ts';
 import { applyNavigationGuard } from './security/navigationGuard.ts';
+import { consumeSplashDecision } from './settings/localSettings.ts';
 
 // Resolved against this module's own location, not app.getAppPath() —
 // getAppPath() returns the launched script's directory (dist/) rather than
@@ -38,7 +39,16 @@ export function createWindow(): BrowserWindow {
   if (fixture) {
     void win.loadFile(fixture);
   } else {
-    void win.loadFile(path.join(moduleDir, 'placeholder.html'));
+    // The splash decision is made here, in main, and handed to the renderer
+    // on its own URL rather than over IPC — see the comment on
+    // consumeSplashDecision() and docs/DESIGN.md section 5.2. Deciding it
+    // before the page loads also means the renderer knows the answer before
+    // its first paint, so there is no frame in which the splash could flash
+    // for a user who has already seen it.
+    const playSplash = consumeSplashDecision();
+    void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
+      query: { splash: playSplash ? '1' : '0' },
+    });
   }
 
   win.once('ready-to-show', () => {

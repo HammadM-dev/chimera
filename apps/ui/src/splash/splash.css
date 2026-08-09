@@ -1,0 +1,200 @@
+/* F11.1 splash — the implementable timeline is docs/DESIGN.md section 5.1.
+ * Every number below is that table, and nothing else sets splash timing: the
+ * component (Splash.tsx) reacts to these animations, it does not schedule
+ * them.
+ *
+ * Note the structure: the elements and their resting (t=0) styles are defined
+ * unconditionally, and every `animation` property is defined only under
+ * `[data-armed='true']`. That split is deliberate. The splash mounts opaque
+ * over the shell immediately, so there is no flash of app chrome, but on a
+ * cold Electron start the renderer drops frames badly for the first few
+ * hundred milliseconds while the GPU process and X11 surface come up — and a
+ * time-based animation started in that window does not slow down, it *skips*.
+ * Holding the animation *declarations* back until Splash.tsx has seen a
+ * healthy frame loop means all ten animations are created in the same style
+ * recalculation, sharing one start time.
+ *
+ * `animation-play-state: paused` was tried first and is wrong here: a paused
+ * animation with a zero delay is still in its active phase, so the first
+ * letter's animationstart fires at mount rather than at unpause, and the
+ * whole timeline loses its origin. */
+
+.splash {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--surface-canvas);
+}
+
+/* A hold, not a visual effect: opacity stays at 1 for the whole 2300ms. Its
+ * only job is to be the compositor-driven clock the component unmounts on
+ * (animationend), so the total duration is measured on the same timeline as
+ * the staged animations rather than drifting independently on a JS timer.
+ * DESIGN.md section 5.1 specifies a hold at full-brand state through to
+ * 2300ms — a fade-out here would contradict it. */
+.splash[data-armed='true'] {
+  animation: splash-life 2300ms linear forwards;
+}
+
+.splash__mark {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: fit-content;
+}
+
+.splash__wordmark {
+  font-size: var(--type-heading-max);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
+  /* "Wide tracking" (F11.1). The negative right margin cancels the trailing
+   * letter-space after the final A so the rule beneath aligns to the visual
+   * edge of the wordmark, not to the phantom gap. */
+  letter-spacing: 0.42em;
+  margin-right: -0.42em;
+  white-space: nowrap;
+}
+
+.splash__letter {
+  display: inline-block;
+  opacity: 0;
+  transform: translateY(4px);
+  /* Promotes each letter to its own compositor layer before the sequence
+   * starts, so the first animated frame is not also the frame that rasterises
+   * seven glyphs and allocates seven layers. Measured worth ~100ms off the
+   * first letter's start on a cold launch. */
+  will-change: opacity, transform;
+}
+
+.splash[data-armed='true'] .splash__letter {
+  animation: splash-letter-in 240ms ease-out forwards;
+  animation-delay: calc(var(--letter-index) * 100ms);
+}
+
+.splash__rule {
+  width: 0;
+  height: var(--border-width);
+  /* --border-strong, not --border-hairline: DESIGN.md section 5.1 — here the
+   * rule is a graphic mark, not structural chrome, so it earns the stronger
+   * token. */
+  background: var(--border-strong);
+}
+
+.splash[data-armed='true'] .splash__rule {
+  animation: splash-rule-draw 360ms ease-in-out 840ms forwards;
+}
+
+.splash__byline {
+  margin: 0;
+  will-change: opacity;
+  font-family: var(--font-serif-italic);
+  font-style: italic;
+  font-weight: var(--font-weight-regular);
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  opacity: 0;
+}
+
+.splash[data-armed='true'] .splash__byline {
+  animation: splash-byline-in 200ms ease-out 1520ms forwards;
+}
+
+/* Keyboard-reachable skip affordance (DESIGN.md section 5.2 allows "visible
+ * or keyboard-reachable"). Kept out of the visual field so a 2.3s brand
+ * moment isn't fronted by a Skip button, but focusable and announced, so it
+ * is a real affordance for assistive tech rather than an undocumented
+ * any-key shortcut. */
+.splash__skip {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+.splash__skip:focus-visible {
+  position: static;
+  width: auto;
+  height: auto;
+  margin: 0;
+  overflow: visible;
+  clip-path: none;
+  padding: 4px 10px;
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  font-size: var(--type-meta);
+}
+
+@keyframes splash-letter-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes splash-rule-draw {
+  from {
+    width: 0;
+  }
+  to {
+    width: 100%;
+  }
+}
+
+@keyframes splash-byline-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes splash-life {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* DESIGN.md section 5.3: reduced motion means skip to the settled state, not
+ * play a faster version of the same animation. Every animation is removed
+ * outright — `animation: none`, not a shortened duration — and each element
+ * is painted in its t=2300ms end state. The 400ms hold that replaces the
+ * sequence is a timer in Splash.tsx, because with no animation left there is
+ * no animationend to unmount on. */
+.splash[data-reduced-motion='true'],
+.splash[data-reduced-motion='true'] .splash__letter,
+.splash[data-reduced-motion='true'] .splash__rule,
+.splash[data-reduced-motion='true'] .splash__byline {
+  animation: none;
+}
+
+.splash[data-reduced-motion='true'] .splash__letter {
+  opacity: 1;
+  transform: none;
+}
+
+.splash[data-reduced-motion='true'] .splash__rule {
+  width: 100%;
+}
+
+.splash[data-reduced-motion='true'] .splash__byline {
+  opacity: 1;
+}
