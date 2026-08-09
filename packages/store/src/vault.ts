@@ -1,6 +1,6 @@
 import { Entry } from '@napi-rs/keyring';
 import { randomUUID } from 'node:crypto';
-import { VaultError } from '@chimera/core';
+import { VaultError } from '@chimera/errors';
 
 const SERVICE_NAME = 'chimera';
 

@@ -11,9 +11,9 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@chimera/core": "*",
     "better-sqlite3": "^13.0.3",
-    "@napi-rs/keyring": "^1.3.0"
+    "@napi-rs/keyring": "^1.3.0",
+    "@chimera/errors": "*"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0"

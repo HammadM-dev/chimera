@@ -1,16 +1,13 @@
 {
-  "name": "@chimera/core",
+  "name": "@chimera/errors",
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Engine, Governor, and agent runtime.",
+  "description": "The shared error taxonomy. Depends on nothing; every other package may depend on it.",
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test"
-  },
-  "dependencies": {
-    "@chimera/errors": "*"
   }
 }

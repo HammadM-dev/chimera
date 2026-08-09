@@ -1,6 +1,6 @@
 import type Database from 'better-sqlite3';
 import { randomUUID } from 'node:crypto';
-import { ValidationError, VaultError } from '@chimera/core';
+import { ValidationError, VaultError } from '@chimera/errors';
 import { isAuthRef, type AuthRef } from '../vault.ts';
 
 // The only code permitted to write SQL against the `connections` table

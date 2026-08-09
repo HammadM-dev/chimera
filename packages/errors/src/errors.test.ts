@@ -12,7 +12,7 @@ import {
   ValidationError,
   VaultError,
   SidecarError,
-} from './errors.ts';
+} from '@chimera/errors';
 
 // "Throwing each subclass and catching it at a simulated IPC boundary
 // produces the exact { code, message, details } shape" — docs/ROADMAP.md

@@ -1,4 +1,11 @@
 // packages/core — engine, Governor, and agent runtime.
 // Rest of the surface (Governor, engine, runtime) populated starting M2.
 // See docs/ARCHITECTURE.md.
-export * from './errors.ts';
+//
+// The error taxonomy deliberately does NOT live here and is NOT re-exported.
+// It is `@chimera/errors`, a leaf package, so that packages/providers and
+// packages/tools can raise typed errors without importing packages/core — an
+// edge docs/ARCHITECTURE.md section 3 forbids and
+// scripts/check-package-boundaries.mjs enforces. Re-exporting it here would
+// quietly recreate the second import path this move exists to close.
+export {};

@@ -17,6 +17,7 @@ Read `docs/ARCHITECTURE.md` and `docs/WORKFLOW_SCHEMA.md` before changing anythi
 ## Layout
 
 ```
+packages/errors        the shared error taxonomy; depends on nothing
 packages/core          engine, governor, agent runtime
 packages/providers     registry and adapters
 packages/tools         MCP client + internal servers

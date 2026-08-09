@@ -33,10 +33,26 @@ const RULES = [
     forbidden: ['@chimera/core', 'packages/core/src', '../core/', '../../core/'],
     why: 'packages/tools must never import packages/core — docs/ARCHITECTURE.md §3. Tools are invoked through the Governor-gated call path; a tool that can reach the runtime can be invoked around it.',
   },
+  {
+    from: 'packages/store/src',
+    forbidden: [
+      '@chimera/core',
+      '@chimera/providers',
+      '@chimera/tools',
+      'packages/core/src',
+      '../core/',
+      '../../core/',
+    ],
+    why: 'packages/store is the floor of the dependency graph — docs/ARCHITECTURE.md §3 says it "imports nothing above it". It may depend on @chimera/errors, which depends on nothing at all.',
+  },
 ];
 
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'coverage']);
 const IMPORT_PATTERN = /(?:^|\s)(?:import|export)\s[^;]*?from\s+['"]([^'"]+)['"]/gm;
+// A bare `import 'x';` has no `from` clause but is still a dependency edge —
+// it is exactly how apps/desktop loads its IPC handlers for their side effects.
+// Missed by the pattern above, and found by this check's own negative control.
+const SIDE_EFFECT_IMPORT_PATTERN = /(?:^|\s)import\s+['"]([^'"]+)['"]/gm;
 const REQUIRE_PATTERN = /require\(\s*['"]([^'"]+)['"]\s*\)/g;
 const DYNAMIC_IMPORT_PATTERN = /import\(\s*['"]([^'"]+)['"]\s*\)/g;
 
@@ -56,7 +72,12 @@ function collectSourceFiles(dir, out = []) {
 
 function specifiersIn(source) {
   const found = new Set();
-  for (const pattern of [IMPORT_PATTERN, REQUIRE_PATTERN, DYNAMIC_IMPORT_PATTERN]) {
+  for (const pattern of [
+    IMPORT_PATTERN,
+    SIDE_EFFECT_IMPORT_PATTERN,
+    REQUIRE_PATTERN,
+    DYNAMIC_IMPORT_PATTERN,
+  ]) {
     pattern.lastIndex = 0;
     let match;
     while ((match = pattern.exec(source)) !== null) found.add(match[1]);

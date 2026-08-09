@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Entry } from '@napi-rs/keyring';
-import { VaultError } from '@chimera/core';
+import { VaultError } from '@chimera/errors';
 import { setSecret, getSecret, deleteSecret, type AuthRef } from './vault.ts';
 
 // Real OS keychain, not a mock — the ticket asks for this to be "skipped,

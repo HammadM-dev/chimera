@@ -4,7 +4,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type Database from 'better-sqlite3';
-import { ValidationError, VaultError } from '@chimera/core';
+import { ValidationError, VaultError } from '@chimera/errors';
 import { openDatabase } from '../db.ts';
 import type { AuthRef } from '../vault.ts';
 import * as connections from './connections.ts';
