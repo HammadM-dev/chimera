@@ -78,9 +78,23 @@ child.on('exit', (code, signal) => {
 
 const startedAt = Date.now();
 
-function cleanUp() {
-  if (exitedEarly === null) child.kill();
-  rmSync(profile, { recursive: true, force: true });
+// Waits for the app to actually be gone before deleting its profile. Windows
+// will not unlink a file another process still holds open, and the app holds
+// chimera.sqlite for as long as it is running — killing it and deleting in the
+// same tick fails with EBUSY. The delete is also best-effort: a temp directory
+// that outlives the run is untidy, never a reason to fail a build that has
+// already proved what it set out to prove.
+async function cleanUp() {
+  if (exitedEarly === null) {
+    const exited = new Promise((resolve) => child.once('exit', resolve));
+    child.kill();
+    await Promise.race([exited, new Promise((resolve) => setTimeout(resolve, 5_000))]);
+  }
+  try {
+    rmSync(profile, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });
+  } catch (err) {
+    console.warn(`Could not remove the throwaway profile at ${profile}: ${err.message}`);
+  }
 }
 
 async function waitForLaunch() {
@@ -114,8 +128,8 @@ try {
   );
 } catch (err) {
   console.error(`Packaged app smoke check failed: ${err.message}`);
-  cleanUp();
+  await cleanUp();
   process.exit(1);
 }
 
-cleanUp();
+await cleanUp();

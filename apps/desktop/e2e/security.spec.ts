@@ -98,15 +98,64 @@ test.describe('M0-3 hardened Electron shell', () => {
         { timeout: 5_000 },
       );
 
-      const outcome = await page.evaluate(
-        () => (window as unknown as { __micPermissionOutcome?: string }).__micPermissionOutcome,
+      const probe = await page.evaluate(() => {
+        const w = window as unknown as {
+          __micPermissionOutcome?: string;
+          __micPermissionErrorName?: string;
+          __audioInputCount?: number;
+        };
+        return {
+          outcome: w.__micPermissionOutcome,
+          errorName: w.__micPermissionErrorName,
+          audioInputCount: w.__audioInputCount ?? 0,
+        };
+      });
+
+      // Never granted, on any machine.
+      expect(probe.outcome).toBe('denied');
+
+      // Where there is no audio input device at all — every GitHub Actions
+      // runner — getUserMedia rejects with NotFoundError before Electron's
+      // permission handler is consulted, so the denial says nothing about
+      // permissions. Skipped rather than asserted loosely: a test that quietly
+      // accepts NotFoundError would keep passing if the permission handler were
+      // deleted outright. The geolocation test below is the one that holds the
+      // handler to account in that environment.
+      test.skip(
+        probe.audioInputCount === 0,
+        'no audio input device present, so the request never reaches the permission layer',
       );
-      const errorName = await page.evaluate(
-        () => (window as unknown as { __micPermissionErrorName?: string }).__micPermissionErrorName,
+      expect(probe.errorName).toBe('NotAllowedError');
+    } finally {
+      await electronApp.close();
+    }
+  });
+
+  test('geolocation permission is denied with no OS-level prompt', async () => {
+    // The hardware-independent counterpart to the microphone test above, and
+    // the one that actually runs everywhere. docs/SECURITY.md section 7:
+    // everything except desktop notifications is denied by default.
+    const electronApp = await launchWithFixture('geolocation-permission.html');
+    try {
+      const page = await electronApp.firstWindow();
+      await page.waitForLoadState('domcontentloaded');
+
+      await page.waitForFunction(
+        () => (window as unknown as { __geoSettled?: boolean }).__geoSettled === true,
+        { timeout: 5_000 },
       );
 
-      expect(outcome).toBe('denied');
-      expect(errorName).toBe('NotAllowedError');
+      const probe = await page.evaluate(() => {
+        const w = window as unknown as { __geoOutcome?: string; __geoErrorCode?: number };
+        return { outcome: w.__geoOutcome, code: w.__geoErrorCode };
+      });
+
+      expect(probe.outcome).toBe('denied');
+      // GeolocationPositionError.PERMISSION_DENIED === 1. Distinguished from
+      // POSITION_UNAVAILABLE (2), which is what a *granted* request would
+      // return in a CI container with no location provider — the two must not
+      // be conflated, since only one of them is the handler doing its job.
+      expect(probe.code).toBe(1);
     } finally {
       await electronApp.close();
     }

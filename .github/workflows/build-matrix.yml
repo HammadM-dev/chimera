@@ -64,6 +64,20 @@ jobs:
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb
 
+      # Chromium's SUID sandbox helper must be root-owned and setuid or it
+      # refuses to start, and electron-builder extracts it as the unprivileged
+      # runner user. Fixed here rather than passing --no-sandbox: the app sets
+      # sandbox: true (apps/desktop/src/windows.ts) and M0-3 exists to keep it
+      # that way, so a smoke check that disabled the sandbox would be
+      # validating a configuration no user ever runs. A real install does this
+      # for you; running the unpacked directory straight out of the build is
+      # what skips it.
+      - name: Configure the Chromium SUID sandbox
+        if: runner.os == 'Linux'
+        run: |
+          sudo chown root:root apps/desktop/release/linux-unpacked/chrome-sandbox
+          sudo chmod 4755 apps/desktop/release/linux-unpacked/chrome-sandbox
+
       - name: Smoke — packaged app launches (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run --auto-servernum node scripts/smoke-packaged-app.mjs
