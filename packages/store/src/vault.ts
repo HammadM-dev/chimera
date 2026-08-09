@@ -22,8 +22,18 @@ export type AuthRef = string & { readonly [authRefBrand]: true };
 const AUTH_REF_PATTERN =
   /^vault:(connection|licence):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
+// Exported so the repositories that persist handles (connections, licence)
+// can reject a raw secret at their own write boundary without duplicating the
+// pattern. Deliberately a *shape allowlist*, not a "does this look like an API
+// key" blocklist: a blocklist has to be updated every time a provider invents
+// a new key prefix, and it silently passes the ones nobody thought of. Only
+// something already shaped like a vault handle gets through here.
+export function isAuthRef(value: string): value is AuthRef {
+  return AUTH_REF_PATTERN.test(value);
+}
+
 function assertAuthRef(value: string): asserts value is AuthRef {
-  if (!AUTH_REF_PATTERN.test(value)) {
+  if (!isAuthRef(value)) {
     // Never include `value` itself in `details` — logging.ts-style
     // redaction can't help here since this error's whole payload IS the
     // suspect value; only its shape is safe to report.

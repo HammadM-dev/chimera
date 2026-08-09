@@ -170,6 +170,8 @@ Dependencies: M0-1.
 
 ### M0-10: Code-signing and notarisation groundwork (paperwork only)
 
+DEFERRED to M6 by decision, 2026-08-09. This ticket is paperwork on the founder's own accounts, ships no code, and blocks nothing until M7-3. Deferring it does not change its content or its dependents — M7-3 (Windows signing) and M10-2 (macOS notarisation) stay blocked on it, and the master plan's risk-register point still stands: enrollment and certificate issuance have real lead time, so starting this at M6 rather than M7 is the latest it can begin without becoming the thing that holds up the commercial milestone. If M6 arrives and enrollment has not started, that is the moment to treat it as urgent rather than routine.
+
 Description: Per the master plan's risk register ("macOS notarisation delays... mitigation: start Apple developer account in M0, account+signing setup has lead time"), begin the account-level groundwork now, without producing any signed build. This is paperwork and account provisioning, not engineering: register an Apple Developer Program account, register a Windows code-signing certificate provider (e.g. a DigiCert or Sectigo EV/OV certificate, or an equivalent cert-issuing CA), and note lead times in this ticket's completion notes. No CI job changes as a result of this ticket — actual signing integration happens at M7 (Windows) and M10 (macOS), per M0-9's decision keeping build-matrix and signing separate.
 
 Acceptance criteria:
@@ -206,6 +208,14 @@ Acceptance criteria:
 - `connections.create({..., authRef: <AuthRef>})` succeeds and persists a row with `auth_ref` equal to the handle, never the underlying secret.
 - `connections.create({..., authRef: "sk-live-abc123" as any})` (bypassing the type system deliberately, simulating a bug) is rejected at the repository boundary with a `VaultError`, verified in a unit test.
 - `registry.list()` reflects the current `connections` table contents after a repository write, without requiring an app restart.
+
+DECISION: **the raw-key check is a shape allowlist, not a "looks like an API key" blocklist.** This ticket's description offers a heuristic ("matches a shape heuristic such as looking like a bearer token") as one option. Implemented as the other: `isAuthRef()` accepts only strings already shaped like `vault:<scope>:<uuid>` and rejects everything else. A blocklist has to be updated every time a provider invents a new key prefix and silently passes the ones nobody thought of; an allowlist fails closed by construction. The check lives in the repository rather than in callers because there is exactly one place that writes `connections.auth_ref`, so there is exactly one place to get it right — and it is the runtime half of a rule the `AuthRef` brand only enforces at compile time, since branding is erased before anything arriving over IPC reaches this code.
+
+DECISION: **the registry is a factory, and stale-cache avoidance is structural.** `createConnectionRegistry(db)` returns an instance rather than exposing module-level singletons, so tests and future multi-workspace use get isolation instead of shared global state. It satisfies "without requiring an app restart" by subscribing to a new `onConnectionsChanged(db, …)` on the repository, which fires after every mutation — rather than by polling, or by trusting every call site to remember to refresh. Listener sets are scoped per database handle in a `WeakMap`, so two databases open in the same process cannot invalidate each other.
+
+DECISION: **unparseable rows are quarantined, not dropped and not fatal.** A connection whose `kind` is unrecognised (written by a newer build, or edited by hand) or whose capabilities blob is corrupt is excluded from `list()` and reported by `unusable()` with a reason. Dropping it silently would make a connection disappear from the UI with nothing to explain it; throwing would let one bad row take out every other connection in the workspace. An unrecognised *health state* is treated differently and degrades to `unknown` without quarantine, because M1-8 re-derives health on the next poll, so a stale value costs nothing.
+
+DECISION: **`capabilities_json` holds `{ capabilities, limits }`.** The kernel schema gives the table one JSON column and no `limits` column, while this ticket's runtime shape needs both. Nesting them leaves the schema untouched; a migration for a second JSON column would buy nothing that a second key does not. Documented in `docs/ARCHITECTURE.md` §5.
 
 Dependencies: M0-11.
 
