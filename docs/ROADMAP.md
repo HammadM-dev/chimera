@@ -179,7 +179,7 @@ Acceptance criteria:
 - A code-signing certificate order/provider account for Windows is initiated.
 - No source or CI change ships as part of this ticket (verified trivially: the PR touches only a notes/checklist artifact, not `.github/workflows/` or `apps/desktop`).
 
-Dependencies: none (can run in parallel with any other M0 ticket).
+Dependencies: none (can run in parallel with any other ticket). Blocks M7-3 and M10-2.
 
 ### M0-11: M0 demo — Foundations exit criteria
 
