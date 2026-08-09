@@ -1,0 +1,84 @@
+name: Build matrix (unsigned)
+
+# docs/ROADMAP.md M0-9. Pulled forward from the master plan's M7/M10 placement
+# on purpose: this is a solo build on a Linux-only machine, so without a matrix
+# a Windows- or macOS-only packaging failure stays invisible until the
+# milestone that needs an installer. Building is cheap; discovering it late is
+# not.
+#
+# Signing is NOT pulled forward with it — no certificate, keychain import, or
+# notarisation credential appears anywhere below, and scripts/check-no-signing.mjs
+# fails the build if one is added. Windows signing is M7, macOS notarisation is
+# M10.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  no-signing-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npm run check:no-signing
+
+  build:
+    strategy:
+      # Each platform reports independently. A Windows packaging failure must
+      # not hide whether macOS and Linux are healthy — that is most of the
+      # value of having the matrix at all.
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - run: npm ci
+
+      # Builds the renderer, main, and preload bundles, then runs
+      # electron-builder for the host platform. --publish=never is explicit:
+      # this workflow produces workflow artifacts, never a release.
+      - name: Package (unsigned)
+        run: npm run package --workspace @chimera/desktop
+
+      # Electron needs a display server on Linux even to open a window it never
+      # shows, the same reason the e2e job uses xvfb.
+      - name: Install xvfb
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y xvfb
+
+      - name: Smoke — packaged app launches (Linux)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum node scripts/smoke-packaged-app.mjs
+
+      - name: Smoke — packaged app launches
+        if: runner.os != 'Linux'
+        run: node scripts/smoke-packaged-app.mjs
+
+      - name: Upload unsigned artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: chimera-unsigned-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.zip
+          if-no-files-found: error
+          retention-days: 14

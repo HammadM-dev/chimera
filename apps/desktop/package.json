@@ -4,6 +4,8 @@
   "private": true,
   "type": "module",
   "description": "Electron main process and preload bridge.",
+  "author": "Hammad",
+  "desktopName": "chimera.desktop",
   "main": "dist/main.js",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.e2e.json",
@@ -11,10 +13,11 @@
     "build": "npm run build --workspace @chimera/ui && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
     "postbuild": "node scripts/copy-renderer.mjs",
     "start": "npm run build && electron .",
-    "test:e2e": "npm run build && playwright test"
+    "test:e2e": "npm run build && playwright test",
+    "package": "npm run build && electron-builder --publish=never"
   },
-  "dependencies": {
-    "electron": "^43.3.0",
+  "devDependencies": {
+    "electron": "43.3.0",
     "zod": "^4.4.3"
   }
 }

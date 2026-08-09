@@ -1,0 +1,58 @@
+# Unsigned development packaging — docs/ROADMAP.md M0-9.
+#
+# There is deliberately no signing configuration anywhere in this file, and no
+# certificate, keychain, or notarisation reference in
+# .github/workflows/build-matrix.yml. Signing is M7 (Windows) and M10 (macOS),
+# and scripts/check-no-signing.mjs fails the build if either grows one early.
+# The split is not an oversight: the build matrix is cheap and worth having
+# now, signing has cost and lead time and belongs where the master plan puts
+# it.
+
+appId: dev.chimera.desktop
+productName: CHIMERA
+copyright: Copyright (c) 2026 Hammad
+# Set explicitly because the default is derived from the npm package name, and
+# "@chimera/desktop" is not a legal filename on any of the three targets.
+executableName: chimera
+
+directories:
+  output: release
+  buildResources: build
+
+# The main and preload bundles are self-contained (Vite bundles everything
+# except Electron itself and native modules), and the renderer is copied into
+# dist/renderer by scripts/copy-renderer.mjs. So the packaged app is dist/ plus
+# the manifest, and nothing else.
+files:
+  - dist/**
+  - package.json
+
+# Native modules ship .node binaries, which cannot be loaded from inside an
+# asar archive. Unpacked even though no native module is reachable from the
+# main bundle yet (M0-11 wires the store in) — the rule is about where .node
+# files can live, and getting it wrong surfaces as a runtime failure in a
+# packaged build only, which is the most expensive place to find it.
+asar: true
+asarUnpack:
+  - '**/*.node'
+
+linux:
+  target:
+    - AppImage
+  category: Development
+  # Pairs with "desktopName" in package.json, which is where electron-builder
+  # reads the name from. Without the pair, the desktop environment cannot
+  # associate a running window with the .desktop entry and the app shows up as
+  # a generic unnamed window in the XFCE taskbar — the dev machine's own
+  # environment.
+  syncDesktopName: true
+  synopsis: Build, run, and govern teams of AI agents
+
+win:
+  target:
+    - portable
+
+mac:
+  target:
+    - zip
+  category: public.app-category.developer-tools
