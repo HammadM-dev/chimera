@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { listChannels, CHANNEL_REGISTRY } from './registry.ts';
+import { getHandler } from './types.ts';
+// Side-effect import: registers every handler. Also what makes the coverage
+// test below meaningful rather than vacuous.
+import './handlers.ts';
 
 test('every channel name is unique', () => {
   const names = listChannels().map((c) => c.channel);
@@ -41,5 +45,16 @@ test('every documented channel from docs/ARCHITECTURE.md section 4 is registered
   ];
   for (const channel of expected) {
     assert.ok(CHANNEL_REGISTRY.has(channel), `expected ${channel} to be registered`);
+  }
+});
+
+test('every invokable channel has a registered handler', () => {
+  // registry.ts and handlers.ts are two files that have to stay in step, and
+  // the compiler cannot see a missing registration — a channel simply never
+  // gets one. This is the check that catches it, rather than a renderer
+  // discovering it at runtime.
+  for (const def of listChannels()) {
+    if (def.kind !== 'invoke') continue;
+    assert.ok(getHandler(def.channel), `${def.channel} has no handler registered in handlers.ts`);
   }
 });

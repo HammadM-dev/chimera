@@ -13,6 +13,15 @@ export interface EventEnvelope<TPayload = unknown> {
   payload: TPayload;
 }
 
+// Deliberately carries no handler. Channel definitions are imported by
+// preload.ts, which runs sandboxed with no Node integration; a handler defined
+// alongside its schema would drag that handler's imports into the preload
+// bundle with it. The first real handler (vault:setSecret, M0-11) reaches
+// packages/store and therefore better-sqlite3 and @napi-rs/keyring — native
+// modules that cannot load in a sandboxed preload at all. Handlers live in
+// handlers.ts, which only the main process imports, and are attached through
+// registerHandler() below so the schema-to-handler type checking survives the
+// split.
 export interface InvokeChannelDefinition<TReq = unknown, TRes = unknown> {
   kind: 'invoke';
   channel: string;
@@ -20,9 +29,6 @@ export interface InvokeChannelDefinition<TReq = unknown, TRes = unknown> {
   sensitive: boolean;
   requestSchema: z.ZodType<TReq>;
   responseSchema: z.ZodType<TRes>;
-  // Stub throughout M0 — real business logic arrives with the milestone
-  // that owns each domain (M1 providers, M2 runtime, M4 workflow engine...).
-  handler: (payload: TReq) => Promise<TRes> | TRes;
 }
 
 export interface EventChannelDefinition<TPayload = unknown> {
@@ -38,31 +44,47 @@ export type ChannelDefinition = InvokeChannelDefinition | EventChannelDefinition
 // Generic-inference helpers. A bare `const x: InvokeChannelDefinition = {...}`
 // annotation defaults TReq/TRes to `unknown` (the interface's own defaults)
 // instead of inferring them from the assigned requestSchema/responseSchema —
-// silently losing the one thing that makes a schema version bump without a
-// matching handler update fail to compile. Defining each channel through
-// this function instead forces TReq/TRes to be inferred from the *input*,
-// so `handler`'s parameter and return types are checked against them for
-// real at the point of definition. The *return* type is deliberately
-// widened to the erased ChannelDefinition union (not InvokeChannelDefinition
-// <TReq, TRes>) — a registry holding differently-typed channels side by
-// side needs one common storage type, and TypeScript is correctly unwilling
-// to widen a concretely-typed handler to `(payload: unknown) => unknown` on
-// its own (a narrower handler isn't safely callable with an arbitrary
-// unknown). The cast here is the one deliberate, contained erasure point;
-// runtime safety holds because dispatch always looks up one entry by name
-// and calls that same entry's handler with that same entry's parsed
-// payload — the two never come from different entries. See registry.ts and
-// ipc/typeSafety.fixture.ts.
+// silently losing the one thing that makes a schema change without a matching
+// handler update fail to compile. Defining each channel through this function
+// forces TReq/TRes to be inferred from the *input*, and the definition keeps
+// those types, so registerHandler() can check a handler against them.
 export function defineInvokeChannel<TReq, TRes>(
   def: Omit<InvokeChannelDefinition<TReq, TRes>, 'kind'>,
-): ChannelDefinition {
-  return { kind: 'invoke', ...def } as ChannelDefinition;
+): InvokeChannelDefinition<TReq, TRes> {
+  return { kind: 'invoke', ...def };
 }
 
 export function defineEventChannel<TPayload>(
   def: Omit<EventChannelDefinition<TPayload>, 'kind'>,
-): ChannelDefinition {
-  return { kind: 'event', ...def } as ChannelDefinition;
+): EventChannelDefinition<TPayload> {
+  return { kind: 'event', ...def };
+}
+
+export type ChannelHandler<TReq = unknown, TRes = unknown> = (
+  payload: TReq,
+) => Promise<TRes> | TRes;
+
+// Main-process only. Populated by handlers.ts at import time; read by
+// mainDispatch.ts. Erased to `unknown` for storage because a map holding
+// differently-typed handlers side by side needs one common type, and
+// TypeScript is correctly unwilling to widen a concretely-typed handler to
+// `(payload: unknown) => unknown` on its own (a narrower handler is not safely
+// callable with an arbitrary unknown).
+const HANDLERS = new Map<string, ChannelHandler>();
+
+// The one deliberate, contained erasure point. Runtime safety holds because
+// dispatch looks up a handler by the same channel name whose schema produced
+// the parsed payload it passes in — the two can never come from different
+// entries.
+export function registerHandler<TReq, TRes>(
+  def: InvokeChannelDefinition<TReq, TRes>,
+  handler: ChannelHandler<TReq, TRes>,
+): void {
+  HANDLERS.set(def.channel, handler as ChannelHandler);
+}
+
+export function getHandler(channel: string): ChannelHandler | undefined {
+  return HANDLERS.get(channel);
 }
 
 export interface WireError {

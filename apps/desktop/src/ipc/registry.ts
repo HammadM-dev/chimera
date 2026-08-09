@@ -13,30 +13,30 @@ import type { ChannelDefinition } from './types.ts';
 // Every entry goes through defineInvokeChannel/defineEventChannel, not a
 // bare object literal — see the comment on those functions in types.ts for
 // why that's load-bearing, not stylistic.
+//
+// This module holds definitions only, never handlers. preload.ts imports it,
+// and preload runs sandboxed with no Node integration — a handler defined
+// here would pull its own imports into the preload bundle, and the first real
+// one reaches native modules that cannot load there at all. Handlers live in
+// handlers.ts, which only the main process imports.
 
-function notImplemented(channel: string): never {
-  throw new Error(`${channel}: not implemented until its owning milestone lands`);
-}
-
-const workflowSave = defineInvokeChannel({
+export const workflowSave = defineInvokeChannel({
   channel: 'workflow:save',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ id: z.string().optional(), definition: z.unknown() }),
   responseSchema: z.object({ id: z.string(), version: z.number() }),
-  handler: () => notImplemented('workflow:save'),
 });
 
-const workflowList = defineInvokeChannel({
+export const workflowList = defineInvokeChannel({
   channel: 'workflow:list',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ status: z.string().optional() }),
   responseSchema: z.object({ workflows: z.array(z.unknown()) }),
-  handler: () => notImplemented('workflow:list'),
 });
 
-const workflowGet = defineInvokeChannel({
+export const workflowGet = defineInvokeChannel({
   channel: 'workflow:get',
   v: 1,
   sensitive: false,
@@ -45,53 +45,48 @@ const workflowGet = defineInvokeChannel({
     version: z.union([z.string(), z.number()]).optional(),
   }),
   responseSchema: z.object({ workflow: z.unknown() }),
-  handler: () => notImplemented('workflow:get'),
 });
 
-const runStart = defineInvokeChannel({
+export const runStart = defineInvokeChannel({
   channel: 'run:start',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ workflowVersionId: z.string(), input: z.unknown() }),
   responseSchema: z.object({ runId: z.string() }),
-  handler: () => notImplemented('run:start'),
 });
 
-const runCancel = defineInvokeChannel({
+export const runCancel = defineInvokeChannel({
   channel: 'run:cancel',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ runId: z.string() }),
   responseSchema: z.object({ accepted: z.boolean() }),
-  handler: () => notImplemented('run:cancel'),
 });
 
-const runSubscribe = defineInvokeChannel({
+export const runSubscribe = defineInvokeChannel({
   channel: 'run:subscribe',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ runId: z.string() }),
   responseSchema: z.object({ subscribed: z.boolean() }),
-  handler: () => notImplemented('run:subscribe'),
 });
 
-const runEvent = defineEventChannel({
+export const runEvent = defineEventChannel({
   channel: 'run:event',
   v: 1,
   sensitive: false,
   payloadSchema: z.object({ runId: z.string(), type: z.string(), data: z.unknown() }),
 });
 
-const providerTestConnection = defineInvokeChannel({
+export const providerTestConnection = defineInvokeChannel({
   channel: 'provider:testConnection',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ connectionId: z.string() }),
   responseSchema: z.object({ ok: z.boolean(), latencyMs: z.number().optional() }),
-  handler: () => notImplemented('provider:testConnection'),
 });
 
-const connectionCreate = defineInvokeChannel({
+export const connectionCreate = defineInvokeChannel({
   channel: 'connection:create',
   v: 1,
   sensitive: true, // may carry an inline raw key before it's exchanged for a vault handle
@@ -102,55 +97,54 @@ const connectionCreate = defineInvokeChannel({
     inlineKey: z.string().optional(),
   }),
   responseSchema: z.object({ id: z.string() }),
-  handler: () => notImplemented('connection:create'),
 });
 
-const connectionList = defineInvokeChannel({
+export const connectionList = defineInvokeChannel({
   channel: 'connection:list',
   v: 1,
   sensitive: false,
   requestSchema: z.object({}),
   responseSchema: z.object({ connections: z.array(z.unknown()) }),
-  handler: () => notImplemented('connection:list'),
 });
 
-const vaultSetSecret = defineInvokeChannel({
+export const vaultSetSecret = defineInvokeChannel({
   channel: 'vault:setSecret',
-  v: 1,
+  // v2: `scope` narrowed from an open string to the vault's actual scope
+  // union when the handler landed in M0-11. CLAUDE.md: "adding a field is
+  // fine, changing one needs a version bump" — narrowing what a field accepts
+  // is changing it, so this bumps even though v1 never had a working handler
+  // for anything to depend on.
+  v: 2,
   sensitive: true,
-  requestSchema: z.object({ scope: z.string(), value: z.string() }),
+  requestSchema: z.object({ scope: z.enum(['connection', 'licence']), value: z.string() }),
   responseSchema: z.object({ handle: z.string() }),
-  handler: () => notImplemented('vault:setSecret'),
 });
 
-const vaultHasSecret = defineInvokeChannel({
+export const vaultHasSecret = defineInvokeChannel({
   channel: 'vault:hasSecret',
   v: 1,
   sensitive: false,
   requestSchema: z.object({ handle: z.string() }),
   responseSchema: z.object({ exists: z.boolean() }),
-  handler: () => notImplemented('vault:hasSecret'),
 });
 
-const licenceActivate = defineInvokeChannel({
+export const licenceActivate = defineInvokeChannel({
   channel: 'licence:activate',
   v: 1,
   sensitive: true,
   requestSchema: z.object({ token: z.string() }),
   responseSchema: z.object({ tier: z.string(), activatedAt: z.string() }),
-  handler: () => notImplemented('licence:activate'),
 });
 
-const licenceStatus = defineInvokeChannel({
+export const licenceStatus = defineInvokeChannel({
   channel: 'licence:status',
   v: 1,
   sensitive: false,
   requestSchema: z.object({}),
   responseSchema: z.object({ tier: z.string(), graceExpiresAt: z.string().nullable() }),
-  handler: () => notImplemented('licence:status'),
 });
 
-const templateImport = defineInvokeChannel({
+export const templateImport = defineInvokeChannel({
   channel: 'template:import',
   v: 1,
   sensitive: false,
@@ -159,10 +153,9 @@ const templateImport = defineInvokeChannel({
     path: z.string(),
   }),
   responseSchema: z.object({ workflowId: z.string() }),
-  handler: () => notImplemented('template:import'),
 });
 
-const evalRun = defineInvokeChannel({
+export const evalRun = defineInvokeChannel({
   channel: 'eval:run',
   v: 1,
   sensitive: false,
@@ -171,9 +164,11 @@ const evalRun = defineInvokeChannel({
     provider: z.union([z.literal('mock'), z.literal('live')]),
   }),
   responseSchema: z.object({ passed: z.boolean(), results: z.array(z.unknown()) }),
-  handler: () => notImplemented('eval:run'),
 });
 
+// Widened to the erased union for storage: the definitions above keep their
+// inferred request/response types so handlers.ts can be checked against them,
+// but a registry holding them side by side needs one common type.
 const ALL_CHANNELS: ChannelDefinition[] = [
   workflowSave,
   workflowList,

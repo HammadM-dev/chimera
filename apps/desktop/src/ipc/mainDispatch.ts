@@ -1,5 +1,9 @@
 import { ipcMain, type IpcMainInvokeEvent, type WebContents } from 'electron';
 import { getChannel } from './registry.ts';
+import { getHandler } from './types.ts';
+// Imported for its side effect: handlers.ts registers every handler at import
+// time. Main-process only — see its header comment.
+import './handlers.ts';
 import type { InvokeEnvelope, EventEnvelope, WireResult } from './types.ts';
 import {
   IpcError,
@@ -47,8 +51,19 @@ async function dispatch(envelope: InvokeEnvelope): Promise<WireResult<unknown>> 
     };
   }
 
+  const handler = getHandler(envelope.channel);
+  if (!handler) {
+    return {
+      ok: false,
+      error: new IpcError(
+        'IPC_NO_HANDLER',
+        `"${envelope.channel}" is registered but has no handler — handlers.ts is out of sync with registry.ts`,
+      ).toWireFormat(),
+    };
+  }
+
   try {
-    const result = await def.handler(parsedRequest.data);
+    const result = await handler(parsedRequest.data);
     const parsedResponse = def.responseSchema.safeParse(result);
     if (!parsedResponse.success) {
       return {

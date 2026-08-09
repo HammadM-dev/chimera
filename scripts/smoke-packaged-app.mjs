@@ -2,11 +2,19 @@
 // docs/ROADMAP.md M0-9: "it builds and launches". Building an artifact proves
 // electron-builder ran; it does not prove the thing it produced starts. This
 // launches the packaged binary for the current platform against a throwaway
-// profile and waits for the app to write local-settings.json, which only
-// happens after the main process is ready, the window has been created, and
-// the splash decision has been consumed (apps/desktop/src/windows.ts). That
-// makes it a real end-to-end signal rather than a "the process did not exit
-// within N seconds" guess.
+// profile and waits for two files to appear in it:
+//
+//   local-settings.json  written once the main process is ready, the window
+//                        exists, and the splash decision has been consumed
+//                        (apps/desktop/src/windows.ts)
+//   chimera.sqlite       written once better-sqlite3 has loaded and applied
+//                        migrations (apps/desktop/src/store/lifecycle.ts)
+//
+// The second is the one that earns the matrix its keep. Native modules ship as
+// prebuilt .node binaries unpacked out of the asar, and whether the right one
+// exists and loads is exactly the per-platform question a Linux-only developer
+// cannot answer locally. A build that packages a broken or missing binary
+// still produces an artifact; it just fails the moment it opens a database.
 //
 // Runs on all three matrix platforms. On Linux it needs a display server, so
 // the workflow wraps it in xvfb-run exactly as it does the e2e job.
@@ -51,6 +59,7 @@ if (!binary || !existsSync(binary)) {
 
 const profile = mkdtempSync(path.join(os.tmpdir(), 'chimera-smoke-'));
 const settingsFile = path.join(profile, 'local-settings.json');
+const databaseFile = path.join(profile, 'chimera.sqlite');
 
 console.log(`Launching ${path.relative(repoRoot, binary)} against a throwaway profile...`);
 
@@ -76,7 +85,7 @@ function cleanUp() {
 
 async function waitForLaunch() {
   for (;;) {
-    if (existsSync(settingsFile)) {
+    if (existsSync(settingsFile) && existsSync(databaseFile)) {
       const settings = JSON.parse(readFileSync(settingsFile, 'utf8'));
       if (settings.hasSeenSplash === true) return;
     }
@@ -86,7 +95,13 @@ async function waitForLaunch() {
       );
     }
     if (Date.now() - startedAt > TIMEOUT_MS) {
-      throw new Error(`the app did not finish starting within ${TIMEOUT_MS}ms.\n${stderr}`);
+      const missing = [
+        existsSync(settingsFile) ? null : 'local-settings.json',
+        existsSync(databaseFile) ? null : 'chimera.sqlite (better-sqlite3 may have failed to load)',
+      ].filter(Boolean);
+      throw new Error(
+        `the app did not finish starting within ${TIMEOUT_MS}ms; never wrote: ${missing.join(', ')}.\n${stderr}`,
+      );
     }
     await new Promise((resolve) => setTimeout(resolve, POLL_MS));
   }
@@ -94,7 +109,9 @@ async function waitForLaunch() {
 
 try {
   await waitForLaunch();
-  console.log(`Packaged app launched and initialised in ${Date.now() - startedAt}ms.`);
+  console.log(
+    `Packaged app launched, opened its database, and initialised in ${Date.now() - startedAt}ms.`,
+  );
 } catch (err) {
   console.error(`Packaged app smoke check failed: ${err.message}`);
   cleanUp();

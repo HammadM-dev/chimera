@@ -11,13 +11,19 @@
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.e2e.json",
     "test": "node --test",
     "build": "npm run build --workspace @chimera/ui && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
-    "postbuild": "node scripts/copy-renderer.mjs",
+    "postbuild": "node scripts/copy-app-assets.mjs",
     "start": "npm run build && electron .",
     "test:e2e": "npm run build && playwright test",
     "package": "npm run build && electron-builder --publish=never"
   },
   "devDependencies": {
     "electron": "43.3.0",
-    "zod": "^4.4.3"
+    "zod": "^4.4.3",
+    "@chimera/store": "*",
+    "@chimera/core": "*"
+  },
+  "dependencies": {
+    "better-sqlite3": "^13.0.3",
+    "@napi-rs/keyring": "^1.3.0"
   }
 }
