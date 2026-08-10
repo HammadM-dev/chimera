@@ -3,8 +3,10 @@ import type { WebContents } from 'electron';
 import { ProviderError } from '@chimera/errors';
 import { connectionsRepository, setSecret, settingsRepository, type AuthRef } from '@chimera/store';
 import {
+  HealthMonitor,
   adapterFor,
   capabilityMatrix,
+  PROVIDER_KINDS,
   createConnectionRegistry,
   type ConnectionRegistry,
   type ProviderConnection,
@@ -28,6 +30,7 @@ function providerRegistry(): ConnectionRegistry {
 export function closeProviderRegistry(): void {
   registry?.close();
   registry = undefined;
+  monitor = undefined;
 }
 
 export interface CreateConnectionRequest {
@@ -84,7 +87,11 @@ export interface ConnectionSummary {
  * let the user choose one the workspace has explicitly ruled out. `authRef` is
  * deliberately not included: the renderer has no use for a vault handle.
  */
-export function listConnections(): { connections: ConnectionSummary[]; localOnlyMode: boolean } {
+export function listConnections(): {
+  connections: ConnectionSummary[];
+  localOnlyMode: boolean;
+  kinds: string[];
+} {
   const registryInstance = providerRegistry();
   return {
     connections: registryInstance.list().map((connection) => ({
@@ -95,6 +102,7 @@ export function listConnections(): { connections: ConnectionSummary[]; localOnly
       healthState: connection.healthState,
     })),
     localOnlyMode: registryInstance.localOnlyMode(),
+    kinds: [...PROVIDER_KINDS],
   };
 }
 
@@ -214,6 +222,40 @@ export function estimateCost(
     (inputTokens / 1_000_000) * pricing.inputPerMillion +
     (outputTokens / 1_000_000) * pricing.outputPerMillion
   );
+}
+
+let monitor: HealthMonitor | undefined;
+
+/**
+ * Probes every visible connection once and returns their refreshed states.
+ *
+ * The monitor is held across calls because the circuit breaker is stateful —
+ * "three consecutive failures" is not a fact a fresh breaker can know. Probing
+ * is sequential from the renderer's point of view (one sweep per request) but
+ * concurrent inside `sweep()`, so one unreachable provider does not delay the
+ * others.
+ */
+export async function sweepHealth(): Promise<{ connections: ConnectionSummary[] }> {
+  const registryInstance = providerRegistry();
+  monitor ??= new HealthMonitor(getStore());
+
+  const connections = registryInstance.list();
+  await monitor.sweep(
+    connections.map((connection) => ({
+      connectionId: connection.id,
+      adapter: adapterFor(connection.kind),
+      options: {
+        authRef: connection.authRef,
+        ...(connection.baseUrl === null ? {} : { baseUrl: connection.baseUrl }),
+      },
+    })),
+  );
+
+  // The probe wrote health_state to SQLite; the registry caches rows, so it has
+  // to be told to re-read or the status bar would show the state from before
+  // the sweep it just asked for.
+  registryInstance.refresh();
+  return { connections: listConnections().connections };
 }
 
 export function setLocalOnlyMode(enabled: boolean): void {

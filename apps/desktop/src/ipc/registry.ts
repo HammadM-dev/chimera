@@ -152,6 +152,27 @@ export const connectionList = defineInvokeChannel({
   responseSchema: z.object({
     connections: z.array(connectionSummary),
     localOnlyMode: z.boolean(),
+    // Additive in M1-11 (CLAUDE.md: "adding a field is fine"). The renderer
+    // needs the kind list to offer it in the connection form, and deriving it
+    // here rather than duplicating PROVIDER_KINDS in apps/ui keeps one answer.
+    kinds: z.array(z.string()),
+  }),
+});
+
+/**
+ * Runs one health sweep and returns the result.
+ *
+ * Renderer-driven rather than a timer in main: the status bar is the only
+ * consumer, a window that is closed needs no probing, and a pull keeps the
+ * probe cadence visible in one place instead of split across processes.
+ */
+export const healthSweep = defineInvokeChannel({
+  channel: 'health:sweep',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    connections: z.array(connectionSummary),
   }),
 });
 
@@ -312,6 +333,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   providerTestConnection,
   connectionCreate,
   connectionList,
+  healthSweep,
   vaultSetSecret,
   vaultHasSecret,
   licenceActivate,

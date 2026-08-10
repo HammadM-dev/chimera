@@ -419,6 +419,14 @@ Acceptance criteria:
 - The status bar (stubbed minimally here, built out fully in M4's shell work) shows live health state (M1-8) and a running cost figure for the session across all three connections.
 - All M1 tickets' acceptance criteria pass in CI; `npm test` is green.
 
+DECISION: **the health sweep is pulled by the renderer, not run on a timer in main.** The status bar is the only consumer; a closed window needs no probing, and a pull keeps the cadence in one visible place rather than split across two processes. The `HealthMonitor` instance is held across calls because the breaker is stateful — "three consecutive failures" is not something a fresh breaker can know — and the registry is explicitly refreshed after each sweep, since it caches rows and would otherwise report the state from before the sweep that was just requested.
+
+DECISION: **the session meter counts unpriced exchanges separately rather than adding them as zero.** A total that silently absorbed unpriced calls would read as complete when it is not, which is the same failure mode `$0.00` would have been in M1-10's per-exchange readout. The bar shows `$0.7000 this session · 1 unpriced`.
+
+DECISION: **`connection:list` gained a `kinds` field rather than the renderer duplicating `PROVIDER_KINDS`.** Additive, so no version bump (CLAUDE.md: "adding a field is fine"). `apps/ui` imports nothing from `packages/*`, so the alternative was a hand-maintained copy of the kind list in the renderer — the same drift the preload duplication in M1-10 had to be guarded with a test to make safe. Deriving it in main leaves one answer.
+
+DECISION: **the demo's three connections all point at one local gateway stub.** CLAUDE.md forbids CI touching a real provider, and the criterion is about the three *adapters* and the surfaces around them, not about three distinct hosts. The stub serves `/v1/models`, a non-streaming completion for the health probe, and a streaming one for the panel, so each adapter exercises its real request and response translation. Verifying against real keys is a manual step, listed in the M1 summary as outstanding.
+
 Dependencies: M1-3, M1-7, M1-8, M1-9, M1-10.
 
 ---

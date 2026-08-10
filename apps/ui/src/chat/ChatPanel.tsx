@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError, type ChatDelta, type ConnectionSummary } from './useChimera.ts';
+import { recordExchange } from '../shell/sessionMeter.ts';
 import './chat.css';
 
 // M1-10's minimal chat panel: pick a connection, send a message, watch the
@@ -15,7 +16,12 @@ interface Usage {
 
 type Phase = 'idle' | 'streaming' | 'done' | 'failed';
 
-export function ChatPanel(): JSX.Element {
+interface Props {
+  /** Bumped by the connection form so a new connection appears without a reload. */
+  refreshToken: number;
+}
+
+export function ChatPanel({ refreshToken }: Props): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [localOnlyMode, setLocalOnlyMode] = useState(false);
   const [selectedId, setSelectedId] = useState('');
@@ -30,6 +36,10 @@ export function ChatPanel(): JSX.Element {
   // The stream this panel is currently listening for. Deltas carry a streamId
   // so a late event from an abandoned request cannot overwrite a newer answer.
   const activeStream = useRef<string | null>(null);
+  // The usage object already counted towards the session total. Identity, not
+  // value: two identical exchanges are still two exchanges, and editing the
+  // model box after a run must not bill the session a second time.
+  const countedUsage = useRef<Usage | null>(null);
 
   const refreshConnections = useCallback(async () => {
     try {
@@ -47,7 +57,7 @@ export function ChatPanel(): JSX.Element {
 
   useEffect(() => {
     void refreshConnections();
-  }, [refreshConnections]);
+  }, [refreshConnections, refreshToken]);
 
   // Subscribed once for the panel's lifetime rather than per send: attaching a
   // listener after the invoke resolves would race the first delta, which on a
@@ -90,7 +100,12 @@ export function ChatPanel(): JSX.Element {
           inputTokens: usage.inputTokens,
           outputTokens: usage.outputTokens,
         });
-        if (!cancelled) setCost(result.cost);
+        if (cancelled) return;
+        setCost(result.cost);
+        if (countedUsage.current !== usage) {
+          countedUsage.current = usage;
+          recordExchange(result.cost);
+        }
       } catch {
         if (!cancelled) setCost(null);
       }

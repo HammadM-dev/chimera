@@ -131,7 +131,13 @@ All renderer-to-main communication is `window.chimera.*`, exposed by `apps/deskt
 | `run:event` | push | no | Streamed run update: node status change, token/cost delta, trace append |
 | `provider:testConnection` | invoke | no | Round-trip a lightweight request to a `ProviderConnection` to confirm reachability and auth validity |
 | `connection:create` | invoke | **yes** | Register a new `ProviderConnection`; if called with an inline raw key rather than a pre-vaulted handle, payload is redacted before logging |
-| `connection:list` | invoke | no | List connections with current `healthState` |
+| `connection:list` | invoke | no | List connections with current `healthState`, the workspace's local-only flag, and the provider kinds the form may offer |
+| `health:sweep` | invoke | no | Probe every visible connection once and return their refreshed `healthState`s (M1-8's monitor, pulled by the status bar) |
+| `omniroute:detect` | invoke | no | Probe the local OmniRoute instance; "not detected" is a normal answer, never an error |
+| `omniroute:import` | invoke | no | Import OmniRoute's `/v1/models` catalogue and create or update its single `connections` row |
+| `chat:send` | invoke | no | Start a streamed completion against a connection; returns a `streamId` immediately |
+| `chat:delta` | push | no | One streamed chunk, terminal usage, or terminal error for a `streamId` |
+| `chat:estimateCost` | invoke | no | Cost in USD for a completed exchange, or `null` when the model has no verified price |
 | `vault:setSecret` | invoke | **yes** | Write a secret into the OS keychain and return a handle; payload (the raw secret) is never logged |
 | `vault:hasSecret` | invoke | no | Boolean existence check by handle, no secret material returned |
 | `licence:activate` | invoke | **yes** | Submit an activation token; payload redacted in logs and traces |
