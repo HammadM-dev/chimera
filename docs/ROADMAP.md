@@ -290,6 +290,16 @@ Acceptance criteria:
 - `mock.ts` can be configured to simulate a rate-limit error, an auth error, and a malformed structured-output response, one scenario per test case, to exercise error-path handling in later milestones without a real API.
 - Adapter conforms to the exact same `ProviderAdapter` interface as every real adapter — no special-cased "if mock" branch anywhere in `packages/core` (there is no `packages/core` yet at this milestone, but the adapter itself is built to this discipline now since M2 depends on it).
 
+DECISION: **built out of order, before M1-4.** M1-4's own second acceptance criterion is "each adapter has an integration test running against `packages/providers/src/mock.ts` (M1-6)", so the mock has to exist before the real adapters can be tested as the ticket requires. The roadmap's numbering has them the other way round; the dependency does not.
+
+DECISION: **the fingerprint hashes the normalised request, not the role/goal tuple `docs/TESTING.md` §2.2 specifies.** Roles arrive at M2-5 and goals at M2-7, and none of those concepts exist to hash yet — but by the time they do, they will be *inside* the request's messages and tools. Hashing the request is the same information expressed in the vocabulary that exists today, and needs no revisiting when roles land. Tool order is normalised out, so two requests differing only in tool declaration order fingerprint identically: without that, a golden eval's "run this twice, expect the same trace" check would fail for a reason unrelated to the workflow.
+
+DECISION: **the synthetic models are not merged into `capabilityMatrix.ts`.** `docs/TESTING.md` §2.3 asks for them "through the same `capabilityMatrix.ts` shape", which they are — they are `ModelCapabilities` records — but the real matrix is the real catalogue, and `mock-frontier` appearing in a user's model picker would be a defect. They are exported from `mock.ts` instead. Their `verifiedAt` is the epoch date, because they are invented and any other value would be a lie in a field whose whole purpose is provenance.
+
+DECISION: **`MockProvider.kind` reports a real provider kind, not a `'mock'` kind.** A distinct kind would be an invitation for `if (kind === 'mock')` somewhere upstream, which is the exact branch this design exists to prevent. `registry.registerForTest()` (also specified in `docs/TESTING.md` §2.4) is deliberately **not** built here: it is a hook into adapter resolution, and adapter resolution does not exist yet. Adding it now would be a stub with no call path.
+
+Found by a test rather than by review: `chat()` originally threw synchronously for a scripted error instead of returning a rejected promise. That is a different shape from every real adapter, and a caller using `.catch()` without a surrounding try/catch would have crashed against the mock while working fine against Anthropic — precisely the divergence this adapter exists to prevent. It is `async` now.
+
 Dependencies: M1-2.
 
 ### M1-7: OmniRoute detection and guided setup

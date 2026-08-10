@@ -33,3 +33,11 @@ export type {
 export * as capabilityMatrix from './capabilityMatrix.ts';
 export { FALLBACK_CAPABILITIES, MODEL_CAPABILITIES } from './capabilityMatrix.ts';
 export type { ModelCapabilities, Pricing, Support } from './capabilityMatrix.ts';
+export { MockProvider, MOCK_MODELS, fingerprintOf, mockTokenCount } from './mock.ts';
+export type {
+  MockScript,
+  MockResponse,
+  MockPersona,
+  MockProviderOptions,
+  MockErrorKind,
+} from './mock.ts';
