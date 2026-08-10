@@ -291,7 +291,17 @@ Acceptance criteria:
 - `openaiCompatible.ts` accepts a user-supplied `baseUrl` and successfully round-trips a scripted request/response against a local test server stub.
 - OmniRoute adapter's `listModels()` call maps directly onto `/v1/models` per F1.5.
 
-Dependencies: M1-2.
+DECISION: **all five subclass one configurable base rather than copying the translation.** `openaiCompatible.ts` holds the OpenAI Chat Completions translation verified in M1-4, and OpenAI, OpenRouter, OmniRoute, Ollama and LM Studio are that class with different endpoint configuration — base URL, provider name, probe model, and whether a credential is required. Five separate implementations of the same wire format would drift: a fix to tool-argument handling or the `[DONE]` sentinel would have to land five times, and the fifth would be forgotten. The tests run one shared suite across all five for the same reason.
+
+DECISION: **local endpoints are keyless by design.** Ollama, LM Studio, and a local OmniRoute set `requiresCredential: false` and send no `Authorization` header when the vault has nothing for them. Demanding a credential would make an ordinary local setup impossible to express — there is no key to enter — and inventing a placeholder one would put a fake secret in the vault. Hosted endpoints still refuse to call without a credential, and both halves are asserted.
+
+DECISION: **`listModels()` returns an empty list rather than throwing when an endpoint has no catalogue.** `/v1/models` is near-universal among OpenAI-compatible servers but not guaranteed, and a self-hosted server without one is a normal condition rather than a failure. An adapter that threw would break connection setup for every endpoint that simply does not publish a catalogue. OmniRoute needs no override at all — F1.5's catalogue import is the base behaviour unchanged.
+
+The generic adapter's round-trip test runs against a **real `node:http` server on an ephemeral port, using the real global `fetch`** rather than an injected stub. A stubbed fetch would not demonstrate the thing the criterion actually asks about — that the adapter can talk to an arbitrary user-supplied URL — and would pass even if URL construction were broken.
+
+A third Node type-stripping constraint, after M1-4's two: **a type-only export must be imported with `import type`.** `import { AddressInfo } from 'node:net'` typechecks and throws `SyntaxError: does not provide an export named 'AddressInfo'` at runtime, because stripping leaves the value import in place. Caught by running the tests.
+
+Dependencies: M1-2, M1-4 (the translation this reuses).
 
 ### M1-6: Mock provider
 

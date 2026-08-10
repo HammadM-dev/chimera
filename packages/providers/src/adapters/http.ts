@@ -176,6 +176,42 @@ async function send(options: PostOptions): Promise<Response> {
   return response;
 }
 
+/** A GET, for catalogue endpoints like `/v1/models`. */
+export async function getJson<T>(options: Omit<PostOptions, 'body'>): Promise<T> {
+  let response: Response;
+  try {
+    response = await options.transport.fetch(options.url, {
+      method: 'GET',
+      headers: options.headers,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw err;
+    const message = scrub(err instanceof Error ? err.message : String(err), options.secrets ?? []);
+    throw new ProviderError(
+      'PROVIDER_UNREACHABLE',
+      `Could not reach ${options.provider}: ${message}`,
+      { provider: options.provider },
+    );
+  }
+  if (!response.ok) {
+    const text = await response.text().catch(() => '');
+    throw errorForStatus(
+      options.provider,
+      response.status,
+      response.headers,
+      text,
+      options.secrets ?? [],
+    );
+  }
+  const text = await response.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw invalidResponse(options.provider, 'body was not valid JSON');
+  }
+}
+
 export async function postJson<T>(options: PostOptions): Promise<T> {
   const response = await send(options);
   const text = await response.text();
