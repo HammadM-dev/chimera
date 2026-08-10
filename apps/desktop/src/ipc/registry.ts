@@ -259,6 +259,31 @@ export const chatEstimateCost = defineInvokeChannel({
   responseSchema: z.object({ cost: z.number().nullable() }),
 });
 
+/** F1.5 detection. Never rejects for "not installed" — that is a normal answer. */
+export const omnirouteDetect = defineInvokeChannel({
+  channel: 'omniroute:detect',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ baseUrl: z.string().optional() }),
+  responseSchema: z.object({
+    state: z.enum(['detected', 'not-detected']),
+    baseUrl: z.string(),
+    modelCount: z.number(),
+  }),
+});
+
+export const omnirouteImport = defineInvokeChannel({
+  channel: 'omniroute:import',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ baseUrl: z.string().optional() }),
+  responseSchema: z.object({
+    connectionId: z.string(),
+    modelCount: z.number(),
+    created: z.boolean(),
+  }),
+});
+
 export const chatDelta = defineEventChannel({
   channel: 'chat:delta',
   v: 1,
@@ -295,6 +320,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   evalRun,
   chatSend,
   chatEstimateCost,
+  omnirouteDetect,
+  omnirouteImport,
   chatDelta,
 ];
 

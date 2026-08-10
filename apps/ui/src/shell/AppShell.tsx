@@ -1,5 +1,6 @@
 import type { JSX } from 'react';
 import { ChatPanel } from '../chat/ChatPanel.tsx';
+import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './shell.css';
 
 // Empty-state copy follows docs/DESIGN.md section 8: an invitation with a
@@ -21,6 +22,7 @@ export function AppShell(): JSX.Element {
       <aside className="shell__inspector" aria-label="Inspector">
         <h2 className="shell__region-title">Inspector</h2>
         <p className="shell__empty">Select a node to configure it.</p>
+        <OmniRouteSetup />
       </aside>
       <footer className="shell__status">
         <span>No active runs</span>

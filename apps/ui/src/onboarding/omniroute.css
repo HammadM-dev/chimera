@@ -1,0 +1,32 @@
+.omniroute {
+  border-top: var(--border-width) solid var(--border-hairline);
+}
+
+.omniroute__body {
+  margin: 0;
+  padding: 12px;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+.omniroute__text {
+  margin: 0 0 8px;
+}
+
+.omniroute__action {
+  font: inherit;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 4px 10px;
+}
+
+.omniroute__detail {
+  margin: 0;
+  padding: 0 12px 12px;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}

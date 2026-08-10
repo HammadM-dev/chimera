@@ -333,6 +333,14 @@ Acceptance criteria:
 - With nothing listening on `localhost:20128`, the UI shows the install-guidance state, not an error toast.
 - Re-running detection after the user installs and starts OmniRoute (simulated by starting the mock server mid-flow) transitions the UI from "not detected" to "detected, importing" to "ready" without a full app restart.
 
+DECISION: **the port is fixed at 20128, but overridable by `CHIMERA_OMNIROUTE_BASE_URL` for tests only.** The acceptance criteria name `localhost:20128` literally, and a test that binds it would fight a developer's own OmniRoute install for the port — which would make the flow least tested on exactly the machines that have OmniRoute. The E2E suite therefore stands its stub on an ephemeral port and points the main process at it through the environment variable; the default, and the only value production ever uses, is still `http://localhost:20128/v1`.
+
+DECISION: **an empty model list counts as not detected.** The adapter's `listModels()` swallows a missing catalogue and returns `[]`, so "something answered on that port but has no models" is indistinguishable from "nothing usable is there". Importing on an empty list would create a connection with no models behind it, which the picker would then offer as if it worked.
+
+DECISION: **import is idempotent — it updates the existing row rather than adding a second.** Criterion 3 makes re-running detection the documented recovery path, so the second run has to be safe. A duplicate OmniRoute connection would be indistinguishable from the first in the picker.
+
+Found by a test rather than by review: the detection probe originally passed a fabricated vault handle to satisfy `AdapterCallOptions.authRef`. Detection runs before any connection exists, so nothing has ever been written under that handle, and `getSecret()` raises `VaultError` for a handle the keychain does not hold. `listModels()` catches everything and returns `[]`, so a *running* OmniRoute would have been reported as absent. The probe now injects a `resolveSecret` that returns `undefined` — correct anyway, since a local gateway may be unauthenticated.
+
 Dependencies: M1-1, M1-5.
 
 ### M1-8: Health checks and circuit breaker

@@ -10,6 +10,7 @@ import {
   startChat,
   testConnection,
 } from '../providers/service.ts';
+import { detect, importCatalogue } from '../providers/omniroute.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -66,6 +67,12 @@ registerHandler(channels.connectionCreate, (payload) => createConnection(payload
 registerHandler(channels.connectionList, () => listConnections());
 registerHandler(channels.providerTestConnection, (payload) => testConnection(payload.connectionId));
 registerHandler(channels.chatSend, (payload, context) => startChat(context.webContents, payload));
+registerHandler(channels.omnirouteDetect, async (payload) => {
+  const result = await detect(payload.baseUrl);
+  return { state: result.state, baseUrl: result.baseUrl, modelCount: result.models.length };
+});
+registerHandler(channels.omnirouteImport, (payload) => importCatalogue(payload.baseUrl));
+
 registerHandler(channels.chatEstimateCost, (payload) => ({
   cost: estimateCost(payload.model, payload.inputTokens, payload.outputTokens),
 }));

@@ -28,12 +28,14 @@ export interface LaunchOptions {
   profile: string;
   /** Absolute path to an `e2e/fixtures` page to load instead of the renderer. */
   fixture?: string;
+  /** Extra environment for the main process, e.g. an OmniRoute stub URL. */
+  env?: Record<string, string>;
 }
 
-export function launchApp({ profile, fixture }: LaunchOptions): Promise<ElectronApplication> {
+export function launchApp({ profile, fixture, env }: LaunchOptions): Promise<ElectronApplication> {
   return electron.launch({
     args: [mainEntry, `--user-data-dir=${profile}`],
     cwd: desktopRoot,
-    env: { ...process.env, CHIMERA_E2E_FIXTURE: fixture ?? '' },
+    env: { ...process.env, CHIMERA_E2E_FIXTURE: fixture ?? '', ...env },
   });
 }
