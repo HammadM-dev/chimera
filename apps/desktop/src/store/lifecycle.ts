@@ -1,4 +1,3 @@
-import { app } from 'electron';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type Database from 'better-sqlite3';
@@ -16,10 +15,19 @@ let db: Database.Database | undefined;
 // and import.meta.url is unambiguous under all of them.
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
-export function openStore(): Database.Database {
+/**
+ * Opens the workspace database under `userDataDir`.
+ *
+ * The path is passed in rather than read from Electron's `app` here, so this
+ * module — and everything that reaches it, which is now the whole main-process
+ * provider surface — imports no Electron at all and can be exercised under
+ * plain `node --test`. A single `import { app } from 'electron'` at the top of
+ * this file was enough to make the IPC handler-coverage test unrunnable.
+ */
+export function openStore(userDataDir: string): Database.Database {
   if (db) return db;
   db = openDatabase({
-    dbPath: path.join(app.getPath('userData'), 'chimera.sqlite'),
+    dbPath: path.join(userDataDir, 'chimera.sqlite'),
     migrationsDir: path.join(moduleDir, 'migrations'),
   });
   return db;

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { listChannels, CHANNEL_REGISTRY } from './registry.ts';
+import { PROVIDER_KINDS } from '@chimera/providers';
+import { listChannels, CHANNEL_REGISTRY, connectionCreate } from './registry.ts';
 import { getHandler } from './types.ts';
 // Side-effect import: registers every handler. Also what makes the coverage
 // test below meaningful rather than vacuous.
@@ -57,4 +58,26 @@ test('every invokable channel has a registered handler', () => {
     if (def.kind !== 'invoke') continue;
     assert.ok(getHandler(def.channel), `${def.channel} has no handler registered in handlers.ts`);
   }
+});
+
+test("the IPC schema's provider kinds match the providers package exactly", async () => {
+  // registry.ts duplicates PROVIDER_KINDS rather than importing it, because
+  // preload.ts imports registry.ts and the providers package pulls native
+  // modules the preload bundler cannot parse (the build fails outright).
+  // A duplicated list drifts, so this asserts they are identical rather than
+  // trusting anyone to remember. Importing providers is fine *here*: a test is
+  // never bundled into the preload.
+  const schema = connectionCreate.kind === 'invoke' ? connectionCreate.requestSchema : undefined;
+  assert.ok(schema, 'connection:create should be an invokable channel');
+
+  for (const kind of PROVIDER_KINDS) {
+    assert.doesNotThrow(
+      () => schema.parse({ label: 'x', kind }),
+      `${kind} is a real provider kind but the IPC schema rejects it`,
+    );
+  }
+  assert.throws(
+    () => schema.parse({ label: 'x', kind: 'not-a-real-provider' }),
+    'the IPC schema should reject a kind the providers package does not define',
+  );
 });

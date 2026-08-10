@@ -21,7 +21,10 @@ function logInvoke(envelope: InvokeEnvelope): void {
   console.log('[ipc]', JSON.stringify(formatInvokeLogEntry(envelope, def)));
 }
 
-async function dispatch(envelope: InvokeEnvelope): Promise<WireResult<unknown>> {
+async function dispatch(
+  envelope: InvokeEnvelope,
+  context: { webContents: WebContents },
+): Promise<WireResult<unknown>> {
   const def = getChannel(envelope.channel);
 
   if (!def) {
@@ -63,7 +66,7 @@ async function dispatch(envelope: InvokeEnvelope): Promise<WireResult<unknown>> 
   }
 
   try {
-    const result = await handler(parsedRequest.data);
+    const result = await handler(parsedRequest.data, context);
     const parsedResponse = def.responseSchema.safeParse(result);
     if (!parsedResponse.success) {
       return {
@@ -85,9 +88,9 @@ async function dispatch(envelope: InvokeEnvelope): Promise<WireResult<unknown>> 
 }
 
 export function registerIpcMainHandlers(): void {
-  ipcMain.handle(INVOKE_CHANNEL, async (_event: IpcMainInvokeEvent, envelope: InvokeEnvelope) => {
+  ipcMain.handle(INVOKE_CHANNEL, async (event: IpcMainInvokeEvent, envelope: InvokeEnvelope) => {
     logInvoke(envelope);
-    return dispatch(envelope);
+    return dispatch(envelope, { webContents: event.sender });
   });
 }
 

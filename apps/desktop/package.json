@@ -19,7 +19,8 @@
   "devDependencies": {
     "electron": "43.3.0",
     "zod": "^4.4.3",
-    "@chimera/store": "*"
+    "@chimera/store": "*",
+    "@chimera/providers": "*"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

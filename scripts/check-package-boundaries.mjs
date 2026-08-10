@@ -34,6 +34,18 @@ const RULES = [
     why: 'packages/tools must never import packages/core — docs/ARCHITECTURE.md §3. Tools are invoked through the Governor-gated call path; a tool that can reach the runtime can be invoked around it.',
   },
   {
+    // preload.ts imports registry.ts, types.ts, clientError.ts and
+    // channelNames.ts, and runs sandboxed with no Node integration. Anything
+    // these reach is bundled into the preload — and @chimera/store pulls in
+    // native .node binaries the preload bundler cannot parse at all, so the
+    // build fails rather than degrading. Handlers live in handlers.ts, which
+    // only the main process imports.
+    from: 'apps/desktop/src/ipc',
+    exclude: ['handlers.ts', 'mainDispatch.ts', 'logging.ts'],
+    forbidden: ['@chimera/store', '@chimera/providers', '@chimera/core'],
+    why: 'This module is reachable from the sandboxed preload bundle, which cannot load native modules. Put anything that needs packages/store or packages/providers in handlers.ts (main-process only) — see the header comment on apps/desktop/src/ipc/registry.ts.',
+  },
+  {
     from: 'packages/store/src',
     forbidden: [
       '@chimera/core',
@@ -90,6 +102,13 @@ const violations = [];
 for (const rule of RULES) {
   const root = path.join(repoRoot, rule.from);
   for (const file of collectSourceFiles(root)) {
+    // Files a rule explicitly exempts — main-process-only modules that
+    // happen to sit in the same directory as preload-reachable ones.
+    // Files a rule exempts, plus tests — a test is never bundled into the
+    // preload, and forbidding it from importing the packages it exists to
+    // check would make the rule unverifiable.
+    const base = path.basename(file);
+    if ((rule.exclude ?? []).includes(base) || /\.test\.[cm]?tsx?$/.test(base)) continue;
     const source = readFileSync(file, 'utf8');
     for (const specifier of specifiersIn(source)) {
       // Normalise a relative specifier against its own file so that

@@ -3,6 +3,13 @@
 // and through it better-sqlite3 and @napi-rs/keyring) stay out of the
 // sandboxed preload bundle. See the header comment on registry.ts.
 import { setSecret, getSecret, type AuthRef } from '@chimera/store';
+import {
+  createConnection,
+  estimateCost,
+  listConnections,
+  startChat,
+  testConnection,
+} from '../providers/service.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -24,9 +31,6 @@ stub(channels.workflowGet);
 stub(channels.runStart);
 stub(channels.runCancel);
 stub(channels.runSubscribe);
-stub(channels.providerTestConnection);
-stub(channels.connectionCreate);
-stub(channels.connectionList);
 stub(channels.licenceActivate);
 stub(channels.licenceStatus);
 stub(channels.templateImport);
@@ -51,4 +55,17 @@ registerHandler(channels.vaultSetSecret, (payload) => ({
 // answers without the value crossing a process boundary.
 registerHandler(channels.vaultHasSecret, (payload) => ({
   exists: getSecret(payload.handle as AuthRef) !== undefined,
+}));
+
+// M1-10: the provider channels the chat panel drives. `connection:create` is
+// the one channel that carries a raw key, which is why it is flagged
+// `sensitive` in the registry — its payload is redacted before it reaches a log
+// line, and the key is exchanged for a vault handle inside createConnection()
+// and never returned.
+registerHandler(channels.connectionCreate, (payload) => createConnection(payload));
+registerHandler(channels.connectionList, () => listConnections());
+registerHandler(channels.providerTestConnection, (payload) => testConnection(payload.connectionId));
+registerHandler(channels.chatSend, (payload, context) => startChat(context.webContents, payload));
+registerHandler(channels.chatEstimateCost, (payload) => ({
+  cost: estimateCost(payload.model, payload.inputTokens, payload.outputTokens),
 }));

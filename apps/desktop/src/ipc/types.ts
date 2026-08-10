@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import type { WebContents } from 'electron';
 
 export interface InvokeEnvelope<TPayload = unknown> {
   v: number;
@@ -60,8 +61,20 @@ export function defineEventChannel<TPayload>(
   return { kind: 'event', ...def };
 }
 
+/**
+ * Context a handler may need beyond its payload.
+ *
+ * `webContents` is how a handler pushes events back to the window that called
+ * it — a streaming channel has to answer the specific renderer that asked,
+ * not broadcast to every open window.
+ */
+export interface HandlerContext {
+  webContents: WebContents;
+}
+
 export type ChannelHandler<TReq = unknown, TRes = unknown> = (
   payload: TReq,
+  context: HandlerContext,
 ) => Promise<TRes> | TRes;
 
 // Main-process only. Populated by handlers.ts at import time; read by

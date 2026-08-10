@@ -65,3 +65,4 @@ export type {
   MonitoredConnection,
   SelfReportingAdapter,
 } from './health.ts';
+export { adapterFor } from './adapterFactory.ts';

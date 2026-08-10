@@ -1,4 +1,30 @@
 import { z } from 'zod';
+
+/**
+ * The provider kinds, duplicated here rather than imported from
+ * `@chimera/providers`.
+ *
+ * This module is imported by preload.ts, which runs sandboxed with no Node
+ * integration. Importing the providers package pulls in `@chimera/store` and
+ * through it `@napi-rs/keyring`'s native `.node` binary, which the preload
+ * bundler cannot even parse — the build fails outright. That is the same
+ * boundary the registry/handler split exists to protect, reached by a new path.
+ *
+ * A duplicated list can drift, so it is not left to vigilance:
+ * `registry.test.ts` asserts this array equals `PROVIDER_KINDS` exactly, and
+ * `scripts/check-package-boundaries.mjs` fails the build if this file ever
+ * imports the providers or store package again.
+ */
+const PROVIDER_KINDS = [
+  'anthropic',
+  'openai',
+  'google',
+  'openrouter',
+  'omniroute',
+  'ollama',
+  'lmstudio',
+  'openai-compatible',
+] as const;
 import { defineInvokeChannel, defineEventChannel } from './types.ts';
 import type { ChannelDefinition } from './types.ts';
 
@@ -80,31 +106,53 @@ export const runEvent = defineEventChannel({
 
 export const providerTestConnection = defineInvokeChannel({
   channel: 'provider:testConnection',
-  v: 1,
+  v: 2,
   sensitive: false,
   requestSchema: z.object({ connectionId: z.string() }),
-  responseSchema: z.object({ ok: z.boolean(), latencyMs: z.number().optional() }),
+  responseSchema: z.object({
+    ok: z.boolean(),
+    latencyMs: z.number(),
+    detail: z.string().optional(),
+  }),
 });
 
 export const connectionCreate = defineInvokeChannel({
   channel: 'connection:create',
-  v: 1,
-  sensitive: true, // may carry an inline raw key before it's exchanged for a vault handle
+  // v2: `kind` narrowed to the real provider union and the response widened to
+  // the created row's fields when the handler landed in M1-10. CLAUDE.md —
+  // changing a field needs a version bump.
+  v: 2,
+  sensitive: true, // carries the raw key before it is exchanged for a vault handle
   requestSchema: z.object({
-    label: z.string(),
-    kind: z.string(),
+    label: z.string().min(1),
+    kind: z.enum(PROVIDER_KINDS),
     baseUrl: z.string().optional(),
     inlineKey: z.string().optional(),
   }),
-  responseSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ id: z.string(), label: z.string(), kind: z.string() }),
+});
+
+export const connectionSummary = z.object({
+  id: z.string(),
+  label: z.string(),
+  kind: z.string(),
+  baseUrl: z.string().nullable(),
+  healthState: z.string(),
 });
 
 export const connectionList = defineInvokeChannel({
   channel: 'connection:list',
-  v: 1,
+  // v2: the response shape went from `unknown[]` to a real summary in M1-10.
+  // Deliberately carries no authRef — the renderer has no use for a vault
+  // handle and giving it one would put a credential reference on a channel
+  // flagged non-sensitive.
+  v: 2,
   sensitive: false,
   requestSchema: z.object({}),
-  responseSchema: z.object({ connections: z.array(z.unknown()) }),
+  responseSchema: z.object({
+    connections: z.array(connectionSummary),
+    localOnlyMode: z.boolean(),
+  }),
 });
 
 export const vaultSetSecret = defineInvokeChannel({
@@ -169,6 +217,65 @@ export const evalRun = defineInvokeChannel({
 // Widened to the erased union for storage: the definitions above keep their
 // inferred request/response types so handlers.ts can be checked against them,
 // but a registry holding them side by side needs one common type.
+/**
+ * Starts a streamed completion. Resolves as soon as the request is accepted;
+ * the tokens arrive as `chat:delta` events keyed by the returned streamId.
+ *
+ * Split this way because Electron's invoke/handle is request/response and
+ * cannot yield — a single invoke that resolved with the whole answer would
+ * defeat the point of streaming, which is that the user sees the first token
+ * immediately rather than after the last one.
+ */
+export const chatSend = defineInvokeChannel({
+  channel: 'chat:send',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    connectionId: z.string(),
+    model: z.string(),
+    prompt: z.string().min(1),
+  }),
+  responseSchema: z.object({ streamId: z.string() }),
+});
+
+/**
+ * Prices a completed exchange.
+ *
+ * Lives in main rather than the renderer because the capability matrix is the
+ * single source of truth for a model's rate, and duplicating that table into
+ * the renderer bundle would create two answers to the same question — one of
+ * which would eventually be stale.
+ */
+export const chatEstimateCost = defineInvokeChannel({
+  channel: 'chat:estimateCost',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    model: z.string(),
+    inputTokens: z.number(),
+    outputTokens: z.number(),
+  }),
+  // Nullable, not zero: a model with no verified price is not free (M1-3).
+  responseSchema: z.object({ cost: z.number().nullable() }),
+});
+
+export const chatDelta = defineEventChannel({
+  channel: 'chat:delta',
+  v: 1,
+  sensitive: false,
+  payloadSchema: z.object({
+    streamId: z.string(),
+    // Discriminated so the renderer never has to guess which fields are set.
+    type: z.enum(['start', 'text', 'finish', 'error']),
+    text: z.string().optional(),
+    inputTokens: z.number().optional(),
+    outputTokens: z.number().optional(),
+    finishReason: z.string().optional(),
+    errorCode: z.string().optional(),
+    errorMessage: z.string().optional(),
+  }),
+});
+
 const ALL_CHANNELS: ChannelDefinition[] = [
   workflowSave,
   workflowList,
@@ -186,6 +293,9 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   licenceStatus,
   templateImport,
   evalRun,
+  chatSend,
+  chatEstimateCost,
+  chatDelta,
 ];
 
 export const CHANNEL_REGISTRY: ReadonlyMap<string, ChannelDefinition> = new Map(

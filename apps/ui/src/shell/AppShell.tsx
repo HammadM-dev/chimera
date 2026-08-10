@@ -1,4 +1,5 @@
 import type { JSX } from 'react';
+import { ChatPanel } from '../chat/ChatPanel.tsx';
 import './shell.css';
 
 // Empty-state copy follows docs/DESIGN.md section 8: an invitation with a
@@ -11,7 +12,11 @@ export function AppShell(): JSX.Element {
         <p className="shell__empty">Build your first workflow, or start from a template.</p>
       </nav>
       <main className="shell__canvas">
-        <p className="shell__empty">Open a workflow to edit it here.</p>
+        {/* M1-10's chat panel stands in for the canvas until M4 builds the
+            real one. It is here rather than in a separate route because M1 has
+            no router and adding one for a single surface would be scaffolding
+            with no second user. */}
+        <ChatPanel />
       </main>
       <aside className="shell__inspector" aria-label="Inspector">
         <h2 className="shell__region-title">Inspector</h2>

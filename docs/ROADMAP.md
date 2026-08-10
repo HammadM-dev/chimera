@@ -387,6 +387,18 @@ Acceptance criteria:
 - `connection:create` and `vault:setSecret` payloads are confirmed redacted in logs (re-exercising M0-4's sensitive-channel redaction against real payloads for the first time).
 - Testing an intentionally invalid key produces a `ProviderAuthError` surfaced in the UI as a clear inline error, not a crash or an unhandled promise rejection.
 
+DECISION: **streaming is `chat:send` (invoke) plus `chat:delta` (event), not one invoke that resolves with the answer.** Electron's invoke/handle is request/response and cannot yield. A single invoke returning the finished text would defeat the entire point of streaming — that the user sees the first token immediately rather than after the last one. `chat:send` resolves with a `streamId` as soon as the request is accepted; deltas carry that id so a late event from an abandoned request cannot overwrite a newer answer.
+
+DECISION: **stream errors arrive as a terminal `error` delta, not a thrown handler.** By the time a stream fails the invoke has already resolved, so throwing would become an unhandled rejection in the main process while the renderer waited forever. The error is pushed down the same channel as the tokens.
+
+DECISION: **cost is computed in main, from the capability matrix, and is nullable.** A `chat:estimateCost` channel rather than shipping the rate table into the renderer bundle, which would create two answers to the same question — one of which would eventually be stale. An unpriced model renders "Not priced" rather than `$0.00`: reading "free" off a model nobody has a rate for is the one wrong answer here with a financial consequence, and it is asserted in an E2E test.
+
+Two real problems this ticket surfaced, both caught by the build or the tests rather than by review:
+
+**The preload boundary broke again, through a new path.** Adding `import { PROVIDER_KINDS } from '@chimera/providers'` to `ipc/registry.ts` — which `preload.ts` imports — pulled `@chimera/store` and through it `@napi-rs/keyring`'s native `.node` binary into the sandboxed preload bundle. Rollup cannot parse an ELF file, so the build failed outright rather than shipping something broken. The kinds are now duplicated in `registry.ts` with a test asserting they equal `PROVIDER_KINDS` exactly, and `scripts/check-package-boundaries.mjs` gained a fourth rule forbidding every preload-reachable IPC module from importing `@chimera/store`, `@chimera/providers`, or `@chimera/core`. The duplication is deliberate and guarded; the boundary is now checked rather than remembered.
+
+**One `import { app } from 'electron'` made the whole main-process provider surface untestable.** `store/lifecycle.ts` imported Electron for `app.getPath('userData')`, so anything reaching it — handlers, the provider service, the IPC handler-coverage test — could not run under plain `node --test`. `openStore()` now takes the path as an argument and `main.ts` supplies it, and `service.ts` builds its own event envelope rather than importing `mainDispatch.ts` (which imports `ipcMain`). Neither module imports Electron at runtime now.
+
 Dependencies: M1-4, M1-5, M1-6, M0-4.
 
 ### M1-11: M1 demo — Provider layer exit criteria

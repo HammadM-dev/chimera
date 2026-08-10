@@ -7,7 +7,7 @@ void app.whenReady().then(() => {
   // Before any window exists: the store applies pending migrations on open,
   // and a renderer that came up first could invoke a channel whose handler
   // expects a migrated database.
-  openStore();
+  openStore(app.getPath('userData'));
   registerIpcMainHandlers();
   createWindow();
 

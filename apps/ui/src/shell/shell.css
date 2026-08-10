@@ -26,8 +26,7 @@
   grid-area: canvas;
   background: var(--surface-canvas);
   display: flex;
-  align-items: center;
-  justify-content: center;
+  min-height: 0;
 }
 
 .shell__inspector {
