@@ -52,3 +52,16 @@ export { OpenRouterAdapter } from './adapters/openrouter.ts';
 export { OmniRouteAdapter, OMNIROUTE_DEFAULT_BASE_URL } from './adapters/omniroute.ts';
 export { OllamaAdapter } from './adapters/ollama.ts';
 export { LmStudioAdapter } from './adapters/lmstudio.ts';
+export {
+  CircuitBreaker,
+  HealthMonitor,
+  probeOnce,
+  reportsOwnHealth,
+  DEFAULT_BREAKER,
+} from './health.ts';
+export type {
+  BreakerConfig,
+  ProbeResult,
+  MonitoredConnection,
+  SelfReportingAdapter,
+} from './health.ts';

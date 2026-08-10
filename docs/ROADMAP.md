@@ -344,7 +344,17 @@ Acceptance criteria:
 - A connection that recovers after being marked unhealthy transitions back after 2 consecutive successful probes.
 - The OmniRoute connection's health state is sourced from OmniRoute's reported status rather than independently computed, verified by a test asserting the breaker doesn't fire purely on CHIMERA-side probe failures when OmniRoute reports itself healthy.
 
-Dependencies: M1-1.
+DECISION: **the pass-through is a capability on the adapter, not a check on the provider's name.** `SelfReportingAdapter` is an optional `reportedHealth()` method, and the monitor uses it when present. The obvious implementation — `if (connection.kind === 'omniroute')` in the monitor — would put a provider name in a layer that is supposed to have no idea providers differ, which is the same rule the capability matrix is structurally tested for.
+
+DECISION: **`degraded` is a real state, not decoration.** One failed probe on an otherwise healthy connection is usually a blip; reporting it as `unavailable` immediately would train the user to ignore the indicator, at which point the indicator is worthless. Below the threshold shows `degraded` — something is wrong, the connection is still in service.
+
+DECISION: **the success threshold gates recovery only, not steady-state operation.** A healthy connection that fails one probe and then succeeds is healthy again immediately; it is not held below the line waiting for a second success. Only a connection that actually went `unavailable` has to earn its way back. Asserted directly, because the naive implementation (any success increments a counter that must reach the threshold) passes the two literal criteria while being wrong.
+
+DECISION: **the monitor owns no timer.** `sweep()` is called by whoever schedules it. A monitor with its own `setInterval` would be untestable without a fake clock and would keep the Electron main process awake between runs. `sweep()` uses `allSettled` rather than `all`, so one unreachable provider cannot stop the others being probed — precisely the situation health monitoring exists for.
+
+OPEN, low risk: **OmniRoute's health path is not specified.** F1.5 says only that CHIMERA "surfaces its health endpoint". The adapter tries `/health` on the origin and falls back to `/v1/models` reachability when that 404s, so a differently named route degrades to a working check rather than to a permanently uninspected connection. Worth confirming against the real instance during M1-11's demo.
+
+Dependencies: M1-1, M1-5 (the OmniRoute adapter this defers to).
 
 ### M1-9: Local-only mode workspace flag
 
