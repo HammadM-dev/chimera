@@ -30,3 +30,6 @@ export type {
   ModelDescriptor,
   ConnectionTestResult,
 } from './normalised.ts';
+export * as capabilityMatrix from './capabilityMatrix.ts';
+export { FALLBACK_CAPABILITIES, MODEL_CAPABILITIES } from './capabilityMatrix.ts';
+export type { ModelCapabilities, Pricing, Support } from './capabilityMatrix.ts';
