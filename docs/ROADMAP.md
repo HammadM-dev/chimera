@@ -449,6 +449,16 @@ Acceptance criteria:
 - `packages/core/src/runtime/agentLoop.ts` importing `packages/providers/src/adapters/anthropic.ts` directly (a deliberately introduced bad import, added and then reverted during ticket verification) fails `npm run lint`.
 - The stub's public interface (method names, parameter shape, return shape) is documented as frozen for M3 — M3-1's acceptance criteria include "no call site outside `Governor.ts` itself changes."
 
+DECISION: **the allow branch carries the request, and there is a `notes` field.** `AuthorizationResult` could have been a boolean, and for a stub that authorizes everything it would look identical. It is not, for two reasons that only bite later. §7 says the Governor may return a *modified* request — downgrading the model under `budget.onExceed: degrade_to_cheaper_model` — and a boolean makes that impossible to express without changing every call site in M3, which is the one thing M3-1's criteria forbid. And `notes` records that a call was authorized by a permissive stub rather than by a real check: without it, a permissive build's audit trail is indistinguishable from an enforcing one's, which is the only way this stub could do real harm.
+
+DECISION: **`enforcing` mode throws rather than falling through to permissive.** The dangerous failure for a stub with a final interface is a caller asking for enforcement and silently getting a pass-through. `new Governor('enforcing')` raises `GOVERNOR_NOT_IMPLEMENTED` until M3-1 fills it in.
+
+DECISION: **`ToolCallRequest.irreversible` is declared by the tool server, not inferred from the tool id.** A name-matching rule (`/delete|send|publish/`) would be one rename away from silently un-gating an irreversible tool, and CLAUDE.md's approval-gate rule is not something to leave to a regex.
+
+Every field on `ModelCallRequest` and `ToolCallRequest` exists because one of §7's listed checks needs it: budget needs the token estimates, `limits.ts` needs `iteration` and `depth`, the rate limiter needs `connectionId`, the capability check needs `requiredCapabilities`, the allowlist needs `toolId`, the egress check needs `egressTargets`, and the approval gate needs `irreversible`. Nothing is present speculatively — a field the Governor cannot use yet is a field whose meaning nobody has had to commit to, and this shape is frozen for M3.
+
+Criterion 3 verified by doing it: `packages/core/src/runtime/agentLoop.ts` importing `../../../providers/src/adapters/anthropic.ts` was added, `npm run lint` failed with the no-restricted-imports message, and the file was removed. Criterion 2's spy test lands with `agentLoop.ts` itself in M2-7 — there is no call site to assert against until then, and a test asserting a spy on a function nobody calls would pass while proving nothing.
+
 Dependencies: M1-11.
 
 ### M2-2: MCP client and tool registry

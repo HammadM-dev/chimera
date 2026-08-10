@@ -8,4 +8,18 @@
 // edge docs/ARCHITECTURE.md section 3 forbids and
 // scripts/check-package-boundaries.mjs enforces. Re-exporting it here would
 // quietly recreate the second import path this move exists to close.
-export {};
+export { Governor, createGovernor, deny } from './governor/Governor.ts';
+export type { GovernorMode } from './governor/Governor.ts';
+export type {
+  Authorized,
+  AuthorizationResult,
+  CallContext,
+  CallPurpose,
+  Denied,
+  DenialCode,
+  ModelCallAuthorization,
+  ModelCallRequest,
+  RequiredCapability,
+  ToolCallAuthorization,
+  ToolCallRequest,
+} from './governor/types.ts';

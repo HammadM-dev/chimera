@@ -366,8 +366,10 @@ This is the architectural spine referenced throughout this document and the reas
 
 **Call path.** `packages/core/src/governor/Governor.ts` exposes exactly two entry points that matter for the no-bypass rule:
 
-    Governor.authorizeModelCall(request: ModelCallRequest): AuthorizationResult
-    Governor.authorizeToolCall(request: ToolCallRequest): AuthorizationResult
+    Governor.authorizeModelCall(request: ModelCallRequest): AuthorizationResult<ModelCallRequest>
+    Governor.authorizeToolCall(request: ToolCallRequest): AuthorizationResult<ToolCallRequest>
+
+`AuthorizationResult<T>` is `{ decision: 'allow'; request: T; notes }` or `{ decision: 'deny'; code; message; details }`. The allow branch carries the request back because the Governor may return a *modified* one (the model downgrade below); callers dispatch `result.request`, never the request they submitted. It is parameterised so a model-call authorization cannot be mistaken for a tool-call one — the same type this section always described, stated precisely. Implemented in `packages/core/src/governor/types.ts`; frozen as of M2-1.
 
 `packages/core/src/runtime/agentLoop.ts` calls `authorizeModelCall()` immediately before every provider invocation the agent loop wants to make (a plan step, an act step, a verify step) and calls `authorizeToolCall()` immediately before every tool invocation. The engine's tool-calling node runners (`nodeRunners/tool.ts`, and the tool-invoking path inside `nodeRunners/agent.ts`) do the same. Neither the runtime nor the engine holds a reference to a provider adapter or an MCP server — the only object they hold that can reach one is the Governor, and the Governor's `authorize*` methods return an `AuthorizationResult`, not a live handle to the adapter. The actual dispatch (calling `adapter.chat()` or `toolRegistry.invoke()`) happens in the runtime/engine code *after* a successful `AuthorizationResult`, using the Governor-approved, possibly Governor-modified request (e.g. Governor may downgrade to a cheaper model under `budget.onExceed: degrade_to_cheaper_model`) — the Governor is consulted for every call, not just the first one in a loop.
 
