@@ -365,6 +365,16 @@ Acceptance criteria:
 - Attempting to bind a workflow node to a cloud connection while the flag is set is rejected with a `ValidationError` at save time (the validator itself is built in M4; this ticket lands the flag and the registry-level filtering it depends on, and is re-exercised once M4's validator exists).
 - Toggling the flag off restores full registry visibility without requiring re-import of connections.
 
+DECISION: **the flag lives in the workspace database, not in per-device settings.** Migration `0002` adds a single-row `workspace_settings` table. `apps/desktop`'s `local-settings.json` holds cosmetic per-device preferences (`hasSeenSplash`); local-only mode is a security posture a regulated or air-gapped buyer sets once for the workspace and expects to hold wherever that workspace is opened, including on another machine. Storing it per-device would silently drop the restriction the moment the workspace moved — the exact failure the flag exists to prevent. Documented in `docs/ARCHITECTURE.md` §5 in the same commit.
+
+DECISION: **cloud kinds are excluded by kind, never by URL.** An `anthropic` connection pointed at `http://localhost:8080` is a proxy to Anthropic, not a local model. Judging locality by URL alone would defeat the flag for precisely the buyer who set it, so `CLOUD_KINDS` is checked first and a loopback URL cannot rescue a cloud kind. Asserted directly.
+
+DECISION: **"local" includes private ranges and `.local`, not just loopback.** For an air-gapped or regulated buyer, local-only means "does not leave our network", not "runs on this exact machine" — a model server on a LAN box is exactly the deployment this flag is meant to permit. `isLocalEndpoint()` accepts loopback, RFC1918 ranges, and mDNS names, and the tests pin the boundaries (`172.15`/`172.32` rejected, `172.16`–`172.31` accepted), because an off-by-one here leaks traffic off the network.
+
+DECISION: **`get()` honours the filter as well as `list()`.** A registry that filtered its list but resolved any id would let any caller holding an id route straight past the policy — the failure mode is a run reaching a forbidden provider, and it would not be visible in the UI at all. `listAll()` exists separately for the settings screen that has to show what is hidden in order to explain it.
+
+The store's own migration tests hardcoded a count of one and broke when `0002` landed. Rewritten to read the migration directory and assert the invariant — every migration applies exactly once, in order, with ids matching filenames — because a test that must be hand-edited on every migration is one that will eventually be edited carelessly.
+
 Dependencies: M1-1.
 
 ### M1-10: Streaming chat panel and connection IPC

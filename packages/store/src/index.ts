@@ -13,3 +13,6 @@ export type { AuthRef, VaultScope } from './vault.ts';
 export * as connectionsRepository from './repositories/connections.ts';
 export { onConnectionsChanged } from './repositories/connections.ts';
 export type { ConnectionRecord, CreateConnectionInput } from './repositories/connections.ts';
+export * as settingsRepository from './repositories/settings.ts';
+export { onSettingsChanged } from './repositories/settings.ts';
+export type { WorkspaceSettings } from './repositories/settings.ts';

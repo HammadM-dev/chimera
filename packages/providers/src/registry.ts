@@ -2,6 +2,8 @@ import type Database from 'better-sqlite3';
 import {
   connectionsRepository,
   onConnectionsChanged,
+  onSettingsChanged,
+  settingsRepository,
   type AuthRef,
   type ConnectionRecord,
 } from '@chimera/store';
@@ -65,8 +67,19 @@ export interface UnusableConnection {
 }
 
 export interface ConnectionRegistry {
-  /** Every usable connection, reflecting the table as of this call. */
+  /**
+   * Every usable connection, reflecting the table as of this call — and, when
+   * local-only mode is on, only those that cannot reach a third party.
+   */
   list(): ProviderConnection[];
+  /**
+   * Every usable connection regardless of local-only mode. For settings
+   * screens that must show what exists in order to explain what is hidden;
+   * never for resolving a connection to run against.
+   */
+  listAll(): ProviderConnection[];
+  /** True when local-only mode is filtering the list. */
+  localOnlyMode(): boolean;
   get(id: string): ProviderConnection | undefined;
   /**
    * Rows that exist but cannot be used — an unrecognised provider kind, or a
@@ -82,6 +95,63 @@ export interface ConnectionRegistry {
   refresh(): void;
   /** Unsubscribe from the repository. Call when tearing the workspace down. */
   close(): void;
+}
+
+/**
+ * Kinds that can only ever reach a third party, whatever they are pointed at.
+ *
+ * These are excluded under local-only mode by *kind*, not by URL: an
+ * `anthropic` connection with a loopback `baseUrl` is a proxy to Anthropic, not
+ * a local model, and treating it as local because of how its URL looks would
+ * defeat the entire point of the flag for the regulated buyer who set it.
+ */
+const CLOUD_KINDS: ReadonlySet<ProviderKind> = new Set([
+  'anthropic',
+  'openai',
+  'google',
+  'openrouter',
+]);
+
+/**
+ * True when a URL points somewhere that never leaves the user's own network:
+ * loopback, an RFC1918 private range, or an mDNS `.local` name.
+ *
+ * Private ranges count deliberately. "Local-only" for an air-gapped or
+ * regulated buyer means "does not leave our network", not "runs on this exact
+ * machine" — a model server on a LAN box is exactly the deployment this flag
+ * exists to permit.
+ */
+export function isLocalEndpoint(baseUrl: string | null): boolean {
+  if (baseUrl === null || baseUrl.trim() === '') return false;
+  let host: string;
+  try {
+    host = new URL(baseUrl).hostname.toLowerCase();
+  } catch {
+    return false;
+  }
+
+  if (host === 'localhost' || host.endsWith('.localhost') || host.endsWith('.local')) return true;
+  if (host === '::1' || host === '[::1]') return true;
+
+  const octets = host.split('.').map(Number);
+  if (octets.length !== 4 || octets.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) {
+    return false;
+  }
+  const [a = 0, b = 0] = octets;
+  if (a === 127) return true;
+  if (a === 10) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  return false;
+}
+
+/** Whether a connection is usable while local-only mode is on. */
+export function isLocalConnection(kind: ProviderKind, baseUrl: string | null): boolean {
+  if (CLOUD_KINDS.has(kind)) return false;
+  // ollama and lmstudio default to loopback, so a connection with no explicit
+  // baseUrl is local by construction.
+  if (baseUrl === null) return kind === 'ollama' || kind === 'lmstudio';
+  return isLocalEndpoint(baseUrl);
 }
 
 function isProviderKind(value: string): value is ProviderKind {
@@ -178,7 +248,12 @@ function parseRecord(record: ConnectionRecord): Parsed {
 export function createConnectionRegistry(db: Database.Database): ConnectionRegistry {
   let cache: { usable: ProviderConnection[]; unusable: UnusableConnection[] } | undefined;
 
-  const unsubscribe = onConnectionsChanged(db, () => {
+  const unsubscribeConnections = onConnectionsChanged(db, () => {
+    cache = undefined;
+  });
+  // Toggling the flag must take effect immediately — the criterion is that
+  // switching it back restores visibility with no re-import and no restart.
+  const unsubscribeSettings = onSettingsChanged(db, () => {
     cache = undefined;
   });
 
@@ -203,13 +278,27 @@ export function createConnectionRegistry(db: Database.Database): ConnectionRegis
     return cache;
   }
 
+  const visible = (): ProviderConnection[] => {
+    const { usable } = load();
+    if (!settingsRepository.read(db).localOnlyMode) return usable;
+    return usable.filter((connection) => isLocalConnection(connection.kind, connection.baseUrl));
+  };
+
   return {
-    list: () => [...load().usable],
-    get: (id) => load().usable.find((connection) => connection.id === id),
+    list: () => [...visible()],
+    listAll: () => [...load().usable],
+    localOnlyMode: () => settingsRepository.read(db).localOnlyMode,
+    // get() honours the filter too: a caller that resolved a hidden connection
+    // by id would route a run through a cloud provider the workspace has
+    // explicitly forbidden, which is the whole failure this flag prevents.
+    get: (id) => visible().find((connection) => connection.id === id),
     unusable: () => [...load().unusable],
     refresh: () => {
       cache = undefined;
     },
-    close: unsubscribe,
+    close: () => {
+      unsubscribeConnections();
+      unsubscribeSettings();
+    },
   };
 }

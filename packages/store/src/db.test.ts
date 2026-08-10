@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { openDatabase } from './db.ts';
@@ -16,16 +16,42 @@ function withTempDbPath(fn: (dbPath: string) => void): void {
   }
 }
 
-test('fresh open creates the file, applies 0001_init.sql, and records one migration', () => {
+/**
+ * Every migration file on disk, in the order they must apply.
+ *
+ * Read from the directory rather than hardcoded. These tests originally
+ * asserted a literal count of one and broke the moment M1-9 added
+ * `0002_workspace_settings.sql` — a test that has to be edited every time a
+ * migration lands is a test that will eventually be edited carelessly. The
+ * invariant worth asserting is "every migration applies exactly once, in
+ * order", which does not change.
+ */
+function migrationFilesOnDisk(): string[] {
+  return readdirSync(migrationsDir)
+    .filter((name) => name.endsWith('.sql'))
+    .sort();
+}
+
+test('fresh open applies every migration on disk, once each, in order', () => {
   withTempDbPath((dbPath) => {
     const db = openDatabase({ dbPath, migrationsDir });
-    const rows = db.prepare('SELECT id, name FROM _migrations').all() as Array<{
+    const rows = db.prepare('SELECT id, name FROM _migrations ORDER BY id').all() as Array<{
       id: number;
       name: string;
     }>;
-    assert.equal(rows.length, 1);
-    assert.equal(rows[0]?.id, 1);
-    assert.equal(rows[0]?.name, '0001_init.sql');
+
+    const expected = migrationFilesOnDisk();
+    assert.ok(expected.length > 0, 'no migrations found — the fixture path is wrong');
+    assert.deepEqual(
+      rows.map((row) => row.name),
+      expected,
+    );
+    // Ids come from the NNNN prefix, so they must match the filenames rather
+    // than merely being sequential.
+    assert.deepEqual(
+      rows.map((row) => row.id),
+      expected.map((name) => Number(name.slice(0, 4))),
+    );
     db.close();
   });
 });
@@ -33,11 +59,12 @@ test('fresh open creates the file, applies 0001_init.sql, and records one migrat
 test('re-opening an already-migrated database applies zero migrations and does not error', () => {
   withTempDbPath((dbPath) => {
     const first = openDatabase({ dbPath, migrationsDir });
+    const before = (first.prepare('SELECT id FROM _migrations').all() as unknown[]).length;
     first.close();
 
     const second = openDatabase({ dbPath, migrationsDir });
-    const rows = second.prepare('SELECT id FROM _migrations').all();
-    assert.equal(rows.length, 1, 'a second open must not re-apply or duplicate the migration row');
+    const after = (second.prepare('SELECT id FROM _migrations').all() as unknown[]).length;
+    assert.equal(after, before, 'a second open must not re-apply or duplicate migration rows');
     second.close();
   });
 });
@@ -130,9 +157,13 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'assertions_json',
     'provider',
   ],
+  // Added by 0002 for M1-9's local-only mode. Not part of the original kernel
+  // twelve — a workspace-scoped policy row rather than application data, and
+  // documented as such in docs/ARCHITECTURE.md section 5.
+  workspace_settings: ['id', 'local_only_mode'],
 };
 
-test('all twelve kernel tables exist with exactly the documented columns', () => {
+test('every documented table exists with exactly the documented columns', () => {
   withTempDbPath((dbPath) => {
     const db = openDatabase({ dbPath, migrationsDir });
 
