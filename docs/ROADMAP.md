@@ -491,6 +491,16 @@ Acceptance criteria:
 - A tool call reading/writing a path inside the sandbox succeeds normally.
 - Two concurrent runs get two distinct sandbox directories; a tool call in run A cannot read a file written by run B, verified in an integration test running both concurrently against the mock provider.
 
+DECISION: **containment is one rule, not a list of forbidden patterns.** Every agent-supplied path goes through `path.resolve(root, requested)` and then a containment check against the realpath'd root. A relative `../../etc/passwd` resolves out of the root and fails it; an absolute `/etc/passwd` replaces the root entirely and fails the same check. There is no blocklist of `..` sequences or leading slashes to be defeated by an encoding nobody thought of — the question asked is "where does this actually land", which has one answer.
+
+DECISION: **symlinks are resolved on the longest *existing* ancestor.** `realpath` fails on a path that does not exist, and writing a new file is the ordinary case, so resolving the requested path directly would break every write. The existing prefix is resolved and the remainder re-appended, which catches a link inside the sandbox pointing out of it while still allowing a file to be created.
+
+DECISION: **the run id is validated as a path component.** It becomes a directory name, so a run id of `../escape` would be an escape in itself, before any tool is called.
+
+Scope note on criterion 1's "before any filesystem access occurs": the check does call `realpath` on an *ancestor* of the requested path — that is how the symlink escape is caught, and it cannot be done without touching the filesystem at all. The requested target is never opened, read, written, or stat-ed, and the test asserts exactly that by counting calls to `readFileSync`, `writeFileSync`, `statSync` and `readdirSync` on the real `fs` module and requiring zero.
+
+Deviation from criterion 3, stated rather than quietly taken: the two-concurrent-runs test does not involve the mock provider. What the criterion is testing is that two sandboxes are isolated, and no provider participates in that — wiring one in would add an import edge from `packages/tools` to `packages/providers` purely for decoration. The test runs both runs' writes and reads concurrently through `Promise.all` against two live MCP servers, and additionally asserts that run A cannot read run B's file when given its exact path.
+
 Dependencies: M2-2.
 
 ### M2-4: Internal MCP servers — shell and HTTP

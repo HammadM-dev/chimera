@@ -6,3 +6,6 @@ export { createToolRegistry } from './toolRegistry.ts';
 export type { InvocationContext, RegisteredTool, ToolRegistry } from './toolRegistry.ts';
 export { assertToolAllowed, isToolAllowed } from './allowlist.ts';
 export type { AllowlistedRole } from './allowlist.ts';
+export { createSandbox, destroySandbox } from './sandbox.ts';
+export type { Sandbox } from './sandbox.ts';
+export { createFilesystemServer } from './servers/filesystem.ts';
