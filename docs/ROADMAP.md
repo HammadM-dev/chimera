@@ -268,7 +268,19 @@ Acceptance criteria:
 - Each adapter has an integration test running against `packages/providers/src/mock.ts` (M1-6) exercising `chat()` and `streamChat()` with scripted responses, run in CI.
 - Malformed or error responses from the underlying API surface as `ProviderError`/`ProviderAuthError`/`ProviderRateLimitError` per the kernel's error taxonomy, never a raw thrown object.
 
-Dependencies: M1-2, M0-7.
+DECISION (founder, 2026-08-10): **the real-account `testConnection()` check is deferred.** Mock-backed and fixture-backed tests only for now. The method is implemented and its failure path is tested; what is untested is that the fixtures match today's live API. Until a real key is exercised, treat "the adapter builds a correct request" as verified and "the provider accepts it" as unverified.
+
+DECISION: **wire formats were verified, not recalled.** Anthropic's from the published Messages API reference, Google's from the published REST reference for `generateContent`/`streamGenerateContent`, and OpenAI's from their published OpenAPI specification — which is also how the deprecation of `max_tokens` in favour of `max_completion_tokens` was caught, along with the exact `finish_reason` enum and the `stream_options.include_usage` flag without which a streamed OpenAI run reports zero tokens and every budget figure for it would be wrong.
+
+DECISION: **`fetch` and secret resolution are both injected.** `AdapterDependencies` carries a `transport` and a `resolveSecret`. Injecting `fetch` is what makes "never hit a real API in CI" structural rather than aspirational — a test that *could* reach the network eventually will, on someone's laptop, at the wrong moment. Injecting `resolveSecret` matters just as much: an adapter test that had to write a real key into the OS keychain would skip on any CI runner without a keyring daemon, and a test that skips in CI is not a test that runs in CI, which is what this ticket asks for. Production still resolves through the real vault; only the seam moves.
+
+DECISION: **every error is scrubbed of the credential before it is raised.** The first version of `http.ts` asserted a key could not reach an error message because "the key travels in a header, and headers are never read back here". That reasoning was wrong twice: providers echo the request body back in error responses, and Google's API takes the key as a *URL query parameter*, so even a transport-level failure message can carry it. A test planted the secret in an error body and caught it. `scrub()` now removes every known secret — and its percent-encoded form — from every message and detail, rather than reasoning about which paths are safe. The reasoning is what failed.
+
+Two constraints found by running the code rather than by review, both worth knowing repo-wide:
+- **Node 22's type-stripping rejects TypeScript parameter properties.** `constructor(private readonly deps: T)` typechecks under `tsc` and throws `ERR_UNSUPPORTED_TYPESCRIPT_SYNTAX` at runtime, because stripping types cannot synthesise the field assignment. Declared fields plus an explicit assignment everywhere.
+- **`no-undef` is now off for TypeScript files**, as typescript-eslint itself recommends. ESLint cannot see type-only globals (`RequestInit`, `Response`) and reported them as undefined. `npm run typecheck` runs in CI and catches an undefined identifier properly — verified by planting one and confirming typecheck fails on it.
+
+Dependencies: M1-2, M0-7, M1-6 (the mock must exist before adapters can be tested as criterion 2 requires).
 
 ### M1-5: Multi-endpoint adapters — OpenRouter, OmniRoute, Ollama, LM Studio, generic OpenAI-compatible
 

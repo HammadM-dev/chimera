@@ -41,3 +41,8 @@ export type {
   MockProviderOptions,
   MockErrorKind,
 } from './mock.ts';
+export { AnthropicAdapter } from './adapters/anthropic.ts';
+export { OpenAiAdapter } from './adapters/openai.ts';
+export { GoogleAdapter } from './adapters/google.ts';
+export { defaultDependencies, defaultTransport, scrub } from './adapters/http.ts';
+export type { AdapterDependencies, AdapterTransport } from './adapters/http.ts';

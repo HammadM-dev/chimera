@@ -62,6 +62,13 @@ module.exports = [
     },
     rules: {
       ...tseslint.configs.recommended.rules,
+      // Off for TypeScript specifically, as typescript-eslint itself
+      // recommends: the compiler already resolves every identifier, and it does
+      // it correctly. ESLint cannot see type-only globals (`RequestInit`,
+      // `Response`) and reports them as undefined, so leaving this on trades
+      // real coverage for false positives. `npm run typecheck` runs in CI and
+      // is the check that actually catches an undefined name.
+      'no-undef': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/no-unused-vars': [
         'error',
