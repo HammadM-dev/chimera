@@ -1,3 +1,8 @@
 // packages/tools — MCP client, internal MCP servers (filesystem, shell, http, browser).
 // Populated starting M2. See docs/ARCHITECTURE.md and docs/MASTER_PLAN.md F2.3.
-export {};
+export { connectInProcess } from './mcpClient.ts';
+export type { McpToolClient, McpToolResult, ToolDescriptor } from './mcpClient.ts';
+export { createToolRegistry } from './toolRegistry.ts';
+export type { InvocationContext, RegisteredTool, ToolRegistry } from './toolRegistry.ts';
+export { assertToolAllowed, isToolAllowed } from './allowlist.ts';
+export type { AllowlistedRole } from './allowlist.ts';
