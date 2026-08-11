@@ -14,6 +14,7 @@
     "@chimera/errors": "*",
     "@chimera/store": "*",
     "@chimera/tools": "*",
-    "@chimera/providers": "*"
+    "@chimera/providers": "*",
+    "better-sqlite3": "^13.0.3"
   }
 }

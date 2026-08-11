@@ -13,6 +13,14 @@ import type { CallPurpose, Denied } from '../governor/types.ts';
 import type { Role } from './roleRegistry.ts';
 import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
 import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
+import {
+  EMPTY_CHECKPOINT,
+  idempotencyKeyFor,
+  type CheckpointStore,
+  type CompletedToolCall,
+  type NodeStatus,
+  type RunCheckpoint,
+} from './checkpoint.ts';
 
 // F2.1's plan → act → observe → verify → decide loop.
 //
@@ -94,6 +102,14 @@ export interface AgentLoopDeps {
   tools: ToolRegistry;
   callOptions: AdapterCallOptions;
   cancellation?: Cancellation;
+  /**
+   * Journals resumable state after every completed step (M2-9).
+   *
+   * Optional: a loop with no store simply cannot be resumed, which is the right
+   * behaviour for an eval or a dry run. When present, the loop resumes from
+   * whatever it finds rather than starting over.
+   */
+  checkpoints?: CheckpointStore;
 }
 
 // Provider tool names are constrained to `[a-zA-Z0-9_-]` by both Anthropic and
@@ -157,27 +173,61 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   const available = tools.listFor(task.role);
   const definitions = toolDefinitions(available);
 
-  const steps: LoopStep[] = [];
-  const observations: ToolObservation[] = [];
-  const history: Message[] = [];
+  // Resumed state, or a fresh checkpoint. `resumed` distinguishes "we already
+  // planned" from "we have not started" — without it a resumed run would replan
+  // and pay for a model call it had already made.
+  const restored: RunCheckpoint =
+    deps.checkpoints?.load(task.runId, task.nodeId) ?? structuredClone(EMPTY_CHECKPOINT);
+  const resumed = restored.steps.length > 0;
 
-  let output = '';
-  let verification: Verification | null = null;
-  let structuredOutput: unknown = null;
-  let iteration = 0;
+  const steps: LoopStep[] = restored.steps;
+  const observations: ToolObservation[] = restored.observations;
+  const history: Message[] = restored.history;
+  const completedToolCalls: Record<string, CompletedToolCall> = restored.completedToolCalls;
+
+  let output = restored.output;
+  let verification: Verification | null = restored.verification;
+  let structuredOutput: unknown = restored.structuredOutput;
+  let iteration = restored.iteration;
 
   const cancelled = (): boolean => deps.cancellation?.cancelled === true;
 
-  const finish = (status: LoopStatus, extra: Partial<LoopResult> = {}): LoopResult => ({
-    status,
-    output,
-    iterations: iteration,
-    steps,
-    observations,
-    verification,
-    structuredOutput,
-    ...extra,
-  });
+  const checkpoint = (status: NodeStatus): void => {
+    deps.checkpoints?.save({
+      runId: task.runId,
+      nodeId: task.nodeId,
+      status,
+      checkpoint: {
+        version: 1,
+        iteration,
+        output,
+        steps,
+        observations,
+        history,
+        completedToolCalls,
+        verification,
+        structuredOutput,
+      },
+    });
+  };
+
+  const finish = (status: LoopStatus, extra: Partial<LoopResult> = {}): LoopResult => {
+    // A terminal state is journaled too, so a resume after a completed run
+    // reports the outcome instead of re-running it.
+    checkpoint(
+      status === 'succeeded' ? 'succeeded' : status === 'cancelled' ? 'cancelled' : 'failed',
+    );
+    return {
+      status,
+      output,
+      iterations: iteration,
+      steps,
+      observations,
+      verification,
+      structuredOutput,
+      ...extra,
+    };
+  };
 
   /**
    * One authorised model call.
@@ -299,11 +349,14 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   // ---- plan ---------------------------------------------------------------
   if (cancelled()) return finish('cancelled');
 
-  const planned = await callModel('plan', [], false);
-  if ('denied' in planned) return denialResult(planned.denied);
-  const plan = record('plan', planned.response);
-  history.push({ role: 'assistant', content: plan });
-  output = plan;
+  if (!resumed) {
+    const planned = await callModel('plan', [], false);
+    if ('denied' in planned) return denialResult(planned.denied);
+    const plan = record('plan', planned.response);
+    history.push({ role: 'assistant', content: plan });
+    output = plan;
+    checkpoint('running');
+  }
 
   // ---- act / observe / verify / decide ------------------------------------
   while (iteration < task.role.maxIterations) {
@@ -319,10 +372,37 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     const actText = record('act', acted.response);
     if (actText !== '') output = actText;
     history.push({ role: 'assistant', content: actText, toolCalls: acted.response.toolCalls });
+    checkpoint('running');
 
     // ---- observe ----------------------------------------------------------
+    let callIndex = -1;
     for (const call of acted.response.toolCalls) {
+      callIndex += 1;
       const toolId = fromWireName(call.name);
+
+      const key = idempotencyKeyFor({
+        runId: task.runId,
+        nodeId: task.nodeId,
+        iteration,
+        callIndex,
+        toolId,
+        args: call.arguments,
+      });
+
+      const alreadyDone = completedToolCalls[key];
+      if (alreadyDone) {
+        // This exact call already ran before the process died. Replaying the
+        // recorded result rather than calling again is the whole point of the
+        // key: an email that was sent must not be sent twice because the app
+        // was killed a moment later.
+        observations.push({
+          callId: call.id,
+          toolId,
+          output: alreadyDone.output,
+          isError: alreadyDone.isError,
+        });
+        continue;
+      }
 
       const authorization = governor.authorizeToolCall({
         runId: task.runId,
@@ -342,6 +422,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
 
       try {
         const result = await tools.invoke(toolId, call.arguments, { role: task.role });
+        completedToolCalls[key] = { output: result.text, isError: result.isError };
         observations.push({
           callId: call.id,
           toolId,
@@ -352,13 +433,17 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         // A refused or broken tool is an observation, not a crash: the agent
         // is told what happened and gets to react. The allowlist rejection
         // that lands here is the same one the injection corpus asserts.
-        observations.push({
-          callId: call.id,
-          toolId,
-          output: err instanceof Error ? err.message : String(err),
-          isError: true,
-        });
+        const message = err instanceof Error ? err.message : String(err);
+        // Recorded as completed: the call was made and this is its outcome. A
+        // resume that retried it would be retrying a refusal, which cannot
+        // succeed and costs a round trip to learn that.
+        completedToolCalls[key] = { output: message, isError: true };
+        observations.push({ callId: call.id, toolId, output: message, isError: true });
       }
+
+      // After every tool, not after the batch: a process killed between two
+      // tool calls must not replay the first one.
+      checkpoint('running');
     }
 
     if (cancelled()) return finish('cancelled');
@@ -372,6 +457,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     if ('denied' in verified) return denialResult(verified.denied);
     const verifyText = record('verify', verified.response);
     verification = parseVerification(verifyText);
+    checkpoint('running');
 
     // ---- decide -----------------------------------------------------------
     if (verification.verified) {

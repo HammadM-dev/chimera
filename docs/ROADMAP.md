@@ -630,6 +630,20 @@ Acceptance criteria:
 - A tool call carrying an idempotency key that has already been recorded as completed is not re-executed on resume (verified with a mock HTTP tool server counting invocations).
 - Simulating a full disk during a checkpoint write surfaces a clean, typed error rather than corrupting the SQLite file (verified by pointing the DB at a filesystem quota/loop-mounted small volume in a dedicated CI job, or, if that's impractical in the CI environment, by injecting a write failure at the `better-sqlite3` call site and asserting the journal remains consistent).
 
+DECISION: **the unit of recovery is the step, not the run.** A checkpoint is written after the plan, after every act, after every individual tool call, and after every verify. A run that resumes from the beginning re-pays for every model call it already made, which on a long agent run is the difference between an inconvenience and a bill. Writing after each tool rather than after the batch matters for the same reason a resume must not re-send: a process killed between two tool calls must not replay the first.
+
+DECISION: **idempotency keys are derived, not generated.** The key is a hash of run, node, iteration, call index within that iteration, tool id, and canonicalised arguments — every one of which a replay reproduces exactly. Nothing random and nothing clock-based, because a resumed run that computes a different key has a decorative mechanism rather than a working one. Argument order is normalised out, so the same call written two ways is one call.
+
+DECISION: **a refused tool call is recorded as completed.** The call was made and this was its outcome. Retrying a refusal on resume cannot succeed and costs a round trip to learn that.
+
+DECISION: **a corrupt checkpoint is discarded; a future-versioned one is refused.** Unparseable JSON returns null and the run starts over — expensive, but resuming from a state nobody can vouch for is worse. A `version` this build does not know raises `CHECKPOINT_VERSION_UNSUPPORTED` rather than being read optimistically, because a newer build's checkpoint may mean something different by the same field names.
+
+DECISION: **workflow-less runs attach to one reserved workflow row.** `runs.workflow_id` and `workflow_version_id` are `NOT NULL REFERENCES` and M2 has agent runs but no workflows. The alternative was dropping the foreign keys for the milestone that happens to come first, and a constraint removed for convenience is never put back. `runsRepository.ensureAdHocWorkflow()` creates one recognisable row (`…ad0c`, "Ad-hoc agent runs"); documented in `docs/ARCHITECTURE.md` §5. This also lands the minimum `runs` repository M4 needs anyway.
+
+The full-disk criterion is met by injecting the write failure at the `better-sqlite3` call site rather than provisioning a quota-limited volume, which the ticket explicitly allows. `nodeStatesRepository.upsert` raises the typed `STORE_WRITE_FAILED`, the previously journaled checkpoint is asserted byte-identical afterwards, and the database is still usable — the upsert is a single atomic statement, so a failure cannot leave half a row.
+
+The SIGKILL criterion is met literally. `packages/core/test/resumeWorker.ts` runs a real agent loop in a real child process whose second tool call never returns; the test waits for a journaled checkpoint, sends `SIGKILL`, relaunches the same worker against the same database, and asserts the resumed run finishes successfully, contains exactly one `plan` step (it did not replan), and that the file written before the kill is intact while the one that never got written now exists.
+
 Dependencies: M2-7.
 
 ### M2-10: Memory — scratchpad and workspace facts

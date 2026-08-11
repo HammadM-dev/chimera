@@ -71,3 +71,15 @@ export type {
 } from './runtime/outputContract.ts';
 export { validateAgainstSchema, describeViolations } from './runtime/jsonSchema.ts';
 export type { SchemaViolation } from './runtime/jsonSchema.ts';
+
+export {
+  createCheckpointStore,
+  idempotencyKeyFor,
+  EMPTY_CHECKPOINT,
+} from './runtime/checkpoint.ts';
+export type {
+  CheckpointStore,
+  CompletedToolCall,
+  NodeStatus,
+  RunCheckpoint,
+} from './runtime/checkpoint.ts';
