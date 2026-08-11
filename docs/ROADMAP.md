@@ -759,6 +759,20 @@ Acceptance criteria:
 - Changing a node's `modelBinding` to a more expensive model increases the preview's cost estimate proportionally to the capability matrix's declared per-million-token cost difference.
 - The preview is available via IPC (a new channel, `run:costPreview`, added to the M0-4 registry) before `run:start` is called — it does not require a run to already be in progress.
 
+DECISION: **an unpriced model makes the total `null`, with the known part reported separately.** A total that silently omitted three of a workflow's nodes would be worse than no total at all, because the user would budget against it. `pricedCostUsd` carries what is known and `unpricedModels` says what is missing — the same rule M1-10's chat meter follows, for the same reason.
+
+DECISION: **the input/output split is preserved when a node's budget caps the estimate.** Input and output are priced differently — often 5× apart — so scaling a capped node back to a 50/50 assumption would misprice every node whose real ratio is not 50/50. The cap is applied to the total and the original ratio is used to divide it.
+
+DECISION: **a node's declared budget is a ceiling on its own estimate.** A node cannot spend more than it is allowed to, so an estimate above its cap is an estimate of something that cannot happen. Reported as `cappedByBudget` so a user can see which figure is a forecast and which is a limit.
+
+DECISION: **the arithmetic lives in `packages/core`, not in the IPC handler.** M4's engine and M5's swarm planner need the same figures, and two implementations of one estimate become two different answers to the same question. `apps/desktop/src/providers/costPreview.ts` is a five-line adapter over it.
+
+DECISION: **concurrency divides time, not money.** Running ten items at once finishes sooner and costs exactly the same. Obvious stated plainly, easy to get wrong in a formula.
+
+`DEFAULT_MS_PER_ITERATION` is 4,000 and is openly a guess — a node that knows better declares `expectedMsPerIteration`. The duration figure is the softest of the three and is labelled "est" everywhere it appears.
+
+The E2E drives `run:costPreview` on a fresh profile with no run in progress, which is the criterion's actual claim, and asserts the Opus figure is exactly 5× the Haiku figure — the ratio the shipped matrix declares. A preview that ignored the binding would return the same number for both.
+
 Dependencies: M3-1, M1-3.
 
 ### M3-4: Live spend meter and hard stop

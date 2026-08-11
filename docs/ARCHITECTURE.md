@@ -132,6 +132,7 @@ All renderer-to-main communication is `window.chimera.*`, exposed by `apps/deskt
 | `provider:testConnection` | invoke | no | Round-trip a lightweight request to a `ProviderConnection` to confirm reachability and auth validity |
 | `connection:create` | invoke | **yes** | Register a new `ProviderConnection`; if called with an inline raw key rather than a pre-vaulted handle, payload is redacted before logging |
 | `connection:list` | invoke | no | List connections with current `healthState`, the workspace's local-only flag, and the provider kinds the form may offer |
+| `run:costPreview` | invoke | no | Estimate tokens, cost and duration for a workflow before it runs; needs no run in progress |
 | `health:sweep` | invoke | no | Probe every visible connection once and return their refreshed `healthState`s (M1-8's monitor, pulled by the status bar) |
 | `omniroute:detect` | invoke | no | Probe the local OmniRoute instance; "not detected" is a normal answer, never an error |
 | `omniroute:import` | invoke | no | Import OmniRoute's `/v1/models` catalogue and create or update its single `connections` row |

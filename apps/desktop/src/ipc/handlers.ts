@@ -13,6 +13,7 @@ import {
 } from '../providers/service.ts';
 import { detect, importCatalogue } from '../providers/omniroute.ts';
 import { deleteFact, listFacts, setFact } from '../memory/service.ts';
+import { previewCost } from '../providers/costPreview.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -70,6 +71,8 @@ registerHandler(channels.connectionList, () => listConnections());
 registerHandler(channels.providerTestConnection, (payload) => testConnection(payload.connectionId));
 registerHandler(channels.chatSend, (payload, context) => startChat(context.webContents, payload));
 registerHandler(channels.healthSweep, () => sweepHealth());
+
+registerHandler(channels.runCostPreview, (payload) => previewCost(payload));
 
 registerHandler(channels.memoryListFacts, () => listFacts());
 registerHandler(channels.memorySetFact, (payload) => setFact(payload.key, payload.value));

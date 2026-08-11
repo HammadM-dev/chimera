@@ -105,3 +105,20 @@ export type {
 
 export { createTraceSink, NULL_TRACE_SINK } from './runtime/trace.ts';
 export type { TraceEvent, TraceSink, TraceSinkOptions } from './runtime/trace.ts';
+
+export { estimate, describePreview, DEFAULT_MS_PER_ITERATION } from './governor/costPreview.ts';
+export type {
+  CostPreview,
+  NodePreview,
+  PreviewNode,
+  PreviewOptions,
+  PreviewWorkflow,
+} from './governor/costPreview.ts';
+export { BudgetLedger, costOf } from './governor/budget.ts';
+export type { BudgetLimit, BudgetPolicy, Consumption } from './governor/budget.ts';
+export { LimitTracker, NO_LIMITS } from './governor/limits.ts';
+export type { LimitPolicy, LimitBreach } from './governor/limits.ts';
+export { StallDetector, toolSignature, DEFAULT_STALL_POLICY } from './governor/stallDetector.ts';
+export type { StallPolicy, IterationOutcome, StallVerdict } from './governor/stallDetector.ts';
+export type { GovernorPolicy } from './governor/Governor.ts';
+export { denialToError } from './governor/Governor.ts';

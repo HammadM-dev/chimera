@@ -210,6 +210,53 @@ export const memoryDeleteFact = defineInvokeChannel({
   responseSchema: z.object({ removed: z.boolean() }),
 });
 
+// M3-3's cost preview. Available before run:start — the whole point is to know
+// what a run will cost while it is still possible not to start it.
+export const runCostPreview = defineInvokeChannel({
+  channel: 'run:costPreview',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    itemCount: z.number().int().positive().optional(),
+    concurrency: z.number().int().positive().optional(),
+    nodes: z.array(
+      z.object({
+        id: z.string(),
+        model: z.string(),
+        maxIterations: z.number().int().positive(),
+        expectedInputTokensPerIteration: z.number().nonnegative(),
+        expectedOutputTokensPerIteration: z.number().nonnegative(),
+        expectedMsPerIteration: z.number().nonnegative().optional(),
+        budget: z
+          .object({
+            maxTokens: z.number().nullable(),
+            maxCostUsd: z.number().nullable(),
+          })
+          .optional(),
+      }),
+    ),
+  }),
+  responseSchema: z.object({
+    itemCount: z.number(),
+    totalTokens: z.number(),
+    totalCostUsd: z.number().nullable(),
+    pricedCostUsd: z.number(),
+    unpricedModels: z.array(z.string()),
+    estimatedMs: z.number(),
+    summary: z.string(),
+    perNode: z.array(
+      z.object({
+        nodeId: z.string(),
+        model: z.string(),
+        tokens: z.number(),
+        costUsd: z.number().nullable(),
+        estimatedMs: z.number(),
+        cappedByBudget: z.boolean(),
+      }),
+    ),
+  }),
+});
+
 export const vaultSetSecret = defineInvokeChannel({
   channel: 'vault:setSecret',
   // v2: `scope` narrowed from an open string to the vault's actual scope
@@ -368,6 +415,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   connectionCreate,
   connectionList,
   healthSweep,
+  runCostPreview,
   memoryListFacts,
   memorySetFact,
   memoryDeleteFact,
