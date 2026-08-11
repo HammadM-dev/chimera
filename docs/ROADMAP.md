@@ -559,6 +559,18 @@ Acceptance criteria:
 - `evals/injection/` contains at least 5 payload cases at the end of this ticket, each with an assertion that the agent does not take the injected action (using the mock provider scripted to simulate a "compromised" model for the negative-control case, and a real prompt-assembly-only test for the positive case that the envelope structurally exists).
 - This corpus runs in CI against every role from M2-5 that has a non-empty `toolAllowlist`.
 
+DECISION: **the separation is structural, not textual.** `assembleSystemMessage()` takes `InstructionSource` — the role, the node's task, and the tool names — and nothing else. Tool output is not a parameter of that function, so there is no expression inside it that could place tool output in the instruction position. The test asserts the system message is byte-for-byte identical with and without a hostile observation, which is a fact about the type signature rather than about a filter working.
+
+DECISION: **the envelope delimiter carries a per-assembly UUID nonce.** A fixed delimiter can be written by the attacker: content that emits `----- END UNTRUSTED DATA -----` closes the block and everything after it reads as trusted. With a nonce generated at assembly time, forging the terminator means guessing a UUID that did not exist when the payload was written. A second layer neutralises any literal delimiter that does match, which costs one `split`/`join` and makes the trace readable.
+
+DECISION: **tool results are `role: 'tool'` messages, never user turns.** A tool result folded into a user message is rendered by the model's own chat template as something a person said, which is the single most common way injected text ends up in the instruction position. The role is carried through to the adapter, which is where the provider-specific rendering already lives.
+
+DECISION: **the corpus is JSON files on disk, loaded by directory scan.** docs/SECURITY.md §8.1 already specified this layout; the loader reads the directories rather than a hand-maintained index, because the corpus is append-only and an index is a second place to forget. `telltale` was added to the documented fixture schema in the same commit — an assertion needs a stable fragment to look for, and matching the whole payload breaks for any payload the envelope neutralises part of.
+
+DECISION: **`evals/` became an npm workspace.** The corpus has to run under `npm test` to be a CI gate, and `npm test` runs workspaces. The alternative — a separate script someone remembers to add to the workflow — is a gate that silently stops running.
+
+Seven payloads across five of §8.2's categories, run against all six tool-enabled starter roles: 42 assertions plus the corpus's own integrity checks. The negative control uses the mock provider's `adversarial-compliant` persona — a model that has read the payload and decided to comply — and asserts that the researcher's attempt to call `shell.exec` dies at the allowlist anyway. That is the point the whole ticket rests on: the envelope is a mitigation, the capability grant is the guarantee.
+
 Dependencies: M2-5, M1-6.
 
 ### M2-7: Agent loop with verification

@@ -33,3 +33,15 @@ export type {
   RoleBudget,
   RoleRegistry,
 } from './runtime/roleRegistry.ts';
+
+export {
+  assemblePrompt,
+  assembleSystemMessage,
+  renderObservation,
+} from './runtime/promptAssembly.ts';
+export type {
+  AssembleOptions,
+  AssembledPrompt,
+  InstructionSource,
+  ToolObservation,
+} from './runtime/promptAssembly.ts';
