@@ -24,3 +24,5 @@ export * as runsRepository from './repositories/runs.ts';
 export type { RunRecord, CreateRunInput } from './repositories/runs.ts';
 export * as workspaceFactsRepository from './repositories/workspaceFacts.ts';
 export type { WorkspaceFact } from './repositories/workspaceFacts.ts';
+export * as tracesRepository from './repositories/traces.ts';
+export type { TraceRecord, AppendTraceInput, TraceEventType } from './repositories/traces.ts';

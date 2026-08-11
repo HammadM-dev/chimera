@@ -14,6 +14,7 @@ import { Governor } from '../src/governor/Governor.ts';
 import { STARTER_ROLES } from '../src/runtime/roleRegistry.ts';
 import { runAgentLoop } from '../src/runtime/agentLoop.ts';
 import { createCheckpointStore } from '../src/runtime/checkpoint.ts';
+import { createTraceSink } from '../src/runtime/trace.ts';
 
 // A real agent run in a real process, so the SIGKILL test kills something that
 // is genuinely mid-run rather than a simulation of one.
@@ -65,6 +66,7 @@ class LoggingProvider implements ProviderAdapter {
 const db = openDatabase({ dbPath: path.join(workDir, 'run.sqlite'), migrationsDir });
 runsRepository.create(db, { id: 'run-kill' });
 const checkpoints = createCheckpointStore(db);
+const trace = createTraceSink(db, 'run-kill');
 
 const sandbox = createSandbox(path.join(workDir, 'sandboxes'), 'run-kill');
 const tools = createToolRegistry();
@@ -149,6 +151,7 @@ if (mode === 'die') {
     },
     callOptions: { authRef: 'vault:connection:0'.padEnd(48, '0') as never },
     checkpoints,
+    trace,
   });
   clearInterval(watcher);
 } else {
@@ -158,6 +161,7 @@ if (mode === 'die') {
     tools,
     callOptions: { authRef: 'vault:connection:0'.padEnd(48, '0') as never },
     checkpoints,
+    trace,
   });
   fs.writeFileSync(
     path.join(workDir, 'result.json'),

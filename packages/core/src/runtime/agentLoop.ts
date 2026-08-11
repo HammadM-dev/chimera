@@ -14,6 +14,7 @@ import type { Role } from './roleRegistry.ts';
 import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
 import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
 import { assertMemoryAvailable, type MemoryConfig } from './memory/vectorStore.ts';
+import { NULL_TRACE_SINK, type TraceSink } from './trace.ts';
 import {
   EMPTY_CHECKPOINT,
   idempotencyKeyFor,
@@ -116,6 +117,12 @@ export interface AgentLoopDeps {
    * whatever it finds rather than starting over.
    */
   checkpoints?: CheckpointStore;
+  /**
+   * The audit trace (F7.5). Defaults to discarding, so a unit test or a dry run
+   * needs no database — but a real run always passes one, and M4-7's viewer
+   * reads exactly what is written here.
+   */
+  trace?: TraceSink;
 }
 
 // Provider tool names are constrained to `[a-zA-Z0-9_-]` by both Anthropic and
@@ -180,6 +187,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   assertMemoryAvailable(task.memory, { runId: task.runId, nodeId: task.nodeId });
 
   const { governor, provider, tools, callOptions } = deps;
+  const trace = deps.trace ?? NULL_TRACE_SINK;
   const available = tools.listFor(task.role);
   const definitions = toolDefinitions(available);
 
@@ -203,6 +211,13 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   const cancelled = (): boolean => deps.cancellation?.cancelled === true;
 
   const checkpoint = (status: NodeStatus): void => {
+    if (deps.checkpoints) {
+      trace.append({
+        nodeId: task.nodeId,
+        eventType: 'checkpoint',
+        payload: { status, iteration, steps: steps.length, observations: observations.length },
+      });
+    }
     deps.checkpoints?.save({
       runId: task.runId,
       nodeId: task.nodeId,
@@ -282,7 +297,33 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       requiredCapabilities: withTools && definitions.length > 0 ? ['toolCalling'] : [],
     });
 
-    if (authorization.decision === 'deny') return { denied: authorization };
+    if (authorization.decision === 'deny') {
+      trace.append({
+        nodeId: task.nodeId,
+        eventType: 'decision',
+        payload: {
+          decision: 'denied',
+          purpose,
+          code: authorization.code,
+          message: authorization.message,
+        },
+      });
+      return { denied: authorization };
+    }
+
+    trace.append({
+      nodeId: task.nodeId,
+      eventType: 'prompt',
+      payload: {
+        purpose,
+        iteration,
+        model: authorization.request.model,
+        system: prompt.system,
+        messages: prompt.messages,
+        toolsOffered: withTools ? definitions.map((definition) => definition.name) : [],
+        governorNotes: authorization.notes,
+      },
+    });
 
     const response = await provider.chat(
       {
@@ -292,6 +333,26 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       },
       callOptions,
     );
+
+    trace.append({
+      nodeId: task.nodeId,
+      eventType: 'response',
+      payload: {
+        purpose,
+        iteration,
+        model: response.model,
+        text: textOf(response),
+        toolCalls: response.toolCalls.map((call) => ({
+          id: call.id,
+          name: fromWireName(call.name),
+          arguments: call.arguments,
+        })),
+        finishReason: response.finishReason,
+      },
+      tokensIn: response.usage.inputTokens,
+      tokensOut: response.usage.outputTokens,
+    });
+
     return { response };
   };
 
@@ -399,6 +460,18 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         args: call.arguments,
       });
 
+      trace.append({
+        nodeId: task.nodeId,
+        eventType: 'tool_call',
+        payload: {
+          toolId,
+          callId: call.id,
+          iteration,
+          arguments: call.arguments,
+          idempotencyKey: key,
+        },
+      });
+
       const alreadyDone = completedToolCalls[key];
       if (alreadyDone) {
         // This exact call already ran before the process died. Replaying the
@@ -410,6 +483,17 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
           toolId,
           output: alreadyDone.output,
           isError: alreadyDone.isError,
+        });
+        trace.append({
+          nodeId: task.nodeId,
+          eventType: 'tool_result',
+          payload: {
+            toolId,
+            callId: call.id,
+            output: alreadyDone.output,
+            isError: alreadyDone.isError,
+            replayedFromCheckpoint: true,
+          },
         });
         continue;
       }
@@ -439,6 +523,17 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
           output: result.text,
           isError: result.isError,
         });
+        trace.append({
+          nodeId: task.nodeId,
+          eventType: 'tool_result',
+          payload: {
+            toolId,
+            callId: call.id,
+            output: result.text,
+            isError: result.isError,
+            replayedFromCheckpoint: false,
+          },
+        });
       } catch (err) {
         // A refused or broken tool is an observation, not a crash: the agent
         // is told what happened and gets to react. The allowlist rejection
@@ -449,6 +544,17 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         // succeed and costs a round trip to learn that.
         completedToolCalls[key] = { output: message, isError: true };
         observations.push({ callId: call.id, toolId, output: message, isError: true });
+        trace.append({
+          nodeId: task.nodeId,
+          eventType: 'tool_result',
+          payload: {
+            toolId,
+            callId: call.id,
+            output: message,
+            isError: true,
+            replayedFromCheckpoint: false,
+          },
+        });
       }
 
       // After every tool, not after the batch: a process killed between two
@@ -467,6 +573,15 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     if ('denied' in verified) return denialResult(verified.denied);
     const verifyText = record('verify', verified.response);
     verification = parseVerification(verifyText);
+    trace.append({
+      nodeId: task.nodeId,
+      eventType: 'decision',
+      payload: {
+        decision: verification.verified ? 'verified' : 'continue',
+        iteration,
+        evidence: verification.evidence,
+      },
+    });
     checkpoint('running');
 
     // ---- decide -----------------------------------------------------------

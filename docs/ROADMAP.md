@@ -684,6 +684,16 @@ Acceptance criteria:
 - `evals/injection/`'s corpus (M2-6) runs clean against this role in CI.
 - All M2 tickets' acceptance criteria pass; `npm test` is green.
 
+DECISION: **`traces.seq` is allocated inside the INSERT, not computed in JavaScript.** `SELECT COALESCE(MAX(seq), 0) + 1` runs in the same statement as the write. Reading the maximum, incrementing it in JS and passing it back would race two writers of the same run and produce duplicate sequence numbers — which is precisely what `seq` exists to prevent, since it defines replay order. It is also what makes the killed-and-resumed run leave one continuous trace: the second process picks the numbering up rather than restarting it, and the test asserts the sequence is gapless across the kill.
+
+DECISION: **`tracesRepository` has no update and no delete.** An audit trace the audited thing can edit is not an audit trace. Append-only by the absence of the methods, not by a comment asking nicely.
+
+DECISION: **long strings in a payload are truncated at 20,000 characters, and the truncation says so.** A trace is an audit record, not a backup of every page an agent read; one run that fetched a large document should not make the workspace database unopenable. The marker means a reader can tell a short value from a shortened one.
+
+The redaction hook exists at the write even though it is a no-op today. Nothing in the agent runtime holds a plaintext credential — the adapter resolves the vault handle inside `packages/providers` and lets the value go out of scope — so the secrets list is empty in practice. It is wired now because a redaction added after the first leak is added too late, and `docs/ARCHITECTURE.md` §5 already specifies that traces pass through one.
+
+Both halves of the exit criterion are exercised against real things. `m2Demo.test.ts` runs the `coder` role against a real sandbox with two real MCP servers, asserts the file is genuinely on disk, counts the Governor's authorisations (five model calls, two tool calls — every one of them), checks that only allowlisted tools were used, and then reads the trace back out of SQLite: all six event types present, `seq` gapless, prompts and responses paired, responses carrying usage, and the traced prompt containing the untrusted-data envelope around the tool output. The second test kills a real process mid-run, relaunches it, and audits the *trace* rather than the loop's own report — exactly one plan prompt, exactly one write of the file that was written before the kill, and a final verified decision.
+
 Dependencies: M2-3, M2-4, M2-6, M2-8, M2-9, M2-10.
 
 ---

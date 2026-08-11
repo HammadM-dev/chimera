@@ -102,3 +102,6 @@ export type {
   VectorSearchResult,
   MemoryConfig,
 } from './runtime/memory/vectorStore.ts';
+
+export { createTraceSink, NULL_TRACE_SINK } from './runtime/trace.ts';
+export type { TraceEvent, TraceSink, TraceSinkOptions } from './runtime/trace.ts';
