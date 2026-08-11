@@ -513,6 +513,20 @@ Acceptance criteria:
 - An HTTP tool call to an allowlisted domain succeeds against a local test server.
 - A shell command is bounded by a wall-clock timeout sourced from the node's declared budget (read from the request, not hardcoded), killing a deliberately long-running test command.
 
+DECISION: **no shell interpretation — `shell: false`, command and arguments as a vector.** With a shell, arguments are re-parsed as source text, and a filename an agent read out of an untrusted document could arrive as `; rm -rf ~`. Quoting is not a defence against that; not invoking a shell is. The test passes `';', 'touch', 'pwned'` as argument elements and asserts no file appears.
+
+DECISION: **the spawned process gets a built environment, not `process.env`.** CHIMERA holds no vault secrets in its own environment by design, but it does inherit whatever the user exported into the shell they launched it from — API keys, tokens, CI credentials. Handing that to a process an agent chose the arguments for would give it all of them. PATH and HOME are passed because a command cannot be found or run without them; a canary variable test asserts nothing else arrives.
+
+DECISION: **`timeoutMs` is required with no default.** The wall-clock limit belongs to the node's declared budget, so it is passed in. A default here would be this file quietly choosing a governed number, and the criterion explicitly says "read from the request, not hardcoded". SIGKILL rather than SIGTERM: a process that ignores a polite request is the case the limit exists for.
+
+DECISION: **HTTP redirects are not followed.** `redirect: 'manual'`. A 302 to a host outside the allowlist would carry the request straight past the check that was just made — the allowlist would hold for the URL the agent asked for and not for the one it reached. The status and the `Location` header are returned so the agent can re-request explicitly, which puts the new host through the check.
+
+DECISION: **only `http:` and `https:`.** `file:` would read the disk through a tool that has no sandbox check, and the rest are worse. Checked before the host, so a scheme refusal is not accidentally reported as an allowlist miss.
+
+DECISION: **a `*.example.com` entry matches subdomains but not the apex, and there is no bare `*`.** A wildcard that also matched the apex would silently widen every entry written by someone who meant subdomains. An empty allowlist means no network access — the correct default for a tool server nobody has granted egress to.
+
+The egress check is exported as `assertEgressAllowed` because M6's `browser.ts` needs the identical rule, and two implementations of one rule is how the two drift apart.
+
 Dependencies: M2-2, M2-3.
 
 ### M2-5: Role registry
