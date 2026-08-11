@@ -1,42 +1,20 @@
-.connections {
-  border-top: var(--border-width) solid var(--border-hairline);
-}
+/* The connection form, in the rail. Compact by necessity — it shares a 264px
+ * column with everything else — so it leans on the shared `.field`/`.control`
+ * rhythm from shell.css rather than inventing its own spacing. */
 
 .connections__body {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 12px;
-}
-
-.connections__label {
-  font-size: var(--type-floor);
-  color: var(--text-muted);
-}
-
-.connections__control {
-  font: inherit;
-  font-size: var(--type-body);
-  color: var(--text-primary);
-  background: var(--surface-canvas);
-  border: var(--border-width) solid var(--border-hairline);
-  border-radius: var(--radius-control);
-  padding: 4px 6px;
 }
 
 .connections__action {
-  margin-top: 8px;
-  font: inherit;
-  font-weight: var(--font-weight-medium);
-  color: var(--text-primary);
-  background: var(--surface-canvas);
-  border: var(--border-width) solid var(--border-hairline);
-  border-radius: var(--radius-control);
-  padding: 4px 10px;
+  align-self: flex-start;
+  margin-top: var(--space-1);
 }
 
 .connections__error {
-  margin: 4px 0 0;
+  margin: var(--space-2) 0 0;
   font-size: var(--type-floor);
-  color: var(--text-muted);
+  line-height: var(--line-height-prose);
+  color: var(--semantic-danger);
 }

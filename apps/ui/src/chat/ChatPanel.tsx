@@ -19,9 +19,11 @@ type Phase = 'idle' | 'streaming' | 'done' | 'failed';
 interface Props {
   /** Bumped by the connection form so a new connection appears without a reload. */
   refreshToken: number;
+  /** Reported up for the title bar, which would otherwise fetch the list twice. */
+  onConnectionCount: (count: number) => void;
 }
 
-export function ChatPanel({ refreshToken }: Props): JSX.Element {
+export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [localOnlyMode, setLocalOnlyMode] = useState(false);
   const [selectedId, setSelectedId] = useState('');
@@ -48,12 +50,13 @@ export function ChatPanel({ refreshToken }: Props): JSX.Element {
         localOnlyMode: boolean;
       }>('connection:list', {});
       setConnections(result.connections);
+      onConnectionCount(result.connections.length);
       setLocalOnlyMode(result.localOnlyMode);
       setSelectedId((current) => current || (result.connections[0]?.id ?? ''));
     } catch (err) {
       setError(describeError(err));
     }
-  }, []);
+  }, [onConnectionCount]);
 
   useEffect(() => {
     void refreshConnections();
@@ -154,7 +157,63 @@ export function ChatPanel({ refreshToken }: Props): JSX.Element {
   return (
     <section className="chat" data-testid="chat-panel" data-phase={phase}>
       <header className="chat__header">
-        <h2 className="chat__title">Chat</h2>
+        <div className="chat__controls">
+          <label className="chat__label" htmlFor="chat-connection">
+            Connection
+          </label>
+          <select
+            id="chat-connection"
+            className="chat__control"
+            data-testid="connection-select"
+            value={selectedId}
+            onChange={(event) => {
+              setSelectedId(event.target.value);
+            }}
+          >
+            {connections.length === 0 && <option value="">No connections yet</option>}
+            {connections.map((connection) => (
+              <option key={connection.id} value={connection.id}>
+                {connection.label} ({connection.healthState})
+              </option>
+            ))}
+          </select>
+
+          <label className="chat__label" htmlFor="chat-model">
+            Model
+          </label>
+          {/* A picker when the connection has an imported catalogue, a text box
+              when it does not. Typing an exact model id from memory is not a
+              thing anyone can do against a gateway serving hundreds of them. */}
+          {availableModels.length > 0 ? (
+            <select
+              id="chat-model"
+              className="chat__control"
+              data-testid="model-input"
+              value={model}
+              onChange={(event) => {
+                setModel(event.target.value);
+              }}
+            >
+              {availableModels.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              id="chat-model"
+              className="chat__control"
+              data-testid="model-input"
+              value={model}
+              onChange={(event) => {
+                setModel(event.target.value);
+              }}
+              placeholder="claude-opus-5"
+            />
+          )}
+        </div>
+
         {localOnlyMode && (
           <span className="chat__badge" data-testid="local-only-badge">
             Local-only mode
@@ -162,107 +221,68 @@ export function ChatPanel({ refreshToken }: Props): JSX.Element {
         )}
       </header>
 
-      <div className="chat__controls">
-        <label className="chat__label" htmlFor="chat-connection">
-          Connection
-        </label>
-        <select
-          id="chat-connection"
-          className="chat__control"
-          data-testid="connection-select"
-          value={selectedId}
-          onChange={(event) => {
-            setSelectedId(event.target.value);
-          }}
-        >
-          {connections.length === 0 && <option value="">No connections yet</option>}
-          {connections.map((connection) => (
-            <option key={connection.id} value={connection.id}>
-              {connection.label} ({connection.healthState})
-            </option>
-          ))}
-        </select>
+      <div className="chat__transcript scroll">
+        <div className="chat__column">
+          {error && (
+            <p className="chat__error" data-testid="chat-error" role="alert">
+              {error.message}
+            </p>
+          )}
 
-        <label className="chat__label" htmlFor="chat-model">
-          Model
-        </label>
-        {/* A picker when the connection has an imported catalogue, a text box
-            when it does not. Typing an exact model id from memory is not a
-            thing anyone can do against a gateway serving hundreds of them. */}
-        {availableModels.length > 0 ? (
-          <select
-            id="chat-model"
-            className="chat__control"
-            data-testid="model-input"
-            value={model}
-            onChange={(event) => {
-              setModel(event.target.value);
-            }}
-          >
-            {availableModels.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            id="chat-model"
-            className="chat__control"
-            data-testid="model-input"
-            value={model}
-            onChange={(event) => {
-              setModel(event.target.value);
-            }}
-            placeholder="claude-opus-5"
-          />
-        )}
+          {answer === '' && phase !== 'streaming' ? (
+            <p className="chat__placeholder">
+              {connections.length === 0
+                ? 'Add a connection, or import OmniRoute, to start.'
+                : 'Ask something below.'}
+            </p>
+          ) : (
+            <p className="chat__answer" data-testid="chat-answer">
+              {answer}
+            </p>
+          )}
+        </div>
       </div>
 
-      <textarea
-        className="chat__prompt"
-        data-testid="prompt-input"
-        value={prompt}
-        onChange={(event) => {
-          setPrompt(event.target.value);
-        }}
-        placeholder="Ask something"
-        rows={3}
-      />
+      <div className="chat__composer">
+        <div className="chat__composer-inner">
+          <textarea
+            className="chat__prompt"
+            data-testid="prompt-input"
+            value={prompt}
+            onChange={(event) => {
+              setPrompt(event.target.value);
+            }}
+            placeholder="Ask something"
+            rows={3}
+          />
 
-      <button
-        type="button"
-        className="chat__send"
-        data-testid="send-button"
-        onClick={() => void send()}
-        disabled={phase === 'streaming'}
-      >
-        {phase === 'streaming' ? 'Sending' : 'Send message'}
-      </button>
+          <div className="chat__actions">
+            <footer className="chat__meter" data-testid="chat-meter">
+              <span data-testid="token-count">
+                {usage
+                  ? `${String(usage.inputTokens)} in · ${String(usage.outputTokens)} out`
+                  : '— tokens'}
+              </span>
+              <span data-testid="cost-estimate">
+                {/* An unpriced model shows "not priced", never $0.00: reading
+                    "free" off a model nobody has a rate for is the one wrong
+                    answer here that costs money. */}
+                {cost === null ? (usage ? 'Not priced' : '— cost') : `$${cost.toFixed(6)}`}
+              </span>
+            </footer>
 
-      {error && (
-        <p className="chat__error" data-testid="chat-error" role="alert">
-          {error.message}
-        </p>
-      )}
-
-      <pre className="chat__answer" data-testid="chat-answer">
-        {answer}
-      </pre>
-
-      <footer className="chat__meter" data-testid="chat-meter">
-        <span data-testid="token-count">
-          {usage
-            ? `${String(usage.inputTokens)} in · ${String(usage.outputTokens)} out`
-            : '— tokens'}
-        </span>
-        <span data-testid="cost-estimate">
-          {/* An unpriced model shows "not priced", never $0.00: reading "free"
-              off a model nobody has a rate for is the one wrong answer here
-              that costs money. */}
-          {cost === null ? (usage ? 'Not priced' : '— cost') : `$${cost.toFixed(6)}`}
-        </span>
-      </footer>
+            <button
+              type="button"
+              className="button button--primary"
+              data-testid="send-button"
+              onClick={() => void send()}
+              disabled={phase === 'streaming'}
+            >
+              {phase === 'streaming' ? 'Sending' : 'Send message'}
+            </button>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }

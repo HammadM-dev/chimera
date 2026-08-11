@@ -83,3 +83,44 @@ body {
   outline: 1px solid var(--accent-primary);
   outline-offset: 1px;
 }
+
+/* Spacing, elevation and motion — docs/DESIGN.md section 2.5.
+ *
+ * A four-point scale. Ad-hoc pixel values in component files are what made the
+ * first pass read as scaffolding: every panel padded itself slightly
+ * differently, so nothing lined up across a seam. */
+:root {
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --rail-width: 264px;
+  --inspector-width: 300px;
+  --topbar-height: 44px;
+  --statusbar-height: 26px;
+  /* The reading column. Prose past ~75 characters is measurably harder to
+   * scan, and a chat answer stretched across a 27-inch monitor is unreadable. */
+  --measure: 720px;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+
+  --motion-fast: 90ms;
+  --motion-base: 160ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  --letterspacing-wordmark: 0.18em;
+  --letterspacing-label: 0.06em;
+}
+
+/* Every scroll region in the app. A panel that scrolls with a 15px system
+ * scrollbar has a different internal width from one that does not, which is
+ * the other half of why nothing lined up. */
+.scroll {
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
+}

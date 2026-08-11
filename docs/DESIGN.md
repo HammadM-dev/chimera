@@ -135,6 +135,17 @@ This design system does not currently define a light theme; the token block abov
 
 ---
 
+### 2.5 Spacing, elevation and motion
+
+A four-point spacing scale (`--space-1` 4px through `--space-6` 32px), plus the frame's fixed dimensions (`--rail-width`, `--inspector-width`, `--topbar-height`, `--statusbar-height`) and one reading measure (`--measure`, 720px).
+
+DECISION: **the scale exists because its absence was visible.** The first build of the shell used ad-hoc pixel values per component — 12px here, 16px there, 8px in the third — and each panel was internally consistent and disagreed with its neighbours. The result read as scaffolding rather than as a product, because no seam lined up with the seam above it. A shared scale is the cheapest fix and the only one that survives new panels being added.
+
+DECISION: **`--measure` caps the reading column at 720px.** A model's answer stretched across a 27-inch monitor is unreadable; prose past roughly 75 characters per line measurably slows scanning. The chat transcript and the composer share the measure so the text you write lines up with the text you get back.
+
+DECISION: **one `.scroll` class for every scrolling region.** A panel that scrolls with a system scrollbar has a different internal width from one that does not, so two panels with identical padding end up misaligned the moment one of them overflows.
+
+
 ## 3. Interaction states
 
 DECISION: master plan §4.2 specifies static tokens only — no hover, focus, or disabled states are described anywhere in the source material. Interactive UI cannot ship without them, so this section defines the minimal state model needed to keep every future component consistent, rather than leaving each component author to invent one. Three states, applied uniformly:

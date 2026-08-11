@@ -45,28 +45,30 @@ export function ConnectionForm({ kinds, onCreated }: Props): JSX.Element {
   }, [label, kind, baseUrl, inlineKey, onCreated]);
 
   return (
-    <section className="connections" data-testid="connection-form">
-      <h2 className="shell__region-title">Connections</h2>
-      <div className="connections__body">
-        <label className="connections__label" htmlFor="connection-label">
+    <div className="connections__body" data-testid="connection-form">
+      <div className="field">
+        <label className="field__label" htmlFor="connection-label">
           Label
         </label>
         <input
           id="connection-label"
-          className="connections__control"
+          className="control"
           data-testid="connection-label"
           value={label}
           onChange={(event) => {
             setLabel(event.target.value);
           }}
+          placeholder="Anthropic"
         />
+      </div>
 
-        <label className="connections__label" htmlFor="connection-kind">
+      <div className="field">
+        <label className="field__label" htmlFor="connection-kind">
           Provider
         </label>
         <select
           id="connection-kind"
-          className="connections__control"
+          className="control"
           data-testid="connection-kind"
           value={kind}
           onChange={(event) => {
@@ -80,27 +82,31 @@ export function ConnectionForm({ kinds, onCreated }: Props): JSX.Element {
             </option>
           ))}
         </select>
+      </div>
 
-        <label className="connections__label" htmlFor="connection-base-url">
+      <div className="field">
+        <label className="field__label" htmlFor="connection-base-url">
           Base URL
         </label>
         <input
           id="connection-base-url"
-          className="connections__control"
+          className="control"
           data-testid="connection-base-url"
           value={baseUrl}
           onChange={(event) => {
             setBaseUrl(event.target.value);
           }}
-          placeholder="Leave empty for the provider default"
+          placeholder="Provider default"
         />
+      </div>
 
-        <label className="connections__label" htmlFor="connection-key">
+      <div className="field">
+        <label className="field__label" htmlFor="connection-key">
           API key
         </label>
         <input
           id="connection-key"
-          className="connections__control"
+          className="control"
           data-testid="connection-key"
           type="password"
           value={inlineKey}
@@ -109,23 +115,23 @@ export function ConnectionForm({ kinds, onCreated }: Props): JSX.Element {
           }}
           placeholder="Leave empty for a local provider"
         />
-
-        <button
-          type="button"
-          className="connections__action"
-          data-testid="connection-create"
-          onClick={() => void submit()}
-          disabled={busy}
-        >
-          Add connection
-        </button>
-
-        {error !== null && (
-          <p className="connections__error" data-testid="connection-error" role="alert">
-            {error}
-          </p>
-        )}
       </div>
-    </section>
+
+      <button
+        type="button"
+        className="button connections__action"
+        data-testid="connection-create"
+        onClick={() => void submit()}
+        disabled={busy}
+      >
+        {busy ? 'Adding' : 'Add connection'}
+      </button>
+
+      {error !== null && (
+        <p className="connections__error" data-testid="connection-error" role="alert">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

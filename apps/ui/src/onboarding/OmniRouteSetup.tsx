@@ -69,20 +69,18 @@ export function OmniRouteSetup({ onImported }: Props): JSX.Element {
   }, [onImported]);
 
   return (
-    <section className="omniroute" data-testid="omniroute-setup" data-phase={phase}>
-      <h2 className="shell__region-title">OmniRoute</h2>
-
-      {phase === 'detecting' && <p className="omniroute__body">Looking for a local instance.</p>}
+    <div className="omniroute" data-testid="omniroute-setup" data-phase={phase}>
+      {phase === 'detecting' && <p className="omniroute__text">Looking for a local instance.</p>}
 
       {phase === 'not-detected' && (
         <div className="omniroute__body" data-testid="omniroute-guidance">
           <p className="omniroute__text">
-            No OmniRoute instance is answering on {baseUrl === '' ? 'the default port' : baseUrl}.
-            Install it and sign in with your own provider accounts, then check again.
+            No instance is answering on {baseUrl === '' ? 'the default port' : baseUrl}. Install it
+            and sign in with your own provider accounts, then check again.
           </p>
           <button
             type="button"
-            className="omniroute__action"
+            className="button"
             data-testid="omniroute-recheck"
             onClick={() => void check()}
           >
@@ -94,11 +92,12 @@ export function OmniRouteSetup({ onImported }: Props): JSX.Element {
       {phase === 'detected' && (
         <div className="omniroute__body">
           <p className="omniroute__text" data-testid="omniroute-found">
-            Found {String(modelCount)} models at {baseUrl}.
+            Found <span className="omniroute__count">{String(modelCount)}</span> models at {baseUrl}
+            .
           </p>
           <button
             type="button"
-            className="omniroute__action"
+            className="button button--primary"
             data-testid="omniroute-import"
             onClick={() => void runImport()}
           >
@@ -107,11 +106,12 @@ export function OmniRouteSetup({ onImported }: Props): JSX.Element {
         </div>
       )}
 
-      {phase === 'importing' && <p className="omniroute__body">Importing models.</p>}
+      {phase === 'importing' && <p className="omniroute__text">Importing models.</p>}
 
       {phase === 'ready' && (
-        <p className="omniroute__body" data-testid="omniroute-ready">
-          Connected with {String(modelCount)} models.
+        <p className="omniroute__text" data-testid="omniroute-ready">
+          <span className="chip chip--ok">Connected</span> with{' '}
+          <span className="omniroute__count">{String(modelCount)}</span> models.
         </p>
       )}
 
@@ -120,6 +120,6 @@ export function OmniRouteSetup({ onImported }: Props): JSX.Element {
           {error}
         </p>
       )}
-    </section>
+    </div>
   );
 }

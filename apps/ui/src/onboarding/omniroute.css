@@ -1,32 +1,29 @@
-.omniroute {
-  border-top: var(--border-width) solid var(--border-hairline);
-}
+/* The OmniRoute panel, in the inspector. One state at a time, each with exactly
+ * one thing to do — a panel that shows a button for a state it is not in is
+ * how a user ends up clicking the wrong one. */
 
 .omniroute__body {
-  margin: 0;
-  padding: 12px;
-  font-size: var(--type-body);
-  line-height: var(--line-height-prose);
-  color: var(--text-muted);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: flex-start;
 }
 
 .omniroute__text {
-  margin: 0 0 8px;
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
 }
 
-.omniroute__action {
-  font: inherit;
-  font-weight: var(--font-weight-medium);
+.omniroute__count {
+  font-variant-numeric: tabular-nums;
   color: var(--text-primary);
-  background: var(--surface-canvas);
-  border: var(--border-width) solid var(--border-hairline);
-  border-radius: var(--radius-control);
-  padding: 4px 10px;
 }
 
 .omniroute__detail {
   margin: 0;
-  padding: 0 12px 12px;
   font-size: var(--type-floor);
+  line-height: var(--line-height-prose);
   color: var(--text-muted);
 }

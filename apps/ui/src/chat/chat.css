@@ -1,111 +1,195 @@
-/* Minimal chat surface for M1-10. Uses design tokens only — no literals, per
-   CLAUDE.md and scripts/check-design-tokens.mjs. M4 replaces the canvas and
-   inspector around it; this panel is deliberately plain. */
+/* The chat surface.
+ *
+ * Three parts, in the order the eye needs them: what you are talking to, what
+ * it said, and what you want to say next. The first pass stacked all three as
+ * equal-weight rows in a flat column, so the answer — the only thing anyone is
+ * actually here to read — had no more presence than the model dropdown. */
 
 .chat {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 16px;
-  height: 100%;
-  overflow-y: auto;
-  text-align: left;
+  min-height: 0;
+  min-width: 0;
+  flex: 1;
 }
+
+/* ---- header ------------------------------------------------------------- */
 
 .chat__header {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-hairline);
 }
 
-.chat__title {
-  margin: 0;
+.chat__controls {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: 1;
+  min-width: 0;
+}
+
+.chat__control {
+  font: inherit;
   font-size: var(--type-meta);
-  font-weight: var(--font-weight-medium);
-  color: var(--text-secondary);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-2);
+  max-width: 240px;
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.chat__control:hover {
+  border-color: var(--border-stronger);
+}
+
+.chat__label {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
 }
 
 .chat__badge {
   font-size: var(--type-floor);
-  color: var(--text-secondary);
+  color: var(--semantic-warning);
   border: var(--border-width) solid var(--border-strong);
   border-radius: var(--radius-control);
-  padding: 2px 6px;
+  padding: 1px var(--space-2);
+  white-space: nowrap;
 }
 
-.chat__controls {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 8px 12px;
-  align-items: center;
+/* ---- transcript --------------------------------------------------------- */
+
+.chat__transcript {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-5) var(--space-4);
+  display: flex;
+  justify-content: center;
 }
 
-.chat__label {
-  font-size: var(--type-meta);
-  color: var(--text-secondary);
-}
-
-.chat__control,
-.chat__prompt,
-.chat__send {
-  background: var(--surface-raised);
-  color: var(--text-primary);
-  border: var(--border-width) solid var(--border-hairline);
-  border-radius: var(--radius-control);
-  padding: 6px 8px;
-  font-size: var(--type-body);
-  font-family: inherit;
-}
-
-.chat__prompt {
-  resize: vertical;
-  line-height: var(--line-height-prose);
-}
-
-.chat__send {
-  align-self: flex-start;
-  cursor: pointer;
-}
-
-.chat__send:hover:not(:disabled) {
-  border-color: var(--border-strong);
-}
-
-.chat__send:disabled {
-  opacity: 0.4;
-  pointer-events: none;
-}
-
-.chat__error {
-  margin: 0;
-  padding: 8px;
-  font-size: var(--type-body);
-  line-height: var(--line-height-prose);
-  color: var(--semantic-danger);
-  border: var(--border-width) solid var(--semantic-danger);
-  border-radius: var(--radius-control);
+.chat__column {
+  width: 100%;
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .chat__answer {
   margin: 0;
-  flex: 1;
-  min-height: 80px;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--font-mono);
-  font-size: var(--type-meta);
+  font-family: inherit;
+  font-size: var(--type-body);
   line-height: var(--line-height-prose);
   color: var(--text-primary);
-  background: var(--surface-panel);
-  border: var(--border-width) solid var(--border-hairline);
-  border-radius: var(--radius-card);
-  padding: 12px;
+  /* Wrapping, not scrolling: a model's answer is prose, and a horizontal
+   * scrollbar under a paragraph is a bug people work around by widening the
+   * window. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
+.chat__placeholder {
+  margin: 0;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+/* The caret only exists while tokens are arriving, so a finished answer is not
+ * left looking like it is still going. */
+.chat[data-phase='streaming'] .chat__answer::after {
+  content: '';
+  display: inline-block;
+  width: 7px;
+  height: 1em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--accent-primary);
+  animation: chat-caret 1s steps(2, start) infinite;
+}
+
+@keyframes chat-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat[data-phase='streaming'] .chat__answer::after {
+    animation: none;
+  }
+}
+
+.chat__error {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--semantic-danger);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-left: 2px solid var(--semantic-danger);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+}
+
+/* ---- composer ----------------------------------------------------------- */
+
+.chat__composer {
+  border-top: var(--border-width) solid var(--border-hairline);
+  background: var(--surface-panel);
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  justify-content: center;
+}
+
+.chat__composer-inner {
+  width: 100%;
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chat__prompt {
+  width: 100%;
+  resize: none;
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.chat__prompt:hover {
+  border-color: var(--border-stronger);
+}
+
+.chat__prompt::placeholder {
+  color: var(--text-muted);
+}
+
+.chat__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+/* The meter sits with the send button rather than under the answer: it is
+ * about the cost of the next thing you do, not a footnote to the last one. */
 .chat__meter {
   display: flex;
-  gap: 16px;
+  align-items: center;
+  gap: var(--space-3);
   font-size: var(--type-floor);
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
 }
