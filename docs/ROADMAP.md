@@ -832,6 +832,14 @@ Acceptance criteria:
 - A cancelled/halted run's final status and `error_summary` correctly distinguish which of the four causes triggered the stop.
 - This ticket's acceptance criteria explicitly do not include OS-level global hotkey registration — that is out of scope until M8-3, and a grep-based check confirms no OS-level hotkey registration API call exists anywhere in the codebase yet.
 
+DECISION: **one `halt()` function, and it is the only expression in `agentLoop.ts` that builds a `LoopResult`.** Manual cancel, budget cap, stall, rate-limit exhaustion, a structural limit and running out of iterations all arrive there. Four halt behaviours that were merely "written the same way" would drift, and the one that drifts first is whichever forgets to journal.
+
+DECISION: **`onHalt` exists so the single path is a testable property, not a claim about the source.** A second halt route would either not fire it — the test sees zero — or fire it as well as the first, and the test asserts exactly one call per run across all four scenarios. Reviewing the file and declaring it correct is not the same guarantee.
+
+DECISION: **`haltCause` travels on the result.** Nothing downstream has to re-derive "why" from a status code plus a denial code, and `runOutcome.ts` maps each cause to its own sentence. The test asserts all four summaries are distinct strings — a user told only "failed" cannot tell which lever to pull.
+
+Criterion 3 is enforced rather than asserted once: `scripts/check-no-global-hotkey.mjs` fails the build on `globalShortcut`, `RegisterHotKey` or `XGrabKey` anywhere under `apps/`, `packages/` or `sidecar/`, and runs in CI beside the other structural checks. The reasoning is in the script itself — it is easy to reach for `globalShortcut` while building something called a kill switch and quietly pull two milestones of work forward, and easier still for a half-registered hotkey to sit there doing nothing while looking like a safety feature. The check is deleted at M8-3, in the commit that registers the real one.
+
 Dependencies: M3-1, M3-2, M3-4, M3-5.
 
 ### M3-7: M3 demo — Governor exit criteria

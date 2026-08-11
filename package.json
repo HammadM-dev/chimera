@@ -25,7 +25,8 @@
     "check:no-signing": "node scripts/check-no-signing.mjs",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "smoke:packaged": "node scripts/smoke-packaged-app.mjs",
-    "docs:check-links": "node scripts/check-doc-links.mjs"
+    "docs:check-links": "node scripts/check-doc-links.mjs",
+    "check:no-global-hotkey": "node scripts/check-no-global-hotkey.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

@@ -16,6 +16,8 @@ const HALT_REASONS: Record<string, string> = {
   GOVERNOR_STALLED: 'Stopped: the agent was repeating itself and making no progress.',
   GOVERNOR_DEPTH_EXCEEDED: 'Stopped: the workflow nested deeper than its declared limit.',
   GOVERNOR_STEP_LIMIT_EXCEEDED: 'Stopped: the run reached its step or time limit.',
+  GOVERNOR_RATE_LIMITED:
+    'Stopped: the provider had no rate headroom left and no spillover connection was available.',
   GOVERNOR_CAPABILITY_MISMATCH: 'Stopped: the bound model cannot do what this node needs.',
   GOVERNOR_TOOL_NOT_ALLOWED: 'Stopped: the agent tried to use a tool its role was not granted.',
   GOVERNOR_EGRESS_NOT_ALLOWED: 'Stopped: the agent tried to reach a host outside the allowlist.',

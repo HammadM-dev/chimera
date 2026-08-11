@@ -175,7 +175,7 @@ test('a run halts at its cost cap and never authorises a second call past it', a
   await tools.registerServer('filesystem', await connectInProcess(createFilesystemServer(sandbox)));
 
   try {
-    // A $1 cap, and a model whose每 call costs far more than that once its real
+    // A $1 cap, and a model whose every call costs far more than that once its real
     // usage is reconciled.
     const governor = new Governor('enforcing', {
       budget: { run: { maxTokens: null, maxCostUsd: 1 } },
@@ -245,6 +245,7 @@ test('a cap halt, a stall halt and a completion are three distinguishable outcom
     observations: [],
     verification: null,
     structuredOutput: null,
+    haltCause: 'budget' as const,
   };
 
   const capped = outcomeOf({
@@ -259,6 +260,7 @@ test('a cap halt, a stall halt and a completion are three distinguishable outcom
   });
   const stalled = outcomeOf({
     ...base,
+    haltCause: 'stall',
     status: 'denied',
     denial: {
       decision: 'deny',
@@ -267,8 +269,8 @@ test('a cap halt, a stall halt and a completion are three distinguishable outcom
       details: {},
     },
   });
-  const done = outcomeOf({ ...base, status: 'succeeded' });
-  const ranOut = outcomeOf({ ...base, status: 'exhausted' });
+  const done = outcomeOf({ ...base, status: 'succeeded', haltCause: 'completed' });
+  const ranOut = outcomeOf({ ...base, status: 'exhausted', haltCause: 'iterations' });
 
   // All three halts are `halted`, but the code and the summary say which — a
   // user reading "failed" with no reason is left guessing which lever to pull.

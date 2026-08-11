@@ -37,6 +37,17 @@ import {
 // a loop that decides it is finished by pattern-matching its own prose is a
 // loop that stops when it produces confident-sounding text.
 
+/**
+ * Why a run stopped.
+ *
+ * Every terminal outcome carries one, and every terminal outcome is built by
+ * the same `halt()` below. Four causes, one code path — M3-6's whole point is
+ * that a manual cancel and a budget cap do not diverge into two mechanisms that
+ * drift apart.
+ */
+export type HaltCause =
+  'completed' | 'cancelled' | 'budget' | 'stall' | 'rateLimit' | 'limit' | 'iterations';
+
 export type LoopStatus =
   | 'succeeded'
   /** Ran out of iterations without verifying. Not a crash — an honest "not done". */
@@ -59,6 +70,8 @@ export interface LoopStep {
 
 export interface LoopResult {
   status: LoopStatus;
+  /** Why it stopped. Set by `halt()` and nowhere else. */
+  haltCause: HaltCause;
   /** The agent's final answer, or the last thing it said before it stopped. */
   output: string;
   iterations: number;
@@ -119,6 +132,14 @@ export interface AgentLoopDeps {
    * whatever it finds rather than starting over.
    */
   checkpoints?: CheckpointStore;
+  /**
+   * Called once, by the single halt path, whatever stopped the run.
+   *
+   * Exists so "all four causes converge on one code path" is a property a test
+   * can assert rather than a claim about the source: a second halt path would
+   * either not fire this or fire it twice.
+   */
+  onHalt?: (cause: HaltCause, result: LoopResult) => void;
   /**
    * The live spend meter (M3-4). Optional for the same reason the checkpoint
    * store is: an eval or a dry run has no run row to account against.
@@ -181,6 +202,14 @@ export function parseVerification(text: string): Verification {
   } catch {
     return { verified: false, evidence: text.trim() };
   }
+}
+
+/** Which halt cause a Governor denial represents. */
+function causeOfDenial(code: string): HaltCause {
+  if (code === 'GOVERNOR_BUDGET_EXCEEDED') return 'budget';
+  if (code === 'GOVERNOR_STALLED') return 'stall';
+  if (code === 'GOVERNOR_RATE_LIMITED') return 'rateLimit';
+  return 'limit';
 }
 
 /** Injectable-free on purpose: the delay is the Governor's number, not a policy here. */
@@ -248,14 +277,28 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     });
   };
 
-  const finish = (status: LoopStatus, extra: Partial<LoopResult> = {}): LoopResult => {
+  /**
+   * The one way this loop ends.
+   *
+   * Manual cancel, budget cap, stall, rate-limit exhaustion, a structural
+   * limit, and running out of iterations all arrive here. There is no other
+   * expression in this file that builds a `LoopResult` — which is what stops
+   * four halt behaviours drifting into four different sets of side effects,
+   * one of which eventually forgets to journal.
+   */
+  const halt = (
+    status: LoopStatus,
+    cause: HaltCause,
+    extra: Partial<LoopResult> = {},
+  ): LoopResult => {
     // A terminal state is journaled too, so a resume after a completed run
     // reports the outcome instead of re-running it.
     checkpoint(
       status === 'succeeded' ? 'succeeded' : status === 'cancelled' ? 'cancelled' : 'failed',
     );
-    return {
+    const result: LoopResult = {
       status,
+      haltCause: cause,
       output,
       iterations: iteration,
       steps,
@@ -264,6 +307,8 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       structuredOutput,
       ...extra,
     };
+    deps.onHalt?.(cause, result);
+    return result;
   };
 
   /**
@@ -442,7 +487,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   };
 
   const denialResult = (denied: Denied): LoopResult =>
-    finish('denied', {
+    halt('denied', causeOfDenial(denied.code), {
       denial: denied,
       error: new GovernorLimitError(denied.code, denied.message, denied.details),
     });
@@ -492,7 +537,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   };
 
   // ---- plan ---------------------------------------------------------------
-  if (cancelled()) return finish('cancelled');
+  if (cancelled()) return halt('cancelled', 'cancelled');
 
   if (!resumed) {
     const planned = await callModel('plan', [], false);
@@ -508,7 +553,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     // Checked here, at the top of the step, and again after tools return.
     // Cancellation never interrupts a tool that is already running: a half-
     // executed side effect is worse than one extra completed step.
-    if (cancelled()) return finish('cancelled');
+    if (cancelled()) return halt('cancelled', 'cancelled');
 
     iteration += 1;
 
@@ -646,7 +691,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       checkpoint('running');
     }
 
-    if (cancelled()) return finish('cancelled');
+    if (cancelled()) return halt('cancelled', 'cancelled');
 
     // ---- verify -----------------------------------------------------------
     const verified = await callModel(
@@ -672,7 +717,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     if (verification.verified) {
       const contracted = await applyOutputContract();
       if (contracted !== null && 'denied' in contracted) return denialResult(contracted.denied);
-      return finish('succeeded');
+      return halt('succeeded', 'completed');
     }
 
     history.push({
@@ -684,7 +729,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   // Out of iterations without verifying. CLAUDE.md: "No unbounded loops" — the
   // cap is the role's, and reaching it is a reported outcome rather than an
   // error, because the work done so far may still be worth something.
-  return finish('exhausted');
+  return halt('exhausted', 'iterations');
 }
 
 /**
