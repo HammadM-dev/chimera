@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { GovernorLimitError } from '@chimera/errors';
 import { Governor, createGovernor } from './Governor.ts';
 import type { ModelCallRequest, ToolCallRequest } from './types.ts';
 
@@ -101,16 +100,18 @@ test('an authorization says it was not really checked', () => {
   assert.equal(governor.mode, 'permissive');
 });
 
-test('enforcing mode throws rather than quietly authorizing, until M3 implements it', () => {
-  // The dangerous failure for this stub is a caller asking for enforcement and
-  // getting a pass-through. It fails loudly instead.
-  const governor = new Governor('enforcing');
-  assert.throws(
-    () => governor.authorizeModelCall(modelRequest()),
-    (err: unknown) => err instanceof GovernorLimitError && err.code === 'GOVERNOR_NOT_IMPLEMENTED',
-  );
-  assert.throws(
-    () => governor.authorizeToolCall(toolRequest()),
-    (err: unknown) => err instanceof GovernorLimitError && err.code === 'GOVERNOR_NOT_IMPLEMENTED',
-  );
+test('enforcing mode is a different object, not a different answer from the same checks', () => {
+  // M2-1 shipped this file with `enforcing` throwing GOVERNOR_NOT_IMPLEMENTED,
+  // because a mode that silently passed everything through would have been the
+  // worst possible failure of this interface. M3-1 implements it: an enforcing
+  // Governor with no policy has nothing to enforce and authorises, and one with
+  // a policy denies. The permissive stub's behaviour above is unchanged, which
+  // is the promise M2-1 made.
+  const unconstrained = new Governor('enforcing');
+  assert.equal(unconstrained.authorizeModelCall(modelRequest()).decision, 'allow');
+
+  const constrained = new Governor('enforcing', {
+    budget: { run: { maxTokens: 10, maxCostUsd: null } },
+  });
+  assert.equal(constrained.authorizeModelCall(modelRequest()).decision, 'deny');
 });

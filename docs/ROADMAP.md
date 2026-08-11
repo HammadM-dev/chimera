@@ -712,6 +712,20 @@ Acceptance criteria:
 - Per-node and per-role caps are enforced independently of the run-level cap — a test asserts a single expensive node halts even when the overall run budget has ample headroom left.
 - Max recursion depth and max wall-clock are each independently testable and independently enforced (two separate unit tests, not one conflated test).
 
+DECISION: **charges are committed before dispatch, against the estimate.** A cap enforced after the call is not a cap. The subtler reason is concurrency: M5's swarm makes several calls at once, and checking-then-charging-later would authorise a set of calls each individually inside the budget and collectively outside it. M3-4 reconciles the estimate against the provider's reported usage once the call returns.
+
+DECISION: **an unpriced model is never treated as free.** `costOf()` returns null rather than zero, the cost cap is skipped for that call, and the authorization's notes say so. Treating an absent price as $0.00 would let an entirely unmetered run past a cost cap — the one arithmetic mistake here with a bill attached. The token cap still applies, which is why a workspace that cares about money should set one.
+
+DECISION: **`unknown` capability fails closed.** M1-3 made capability flags a tri-state precisely so an absent fact could not be read as a yes. A Governor that authorised a tool-calling node against a model nobody has verified supports tools would be reading it as a yes.
+
+DECISION: **the capability lookup is injectable.** M1-6 decided the mock's synthetic models stay out of the real matrix, so an enforcing Governor in a test would otherwise deny every tool-calling call against `mock-frontier`. The lookup defaults to `capabilityMatrix.get` and is pointed at `MOCK_MODELS` in tests — the matrix stays free of models no user can select.
+
+DECISION: **budget scopes are checked run, then node, then role, and the first breach is reported.** When several caps are tight at once the answer names the specific one that is the problem, so a user reading the denial learns which limit to raise rather than that "some cap" was hit.
+
+Criterion 1 holds structurally: `git status` for this ticket lists `Governor.ts`, `budget.ts`, `limits.ts` and two test files, all under `packages/core/src/governor/`. No call site changed — `agentLoop.ts` is byte-identical, and the denial path it has had since M2-7 receives its first real denial here. M2-1's "enforcing mode throws" test is replaced by one asserting the mode now works, which is the same file and the same promise kept.
+
+Depth, wall-clock and step limits each have their own test rather than one conflated one: a run stopped for nesting too deep and a run stopped for running too long are different failures, and a combined test can pass with either of them broken. The wall clock runs on an injected clock, because a real-clock test either sleeps for its duration or is flaky.
+
 Dependencies: M2-1, M2-11.
 
 ### M3-2: Stall detector
