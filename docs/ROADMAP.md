@@ -736,6 +736,18 @@ Acceptance criteria:
 - A scripted mock-provider sequence that repeats near-identical output across N iterations (configurable threshold) is detected as a stall and the run halts with a clear stall-specific error/status, not a generic budget error.
 - A sequence that produces genuinely new tool calls each iteration (varying arguments/results) is never flagged as stalled, even across many iterations — a negative-control test.
 
+DECISION: **a stall is both conditions at once — same output *and* no new tool call.** Output similarity alone would halt a methodical agent that narrates each turn identically while working through a list of files, which is a correct agent being killed. Tool-call novelty alone would miss an agent whose prose varies while it polls the same endpoint forever. Both negative controls are tested: 25 iterations of genuinely new work are never flagged, and identical prose with a new tool call each time is not a stall.
+
+DECISION: **similarity is Jaccard over word sets, thresholded at 0.9.** The question is "did it say the same thing", not "did it type the same characters" — a reordered sentence is the same information, and an edit distance would score it as a large change. 0.9 rather than exact equality because a model restating its position rarely restates it byte-for-byte, and a changed adjective would defeat an equality check while telling the reader nothing new.
+
+DECISION: **history is per node.** Two nodes repeating each other is a workflow design problem, not a stall, and one node's careful repetition must not be charged against another's. Only the window is retained; an unbounded history would grow with the run for no benefit.
+
+DECISION: **`Governor.recordOutcome()` is added to the public interface.** The Governor cannot detect a stall from requests alone — a stall is a property of the *answers*, which `authorizeModelCall` never sees. This is deliberately a separate method rather than a new field on `ModelCallRequest`: the two `authorize*` signatures and the result shape are unchanged, so M2-1's frozen contract and the "no bypass path" guarantee read exactly as they did. The alternative was reading answers back out of the `traces` table, which would couple the Governor to SQLite for something it holds in memory for the length of a run, and make stall detection untestable without a database.
+
+DECISION: **`stall: null` switches it off.** A dry run and a golden eval replay known-repetitive scripts on purpose.
+
+The end-to-end test runs a model that says the same thing every turn against a role permitting 25 iterations, and asserts it halts in under six with `GOVERNOR_STALLED` — a stall-specific code, not a budget one, because "you have spent enough" and "this is not going to finish" are different things to tell a user and only one is fixed by raising a limit.
+
 Dependencies: M3-1.
 
 ### M3-3: Cost preview

@@ -9,6 +9,7 @@ import type {
 import { textOf } from '@chimera/providers';
 import type { RegisteredTool, ToolRegistry } from '@chimera/tools';
 import type { Governor } from '../governor/Governor.ts';
+import { toolSignature } from '../governor/stallDetector.ts';
 import type { CallPurpose, Denied } from '../governor/types.ts';
 import type { Role } from './roleRegistry.ts';
 import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
@@ -441,6 +442,16 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     const acted = await callModel('act', [], true);
     if ('denied' in acted) return denialResult(acted.denied);
     const actText = record('act', acted.response);
+    // The Governor sees requests, not answers — this is how it learns whether
+    // the node is going in circles (M3-2). A permissive Governor ignores it.
+    governor.recordOutcome({
+      nodeId: task.nodeId,
+      iteration,
+      text: actText,
+      toolSignatures: acted.response.toolCalls.map((call) =>
+        toolSignature(fromWireName(call.name), call.arguments),
+      ),
+    });
     if (actText !== '') output = actText;
     history.push({ role: 'assistant', content: actText, toolCalls: acted.response.toolCalls });
     checkpoint('running');

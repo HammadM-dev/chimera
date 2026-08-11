@@ -2,6 +2,13 @@ import { GovernorLimitError } from '@chimera/errors';
 import { capabilityMatrix, type ModelCapabilities } from '@chimera/providers';
 import { BudgetLedger, costOf, type BudgetPolicy } from './budget.ts';
 import { LimitTracker, NO_LIMITS, type LimitPolicy } from './limits.ts';
+import {
+  DEFAULT_STALL_POLICY,
+  StallDetector,
+  toolSignature,
+  type IterationOutcome,
+  type StallPolicy,
+} from './stallDetector.ts';
 import type {
   Authorized,
   Denied,
@@ -30,6 +37,8 @@ export type GovernorMode = 'permissive' | 'enforcing';
 export interface GovernorPolicy {
   budget?: BudgetPolicy;
   limits?: LimitPolicy;
+  /** F4.3. Null disables stall detection entirely, which a dry run wants. */
+  stall?: StallPolicy | null;
   /** Injected for tests and for the mock provider's synthetic models. */
   capabilitiesFor?: (model: string) => ModelCapabilities;
   /** Injected so a wall-clock limit is testable without sleeping. */
@@ -57,12 +66,38 @@ export class Governor {
   private readonly ledger: BudgetLedger;
   private readonly tracker: LimitTracker;
   private readonly capabilitiesFor: (model: string) => ModelCapabilities;
+  private readonly stallDetector: StallDetector | null;
 
   constructor(mode: GovernorMode = 'permissive', policy: GovernorPolicy = {}) {
     this.mode = mode;
     this.ledger = new BudgetLedger(policy.budget ?? {});
     this.tracker = new LimitTracker(policy.limits ?? NO_LIMITS, policy.now);
     this.capabilitiesFor = policy.capabilitiesFor ?? ((model) => capabilityMatrix.get(model));
+    this.stallDetector =
+      policy.stall === null ? null : new StallDetector(policy.stall ?? DEFAULT_STALL_POLICY);
+  }
+
+  /**
+   * Reports what an iteration actually produced.
+   *
+   * The Governor cannot detect a stall from requests alone — a stall is a
+   * property of the *answers*, and `authorizeModelCall` never sees one. This is
+   * the one addition to the public interface M2-1 froze, and it is deliberately
+   * not part of `authorize*`: those two signatures, and the result shape, are
+   * unchanged, so the "no bypass path" guarantee reads exactly as it did.
+   *
+   * Reading the answers out of the `traces` table instead was the alternative.
+   * It would couple the Governor to SQLite for something it can hold in memory
+   * for the length of a run, and make stall detection untestable without a
+   * database.
+   */
+  recordOutcome(outcome: IterationOutcome): void {
+    this.stallDetector?.record(outcome);
+  }
+
+  /** Drops a node's stall history. Called when the node finishes. */
+  forgetNode(nodeId: string): void {
+    this.stallDetector?.forget(nodeId);
   }
 
   /** What has been spent so far. Read by M3-4's meter and by the run trace. */
@@ -132,6 +167,23 @@ export class Governor {
         ...limitBreach,
         runId: request.runId,
       });
+    }
+
+    const stall = this.stallDetector?.verdict(request.nodeId);
+    if (stall?.stalled === true) {
+      // A stall is its own answer, not a budget error. "You have spent enough"
+      // and "this is not going to finish" are different things to tell a user,
+      // and only one of them is fixed by raising a limit.
+      return deny(
+        'GOVERNOR_STALLED',
+        `Node "${request.nodeId}" has produced no new information for ${String(stall.repeats + 1)} iterations — same output, no new tool calls. Stopping rather than spending more.`,
+        {
+          nodeId: request.nodeId,
+          repeats: stall.repeats,
+          similarity: Number(stall.lastSimilarity.toFixed(3)),
+          runId: request.runId,
+        },
+      );
     }
 
     const missing = this.unsupportedCapabilities(capabilities, request.requiredCapabilities);
@@ -217,6 +269,8 @@ export function createGovernor(
 ): Governor {
   return new Governor(mode, policy);
 }
+
+export { toolSignature };
 
 /** Turns a denial into the error the runtime surfaces. */
 export function denialToError(denied: Denied): GovernorLimitError {
