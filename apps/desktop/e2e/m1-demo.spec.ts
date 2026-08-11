@@ -30,7 +30,9 @@ async function startGateway(): Promise<{ baseUrl: string; close: () => Promise<v
       res.writeHead(200, { 'content-type': 'application/json' });
       res.end(
         JSON.stringify({
-          data: [{ id: 'omni/haiku', name: 'omni/haiku' }, { id: 'omni/local' }],
+          // A priced model and an unpriced one, so the picker offers both and
+          // the meter has both cases to report.
+          data: [{ id: 'claude-haiku-4-5', name: 'claude-haiku-4-5' }, { id: 'omni/local' }],
         }),
       );
       return;
@@ -118,7 +120,15 @@ async function chatThrough(page: Page, label: string, model: string): Promise<vo
     .first()
     .getAttribute('value');
   await page.getByTestId('connection-select').selectOption(value);
-  await page.getByTestId('model-input').fill(model);
+  // The model control is a picker when the connection has an imported
+  // catalogue and a text box when it does not — OmniRoute imports 200+ models,
+  // and typing one from memory is not a thing anyone can do.
+  const control = page.getByTestId('model-input');
+  if ((await control.evaluate((node) => node.tagName)) === 'SELECT') {
+    await control.selectOption(model);
+  } else {
+    await control.fill(model);
+  }
   await page.getByTestId('prompt-input').fill(`hello from ${label}`);
   await page.getByTestId('send-button').click();
   await expect(page.getByTestId('chat-panel')).toHaveAttribute('data-phase', 'done', {
@@ -177,6 +187,7 @@ test.describe('M1-11 provider layer exit criteria', () => {
       // the matrix has a verified price for and one against a model it does
       // not, so the meter has both cases to report.
       await chatThrough(page, 'OpenAI', 'claude-haiku-4-5');
+      // Chosen from OmniRoute's imported catalogue through the real picker.
       await chatThrough(page, 'OmniRoute', 'claude-haiku-4-5');
       await chatThrough(page, 'Ollama', 'omni/local');
 

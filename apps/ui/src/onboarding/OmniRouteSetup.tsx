@@ -15,7 +15,12 @@ interface DetectResult {
   modelCount: number;
 }
 
-export function OmniRouteSetup(): JSX.Element {
+interface Props {
+  /** Bumps the shell's refresh token so the chat panel picks the new connection up. */
+  onImported: () => void;
+}
+
+export function OmniRouteSetup({ onImported }: Props): JSX.Element {
   const [phase, setPhase] = useState<Phase>('detecting');
   const [modelCount, setModelCount] = useState(0);
   const [baseUrl, setBaseUrl] = useState('');
@@ -53,11 +58,15 @@ export function OmniRouteSetup(): JSX.Element {
       );
       setModelCount(result.modelCount);
       setPhase(result.connectionId === '' ? 'not-detected' : 'ready');
+      // Without this the connection exists in SQLite and is invisible in the
+      // picker until the app is restarted, which reads as "imported 211 models
+      // and nothing happens".
+      if (result.connectionId !== '') onImported();
     } catch (err) {
       setError(describeError(err).message);
       setPhase('detected');
     }
-  }, []);
+  }, [onImported]);
 
   return (
     <section className="omniroute" data-testid="omniroute-setup" data-phase={phase}>

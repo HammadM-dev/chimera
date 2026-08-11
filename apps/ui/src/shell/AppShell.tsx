@@ -48,7 +48,7 @@ export function AppShell(): JSX.Element {
       <aside className="shell__inspector" aria-label="Inspector">
         <h2 className="shell__region-title">Inspector</h2>
         <p className="shell__empty">Select a node to configure it.</p>
-        <OmniRouteSetup />
+        <OmniRouteSetup onImported={onCreated} />
       </aside>
       <StatusBar />
     </div>

@@ -96,6 +96,48 @@ test.describe('M1-7 OmniRoute detection and guided setup', () => {
     }
   });
 
+  test('an imported connection is usable immediately, with its models, no restart', async () => {
+    // The bug this exists for: import reported "211 models" and the chat panel
+    // went on showing an empty picker until the app was restarted, because
+    // nothing told it to re-read. From the outside that is indistinguishable
+    // from an import that did nothing. No reload in this test, deliberately.
+    const stub = await makeStub(['gpt-4o-mini', 'claude-haiku-4-5', 'llama-3.3-70b']);
+    await stub.start();
+    const profile = freshProfile();
+    const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: stub.baseUrl } });
+
+    try {
+      const page = await app.firstWindow();
+      await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+        timeout: 15_000,
+      });
+
+      // Before the import there is nothing to chat with.
+      await expect(page.getByTestId('connection-select')).toContainText('No connections yet');
+
+      await page.getByTestId('omniroute-import').click();
+      await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+        timeout: 15_000,
+      });
+
+      // Immediately selectable — no reload, no restart.
+      await expect(page.getByTestId('connection-select')).toContainText('OmniRoute', {
+        timeout: 10_000,
+      });
+
+      // And the imported models are offered, rather than the user having to
+      // type an exact id from memory against a gateway serving hundreds.
+      const modelControl = page.getByTestId('model-input');
+      await expect(modelControl).toHaveJSProperty('tagName', 'SELECT');
+      const offered = await modelControl.locator('option').allTextContents();
+      expect(offered.sort()).toEqual(['claude-haiku-4-5', 'gpt-4o-mini', 'llama-3.3-70b']);
+    } finally {
+      await app.close();
+      removeProfile(profile);
+      await stub.close();
+    }
+  });
+
   test('shows install guidance rather than an error when nothing is listening', async () => {
     const stub = await makeStub([]);
     const profile = freshProfile();

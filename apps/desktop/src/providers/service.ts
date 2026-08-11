@@ -77,6 +77,15 @@ export interface ConnectionSummary {
   kind: string;
   baseUrl: string | null;
   healthState: string;
+  /**
+   * Model ids this connection can reach, from its imported catalogue.
+   *
+   * Empty when nothing has been imported — a hand-added connection, say. The
+   * picker falls back to a text field in that case rather than offering an
+   * empty list, but a connection that imported 211 models must show them: they
+   * were stored and then invisible, which is indistinguishable from broken.
+   */
+  models: string[];
 }
 
 /**
@@ -100,10 +109,16 @@ export function listConnections(): {
       kind: connection.kind,
       baseUrl: connection.baseUrl,
       healthState: connection.healthState,
+      models: modelsOf(connection),
     })),
     localOnlyMode: registryInstance.localOnlyMode(),
     kinds: [...PROVIDER_KINDS],
   };
+}
+
+/** Model ids out of a connection's cached capability blob. */
+function modelsOf(connection: ProviderConnection): string[] {
+  return Object.keys(connection.capabilities).sort();
 }
 
 function resolve(connectionId: string): ProviderConnection {

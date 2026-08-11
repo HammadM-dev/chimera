@@ -20,6 +20,8 @@ export interface ConnectionSummary {
   kind: string;
   baseUrl: string | null;
   healthState: string;
+  /** Imported catalogue. Empty for a connection nothing was imported for. */
+  models: string[];
 }
 
 export interface ChatDelta {

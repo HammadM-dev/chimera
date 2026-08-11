@@ -133,6 +133,10 @@ export const connectionCreate = defineInvokeChannel({
 });
 
 export const connectionSummary = z.object({
+  // Added in the M1-7 follow-up: the imported catalogue was being stored and
+  // never shown, so a connection with 211 models looked identical to one with
+  // none. Additive, so no version bump.
+  models: z.array(z.string()).default([]),
   id: z.string(),
   label: z.string(),
   kind: z.string(),

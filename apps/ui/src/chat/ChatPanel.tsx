@@ -115,6 +115,15 @@ export function ChatPanel({ refreshToken }: Props): JSX.Element {
     };
   }, [usage, model]);
 
+  // Keep the chosen model valid for the chosen connection. Switching to a
+  // connection that does not serve the current model would otherwise send a
+  // request guaranteed to fail, and the failure would look like ours.
+  useEffect(() => {
+    const models = connections.find((entry) => entry.id === selectedId)?.models ?? [];
+    if (models.length === 0) return;
+    setModel((current) => (models.includes(current) ? current : (models[0] ?? '')));
+  }, [connections, selectedId]);
+
   const send = useCallback(async () => {
     if (selectedId === '' || model.trim() === '' || prompt.trim() === '') return;
 
@@ -139,6 +148,8 @@ export function ChatPanel({ refreshToken }: Props): JSX.Element {
       setPhase('failed');
     }
   }, [selectedId, model, prompt]);
+
+  const availableModels = connections.find((entry) => entry.id === selectedId)?.models ?? [];
 
   return (
     <section className="chat" data-testid="chat-panel" data-phase={phase}>
@@ -175,16 +186,37 @@ export function ChatPanel({ refreshToken }: Props): JSX.Element {
         <label className="chat__label" htmlFor="chat-model">
           Model
         </label>
-        <input
-          id="chat-model"
-          className="chat__control"
-          data-testid="model-input"
-          value={model}
-          onChange={(event) => {
-            setModel(event.target.value);
-          }}
-          placeholder="claude-opus-5"
-        />
+        {/* A picker when the connection has an imported catalogue, a text box
+            when it does not. Typing an exact model id from memory is not a
+            thing anyone can do against a gateway serving hundreds of them. */}
+        {availableModels.length > 0 ? (
+          <select
+            id="chat-model"
+            className="chat__control"
+            data-testid="model-input"
+            value={model}
+            onChange={(event) => {
+              setModel(event.target.value);
+            }}
+          >
+            {availableModels.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        ) : (
+          <input
+            id="chat-model"
+            className="chat__control"
+            data-testid="model-input"
+            value={model}
+            onChange={(event) => {
+              setModel(event.target.value);
+            }}
+            placeholder="claude-opus-5"
+          />
+        )}
       </div>
 
       <textarea

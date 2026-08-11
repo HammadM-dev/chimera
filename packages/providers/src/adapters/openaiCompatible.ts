@@ -229,7 +229,12 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
 
   protected headers(options: AdapterCallOptions): Record<string, string> {
     const key = this.deps.resolveSecret(options.authRef);
-    if (key === undefined) {
+    // An empty string is not a credential. A local gateway is stored with one
+    // because the column holds a vault handle by contract, and sending
+    // `Authorization: Bearer ` makes a server that would have accepted an
+    // unauthenticated request reject it instead — which looks to the user like
+    // a connection that imported fine and then answers nothing.
+    if (key === undefined || key === '') {
       if (this.config.requiresCredential === false) return {};
       throw invalidResponse(this.provider, 'no credential found in the vault for this connection');
     }
@@ -239,7 +244,7 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
   /** The credential, for scrubbing out of any error raised by this call. */
   protected secrets(options: AdapterCallOptions): string[] {
     const key = this.deps.resolveSecret(options.authRef);
-    return key === undefined ? [] : [key];
+    return key === undefined || key === '' ? [] : [key];
   }
 
   protected url(options: AdapterCallOptions): string {
