@@ -807,6 +807,18 @@ Acceptance criteria:
 - A run with no configured spillover connection, facing sustained rate-limiting, surfaces `ProviderRateLimitError` cleanly rather than retrying forever (bounded retry count, consistent with "no unbounded loops").
 - Simulating a mid-run key revocation (mock provider switches to returning auth failures mid-stream) surfaces `ProviderAuthError`, checkpoints the run's last-good state (via M2-9's existing journaling), and the run is resumable once a valid key is restored.
 
+DECISION: **full jitter, not exponential-plus-a-bit.** The delay is a uniform draw from `[0, ceiling)` where the ceiling doubles per attempt and flattens at the cap. The failure this exists to prevent is synchronised retries: several workers limited by the same provider at the same instant will otherwise wait the same interval and hit it together again, which is the thundering herd the backoff was supposed to break up. `random` is injected, so the growth *and* the spread are asserted — a test against `Math.random` can only claim the numbers differ.
+
+DECISION: **a provider's own 429 empties our bucket.** Their answer is more authoritative than our model of their limits, and continuing to send because our accounting says there is headroom is how a soft limit becomes a hard block. A `Retry-After` pushes the refill clock forward so the bucket stays empty for as long as they asked.
+
+DECISION: **spillover chains are declared per connection, never inferred.** Spilling a run onto a connection the user did not nominate could send their data to a provider they deliberately excluded — the same reasoning as M1-9's local-only mode.
+
+DECISION: **the backoff schedule lives on the Governor, not in the runtime.** A runtime with its own retry timer would be a second answer to a governed question. `agentLoop.ts` asks `governor.backoffFor(attempt)` and `governor.maxRetries`.
+
+DECISION: **a 429 is retried; an auth failure is not.** A revoked key does not become valid because we asked again, so burning the retry budget to discover that wastes time and money. `ProviderAuthError` propagates on the first occurrence — after the loop journals `failed`, so the run's last-good state is on disk and it resumes once a valid key is restored. The test does exactly that: revokes mid-run, asserts two provider calls and no more, then resumes against a working provider and asserts the run finishes without replanning.
+
+The spillover case is the first real use of the promise M2-1 made when `AuthorizationResult` was given a `request` field instead of being a boolean: a spilled-over call is dispatched to the connection the *Governor* chose, and no call site changed to make that work.
+
 Dependencies: M3-1.
 
 ### M3-6: Kill switch (run-level hard stop)

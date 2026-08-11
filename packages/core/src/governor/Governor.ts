@@ -3,6 +3,12 @@ import { capabilityMatrix, type ModelCapabilities } from '@chimera/providers';
 import { BudgetLedger, costOf, type BudgetPolicy } from './budget.ts';
 import { LimitTracker, NO_LIMITS, type LimitPolicy } from './limits.ts';
 import {
+  RateLimiter,
+  backoffDelayMs,
+  type RateLimitPolicy,
+  type RateVerdict,
+} from './rateLimiter.ts';
+import {
   DEFAULT_STALL_POLICY,
   StallDetector,
   toolSignature,
@@ -39,6 +45,10 @@ export interface GovernorPolicy {
   limits?: LimitPolicy;
   /** F4.3. Null disables stall detection entirely, which a dry run wants. */
   stall?: StallPolicy | null;
+  /** F4.6. Absent means no rate accounting, which is the right default offline. */
+  rate?: RateLimitPolicy;
+  /** Injected so backoff jitter is testable rather than merely observed to differ. */
+  random?: () => number;
   /** Injected for tests and for the mock provider's synthetic models. */
   capabilitiesFor?: (model: string) => ModelCapabilities;
   /** Injected so a wall-clock limit is testable without sleeping. */
@@ -67,6 +77,8 @@ export class Governor {
   private readonly tracker: LimitTracker;
   private readonly capabilitiesFor: (model: string) => ModelCapabilities;
   private readonly stallDetector: StallDetector | null;
+  private readonly rateLimiter: RateLimiter;
+  private readonly random: () => number;
 
   constructor(mode: GovernorMode = 'permissive', policy: GovernorPolicy = {}) {
     this.mode = mode;
@@ -75,6 +87,29 @@ export class Governor {
     this.capabilitiesFor = policy.capabilitiesFor ?? ((model) => capabilityMatrix.get(model));
     this.stallDetector =
       policy.stall === null ? null : new StallDetector(policy.stall ?? DEFAULT_STALL_POLICY);
+    this.rateLimiter = new RateLimiter(policy.rate ?? {}, policy.now);
+    this.random = policy.random ?? Math.random;
+  }
+
+  /**
+   * How long to wait before retrying a call the provider rate-limited.
+   *
+   * The schedule lives here rather than in the runtime because backoff is a
+   * governed decision like any other: it is the Governor that knows the policy,
+   * and a runtime with its own retry timer would be a second answer to the same
+   * question.
+   */
+  backoffFor(attempt: number): number {
+    return backoffDelayMs(attempt, this.rateLimiter.retryPolicy, this.random);
+  }
+
+  get maxRetries(): number {
+    return this.rateLimiter.retryPolicy.maxRetries;
+  }
+
+  /** Records that a provider rate-limited us, so our accounting matches theirs. */
+  recordRateLimit(connectionId: string, retryAfterMs?: number): void {
+    this.rateLimiter.penalise(connectionId, retryAfterMs);
   }
 
   /**
@@ -233,6 +268,19 @@ export class Governor {
       );
     }
 
+    const rate: RateVerdict = this.rateLimiter.consume(request.connectionId);
+    if (rate.retryAfterMs !== undefined) {
+      return deny(
+        'GOVERNOR_RATE_LIMITED',
+        `Connection "${request.connectionId}" has no rate headroom and no spillover left; it recovers in ${String(Math.ceil(rate.retryAfterMs / 1000))}s.`,
+        {
+          connectionId: request.connectionId,
+          retryAfterMs: rate.retryAfterMs,
+          runId: request.runId,
+        },
+      );
+    }
+
     const missing = this.unsupportedCapabilities(capabilities, request.requiredCapabilities);
     if (missing.length > 0) {
       // Checked at call time as well as at save time (schema rule 4), because a
@@ -250,13 +298,23 @@ export class Governor {
     );
     this.tracker.countStep();
 
+    // This is why an authorization carries the request back rather than a bare
+    // yes (M2-1): a spilled-over call must be dispatched to the connection the
+    // Governor chose, not the one the caller asked for.
+    const approved: ModelCallRequest = rate.spilledOver
+      ? { ...request, connectionId: rate.connectionId }
+      : request;
+
     const notes = [
+      ...(rate.spilledOver
+        ? [`rate: spilled over from "${request.connectionId}" to "${rate.connectionId}"`]
+        : []),
       `budget: ${String(this.ledger.spendAt('run', null).tokens)} tokens used`,
       ...(estimatedCost === null
         ? ['cost: model has no verified price, cost cap not enforceable for this call']
         : []),
     ];
-    return allow(request, notes);
+    return allow(approved, notes);
   }
 
   /**

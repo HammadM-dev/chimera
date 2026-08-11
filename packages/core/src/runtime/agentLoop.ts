@@ -1,4 +1,4 @@
-import { GovernorLimitError } from '@chimera/errors';
+import { GovernorLimitError, ProviderRateLimitError } from '@chimera/errors';
 import type {
   AdapterCallOptions,
   Message,
@@ -10,7 +10,7 @@ import { textOf } from '@chimera/providers';
 import type { RegisteredTool, ToolRegistry } from '@chimera/tools';
 import type { Governor } from '../governor/Governor.ts';
 import { toolSignature } from '../governor/stallDetector.ts';
-import type { CallPurpose, Denied } from '../governor/types.ts';
+import type { CallPurpose, Denied, ModelCallRequest } from '../governor/types.ts';
 import type { Role } from './roleRegistry.ts';
 import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
 import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
@@ -183,6 +183,11 @@ export function parseVerification(text: string): Verification {
   }
 }
 
+/** Injectable-free on purpose: the delay is the Governor's number, not a policy here. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 const VERIFY_INSTRUCTION =
   'Has the task been achieved? Answer only with a JSON object: ' +
   '{"verified": true or false, "evidence": "what you actually observed that shows this"}. ' +
@@ -262,6 +267,63 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   };
 
   /**
+   * Sends the approved request, retrying only what retrying can fix.
+   *
+   * A 429 is transient: the provider is telling us to slow down, and a bounded,
+   * jittered wait is the correct response. An auth failure is not — a revoked
+   * key does not become valid because we asked again — so it is surfaced
+   * immediately rather than burning the retry budget discovering that.
+   *
+   * The backoff schedule comes from the Governor, not from a timer here: a
+   * runtime with its own retry policy would be a second answer to a governed
+   * question.
+   */
+  const dispatch = async (
+    approved: ModelCallRequest,
+    prompt: { system: string; messages: Message[] },
+    withTools: boolean,
+  ): Promise<NormalisedResponse> => {
+    const request = {
+      model: approved.model,
+      messages: [{ role: 'system' as const, content: prompt.system }, ...prompt.messages],
+      ...(withTools && definitions.length > 0 ? { tools: definitions } : {}),
+    };
+
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return await provider.chat(request, callOptions);
+      } catch (err) {
+        if (!(err instanceof ProviderRateLimitError) || attempt >= governor.maxRetries) {
+          // Out of retries, or an error retrying cannot fix. The checkpoint
+          // written after the last completed step is the run's last-good state,
+          // so this is resumable once the cause is fixed.
+          checkpoint('failed');
+          throw err;
+        }
+
+        const retryAfterMs = Number(err.details.retryAfterMs);
+        governor.recordRateLimit(
+          approved.connectionId,
+          Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
+        );
+
+        const delayMs = governor.backoffFor(attempt);
+        trace.append({
+          nodeId: task.nodeId,
+          eventType: 'retry',
+          payload: {
+            attempt: attempt + 1,
+            delayMs,
+            connectionId: approved.connectionId,
+            reason: err.code,
+          },
+        });
+        await sleep(delayMs);
+      }
+    }
+  };
+
+  /**
    * One authorised model call.
    *
    * Returns the denial rather than throwing it, so the caller decides how the
@@ -332,14 +394,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       },
     });
 
-    const response = await provider.chat(
-      {
-        model: authorization.request.model,
-        messages: [{ role: 'system', content: prompt.system }, ...prompt.messages],
-        ...(withTools && definitions.length > 0 ? { tools: definitions } : {}),
-      },
-      callOptions,
-    );
+    const response = await dispatch(authorization.request, prompt, withTools);
 
     // Reconcile the estimate against what the call really used, before the next
     // authorization is made — otherwise the Governor's next decision is taken

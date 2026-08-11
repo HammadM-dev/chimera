@@ -127,3 +127,6 @@ export { createSpendMeter } from './governor/spendMeter.ts';
 export type { SpendMeter, SpendMeterOptions, SpendSnapshot } from './governor/spendMeter.ts';
 export { finalizeRun, outcomeOf } from './runtime/runOutcome.ts';
 export type { RunOutcome, RunStatus } from './runtime/runOutcome.ts';
+
+export { RateLimiter, backoffDelayMs, DEFAULT_RATE_POLICY } from './governor/rateLimiter.ts';
+export type { BucketPolicy, RateLimitPolicy, RateVerdict } from './governor/rateLimiter.ts';
