@@ -606,6 +606,18 @@ Acceptance criteria:
 - A repair turn that still fails validation surfaces a `ValidationError` with the original and repair-attempt validation failures both present in `details`.
 - `onInvalid: repair_until_attempts` respects the node's declared `maxAttempts` rather than looping until budget exhaustion (cross-checked, but real budget enforcement isn't live until M3 — this ticket's own attempt-count limit is independent of the Governor and enforced locally).
 
+DECISION: **a bounded JSON Schema validator in `packages/core/src/runtime/jsonSchema.ts`, not ajv.** CLAUDE.md requires asking before adding a dependency, and no document in this set names a schema library. The subset implemented — `type`, `properties`, `required`, `additionalProperties`, `items`, `enum`, `const`, the numeric and length bounds, and `pattern` — covers every construct `docs/WORKFLOW_SCHEMA.md`'s own `outputContract` examples use, and the supported list is now documented there rather than left to be discovered. **The validator fails closed on a keyword it does not implement**: an unsupported keyword is reported as a violation, never silently skipped, because a contract that quietly stops checking a field is worse than one that refuses. If a real workflow needs `oneOf`/`$ref`/`allOf`, that is a concrete case for ajv and a question for Hammad rather than a decision to take quietly here.
+
+DECISION: **the first attempt costs no extra model call.** The answer the agent already produced is what the contract is checked against; only a repair needs the model again. A design that re-asked for the answer would double the cost of every structured node for nothing.
+
+DECISION: **`repair_until_attempts` with no `maxAttempts` is bounded at two, not unbounded.** An absent limit under a policy whose entire purpose is a limit is a mistake, not permission. The attempt cap is enforced locally rather than by the Governor: it is a property of the contract rather than of the run's money, and it has to hold before M3 exists.
+
+DECISION: **every attempt's violations travel in `ValidationError.details`, not just the last.** An agent that fails the same way twice and one that fails differently each time are different problems, and the difference is invisible if only the final attempt is reported.
+
+DECISION: **a contract failure throws; a Governor denial does not.** Unlike a budget denial, which is a governed outcome the caller expects, an unsatisfiable contract is a genuine failure — returning a status with an answer of the wrong shape attached would push the problem onto every caller.
+
+Repair turns are model calls and go through `Governor.authorizeModelCall` like every other, so a repair can itself be denied and ends the run the same way.
+
 Dependencies: M2-7.
 
 ### M2-9: Checkpoint and resume

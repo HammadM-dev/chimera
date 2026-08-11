@@ -34,7 +34,7 @@ export interface RoleBudget {
 
 export interface OutputContract {
   format: 'text' | 'json';
-  /** Names a schema registered by M2-8. Null for free text. */
+  /** Names one of M2-8's BUILTIN_SCHEMAS. Null for free text. */
   schemaId: string | null;
 }
 
@@ -49,6 +49,12 @@ export interface Role {
   outputContract: OutputContract;
   /** Hard iteration cap. CLAUDE.md: "No unbounded loops." */
   maxIterations: number;
+  /**
+   * What to do when the output contract is not satisfied (M2-8). Optional
+   * because `docs/WORKFLOW_SCHEMA.md` puts this on the *node*; a role-level
+   * value is the default a node inherits when it does not state its own.
+   */
+  onInvalid?: 'repair_once' | 'repair_until_attempts' | 'fail';
   isBuiltin: boolean;
 }
 

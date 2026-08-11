@@ -100,6 +100,8 @@ Common envelope on every node:
 }
 ```
 
+**Supported schema keywords.** `outputContract.schema` is validated by `packages/core/src/runtime/jsonSchema.ts`, which implements a documented subset of JSON Schema: `type` (including a type array), `properties`, `required`, `additionalProperties: false`, `items`, `enum`, `const`, `minimum`, `maximum`, `minLength`, `maxLength`, `minItems`, `maxItems`, and `pattern`. Annotation keywords (`title`, `description`, `default`, `examples`, `$schema`) are accepted and ignored. **Any other keyword is reported as a validation error rather than skipped** — a contract that quietly stops checking a field is worse than one that refuses, because the author believes a constraint is being enforced when it is not. If a workflow needs full draft-2020 (`oneOf`, `$ref`, `allOf`), that is a concrete case for adding a schema library, and it is a decision for the project owner rather than a silent dependency.
+
 `requireVerification: true` adds the verify step to the loop — the agent must produce evidence its sub-goal was met before the node reports success. `onInvalid` is `repair_once`, `repair_until_attempts`, or `fail`.
 
 `modelBinding` is validated against the capability matrix at save time. Binding a node with `toolAllowlist` to a model without tool-calling support is a save-blocking error, not a runtime surprise.

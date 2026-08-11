@@ -56,3 +56,18 @@ export type {
   LoopStep,
   Verification,
 } from './runtime/agentLoop.ts';
+
+export {
+  BUILTIN_SCHEMAS,
+  enforceOutputContract,
+  extractJson,
+  repairInstruction,
+} from './runtime/outputContract.ts';
+export type {
+  ContractAttempt,
+  ContractResult,
+  OnInvalid,
+  OutputContractSpec,
+} from './runtime/outputContract.ts';
+export { validateAgainstSchema, describeViolations } from './runtime/jsonSchema.ts';
+export type { SchemaViolation } from './runtime/jsonSchema.ts';

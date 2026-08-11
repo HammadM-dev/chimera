@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { GovernorLimitError } from '@chimera/errors';
+import { GovernorLimitError, ValidationError } from '@chimera/errors';
 import { MockProvider, type MockResponse } from '@chimera/providers';
 import type { AdapterCallOptions, NormalisedRequest, ProviderAdapter } from '@chimera/providers';
 import {
@@ -455,4 +455,84 @@ test('verification is read from the verifier, and anything unreadable is not a p
   assert.equal(parseVerification('{"verified": "yes"}').verified, false);
   assert.equal(parseVerification('{broken json').verified, false);
   assert.equal(parseVerification('').verified, false);
+});
+
+test('a role with a JSON output contract gets one repair turn, then a validated value', async () => {
+  const h = await harness();
+  const planner = STARTER_ROLES.find((role) => role.id === 'planner');
+  assert.ok(planner);
+
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'Plan.' },
+          // The act answer is JSON of the wrong shape: an empty steps array.
+          { kind: 'text', content: '{"steps": []}' },
+          VERIFIED,
+          // The repair turn, carrying the violation, produces a valid plan.
+          {
+            kind: 'text',
+            content: '{"steps": [{"action": "read the file", "check": "it is non-empty"}]}',
+          },
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(
+      { ...taskFor(planner), role: planner },
+      { governor: new Governor(), provider, tools: h.tools, callOptions: CALL_OPTIONS },
+    );
+
+    assert.equal(result.status, 'succeeded');
+    // plan, act, verify, and exactly one repair — not two, not a loop.
+    assert.equal(provider.calls, 4);
+    assert.deepEqual(
+      result.steps.map((step) => step.purpose),
+      ['plan', 'act', 'verify', 'decide'],
+    );
+    assert.deepEqual(result.structuredOutput, {
+      steps: [{ action: 'read the file', check: 'it is non-empty' }],
+    });
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a contract the model cannot satisfy fails the run with a ValidationError', async () => {
+  const h = await harness();
+  const planner = STARTER_ROLES.find((role) => role.id === 'planner');
+  assert.ok(planner);
+
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'Plan.' },
+          { kind: 'text', content: '{"steps": []}' },
+          VERIFIED,
+        ],
+        // Every repair turn also fails.
+        default: { kind: 'text', content: '{"steps": []}' },
+      },
+    }),
+  );
+
+  try {
+    // Thrown, not returned: unlike a budget denial this is a genuine failure,
+    // and handing the caller an answer of the wrong shape would be worse.
+    await assert.rejects(
+      () =>
+        runAgentLoop(
+          { ...taskFor(planner), role: planner },
+          { governor: new Governor(), provider, tools: h.tools, callOptions: CALL_OPTIONS },
+        ),
+      (err: unknown) =>
+        err instanceof ValidationError && err.code === 'OUTPUT_CONTRACT_UNSATISFIED',
+    );
+  } finally {
+    await h.cleanup();
+  }
 });

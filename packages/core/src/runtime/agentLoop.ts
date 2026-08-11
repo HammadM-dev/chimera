@@ -12,6 +12,7 @@ import type { Governor } from '../governor/Governor.ts';
 import type { CallPurpose, Denied } from '../governor/types.ts';
 import type { Role } from './roleRegistry.ts';
 import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
+import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
 
 // F2.1's plan → act → observe → verify → decide loop.
 //
@@ -53,6 +54,11 @@ export interface LoopResult {
   steps: LoopStep[];
   observations: ToolObservation[];
   verification: Verification | null;
+  /**
+   * The validated value, when the role declares a JSON output contract (M2-8).
+   * Null for a text role, or when the loop did not reach a verified answer.
+   */
+  structuredOutput: unknown;
   /** Present when `status` is `denied`. */
   denial?: Denied;
   error?: GovernorLimitError;
@@ -157,6 +163,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
 
   let output = '';
   let verification: Verification | null = null;
+  let structuredOutput: unknown = null;
   let iteration = 0;
 
   const cancelled = (): boolean => deps.cancellation?.cancelled === true;
@@ -168,6 +175,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     steps,
     observations,
     verification,
+    structuredOutput,
     ...extra,
   });
 
@@ -243,6 +251,50 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       denial: denied,
       error: new GovernorLimitError(denied.code, denied.message, denied.details),
     });
+
+  /**
+   * Enforces the role's JSON output contract on the final answer (M2-8).
+   *
+   * Returns null when there is no contract to enforce, and a denial when the
+   * Governor refuses one of the repair turns — repair turns are model calls
+   * like any other and are authorised like any other. A contract that cannot be
+   * satisfied throws `ValidationError`: unlike a budget denial, that is a
+   * genuine failure rather than a governed outcome, and swallowing it would
+   * hand the caller an answer of the wrong shape.
+   */
+  const applyOutputContract = async (): Promise<{ denied: Denied } | null> => {
+    const contract = task.role.outputContract;
+    if (contract.format !== 'json' || contract.schemaId === null) return null;
+
+    const schema = BUILTIN_SCHEMAS[contract.schemaId];
+    if (!schema) return null;
+
+    let denied: Denied | null = null;
+
+    const contracted = await enforceOutputContract(
+      { schema, onInvalid: task.role.onInvalid ?? ('repair_once' as OnInvalid) },
+      async (repair) => {
+        if (denied) return '';
+        // The first attempt costs no extra call: the answer the agent already
+        // gave is what the contract is checked against. Only a repair needs the
+        // model again.
+        if (repair === null) return output;
+
+        const attempt = await callModel('decide', [{ role: 'user', content: repair }], false);
+        if ('denied' in attempt) {
+          denied = attempt.denied;
+          return '';
+        }
+        const text = record('decide', attempt.response);
+        output = text;
+        return text;
+      },
+    );
+
+    if (denied) return { denied };
+    structuredOutput = contracted.value;
+    return null;
+  };
 
   // ---- plan ---------------------------------------------------------------
   if (cancelled()) return finish('cancelled');
@@ -322,7 +374,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     verification = parseVerification(verifyText);
 
     // ---- decide -----------------------------------------------------------
-    if (verification.verified) return finish('succeeded');
+    if (verification.verified) {
+      const contracted = await applyOutputContract();
+      if (contracted !== null && 'denied' in contracted) return denialResult(contracted.denied);
+      return finish('succeeded');
+    }
 
     history.push({
       role: 'assistant',
