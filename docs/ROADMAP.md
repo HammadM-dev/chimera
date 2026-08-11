@@ -852,6 +852,10 @@ Acceptance criteria:
 - The cost preview (M3-3) shown before the run started reasonably foreshadowed the eventual halt (i.e. the preview's estimate was meaningfully above $1, not a wildly wrong number disconnected from what actually happened).
 - All M3 tickets' acceptance criteria pass; `npm test` is green.
 
+The demo is `packages/core/src/governor/m3Demo.test.ts`, and it does the exit criterion literally. Before the run it takes a cost preview and asserts the figure is *meaningfully above* the cap — criterion 3's "foreshadowed the halt", which is the difference between a preview that predicts and one that merely returns a number. Then it runs the real `coder` role against a real sandbox with the Governor in enforcing mode and a `$1` run cap, and asserts: the run halts with `haltCause: 'budget'`; the meter reported a strictly climbing sequence rather than one jump at the end; the persisted `runs.budget_cost_usd_used` matches the meter's last figure; spend lands within one call's overshoot of the cap (M3-4's stated bound — the Governor cannot un-spend a dispatched call); the run row reads `halted` with the spend-cap summary; and the denial is in the audit trace with its code, alongside a `response` event carrying usage for every call that did happen.
+
+Found while closing the milestone, not by review: M0-8's reduced-motion splash test asserted the 400ms hold to ±50ms, and that window is not survivable on a loaded machine running the whole suite — `setTimeout(400)` is a minimum, not a promise. It passed in isolation and failed once in a full run, which is the worst failure mode a test has. The bound is now one-sided and generous: at least 350ms (it held rather than flashing past) and under 1,500ms (it did not play the full 2,300ms sequence). Both claims are what the test is actually for; the tight window only measured how busy the machine was.
+
 Dependencies: M3-3, M3-6.
 
 ---

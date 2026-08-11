@@ -335,8 +335,17 @@ test.describe('M0-8 splash sequence', () => {
       const timeline = await readTimeline(page);
       expect(timeline.map((entry) => entry.stage)).toEqual(['mount', 'unmount']);
 
+      // The reduced-motion splash holds for 400ms. The bound is deliberately
+      // one-sided and generous on the upper end: `setTimeout(400)` is a
+      // *minimum*, and under a loaded CI machine running the whole suite it
+      // fires late — a ±50ms window made this the only flaky test in the
+      // repository. What the assertion actually needs to prove is that the
+      // splash held rather than flashing past, and that it did not play the
+      // full 2,300ms sequence. Both survive a late timer; a tight window only
+      // measures how busy the machine is.
       const held = (timeline[1]?.t ?? 0) - (timeline[0]?.t ?? 0);
-      expect(Math.abs(held - 400)).toBeLessThanOrEqual(50);
+      expect(held).toBeGreaterThanOrEqual(350);
+      expect(held).toBeLessThan(1_500);
     } finally {
       await app.close();
       removeProfile(profile);
