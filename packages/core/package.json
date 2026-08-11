@@ -11,6 +11,8 @@
     "test": "node --test"
   },
   "dependencies": {
-    "@chimera/errors": "*"
+    "@chimera/errors": "*",
+    "@chimera/store": "*",
+    "@chimera/tools": "*"
   }
 }

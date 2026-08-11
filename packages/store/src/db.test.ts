@@ -161,6 +161,21 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   // twelve — a workspace-scoped policy row rather than application data, and
   // documented as such in docs/ARCHITECTURE.md section 5.
   workspace_settings: ['id', 'local_only_mode'],
+  // Added by 0003 for M2-5's role registry. Workspace-level configuration:
+  // roles are shared by every workflow in a workspace, so tightening one
+  // holds everywhere rather than in the workflow that happened to be edited.
+  roles: [
+    'id',
+    'name',
+    'system_prompt',
+    'tool_allowlist_json',
+    'model_binding_json',
+    'budget_json',
+    'output_contract_json',
+    'max_iterations',
+    'is_builtin',
+    'updated_at',
+  ],
 };
 
 test('every documented table exists with exactly the documented columns', () => {

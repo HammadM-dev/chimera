@@ -16,3 +16,5 @@ export type { ConnectionRecord, CreateConnectionInput } from './repositories/con
 export * as settingsRepository from './repositories/settings.ts';
 export { onSettingsChanged } from './repositories/settings.ts';
 export type { WorkspaceSettings } from './repositories/settings.ts';
+export * as rolesRepository from './repositories/roles.ts';
+export type { RoleRecord, UpsertRoleInput } from './repositories/roles.ts';

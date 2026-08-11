@@ -538,6 +538,16 @@ Acceptance criteria:
 - Editing a role's `toolAllowlist` through the registry's update API persists and is reflected on next read without an app restart.
 - A role with an empty `toolAllowlist` cannot invoke any tool via `toolRegistry.invoke` (re-exercises M2-2's allowlist check against a concrete role fixture).
 
+DECISION: **roles are a workspace table (`0003_roles.sql`), not a blob inside each workflow.** The ticket left the persistence choice open. The same `researcher` is used by every workflow in a workspace, and a user who tightens its allowlist expects that to hold everywhere at once — not in the one workflow they happened to edit. SQLite, through `packages/store`, per CLAUDE.md.
+
+DECISION: **`modelBinding` names a tier, not a model.** The model that is right for "summarise this" changes every few months, and a role that hardcodes `claude-haiku-4-5` is wrong the moment it does. `preferredModel` is the escape hatch for a user who wants to pin one; M5-4's tiering resolves the tier against the connections actually available.
+
+DECISION: **reads go to SQLite every call — no cached role list.** A role's allowlist is a security decision, and a stale cache of one is a grant the user believes they revoked. The table is small and the read is one indexed statement; this is not a place to trade correctness for a microsecond.
+
+DECISION: **`validate()` refuses a role with `maxIterations < 1`, an empty prompt, an empty budget, or a `'*'` allowlist.** The wildcard case matters most: `packages/tools` does not honour `'*'`, so a role carrying it would believe it granted everything while granting nothing — worse than either honest answer.
+
+The starter allowlists are the narrowest set that lets each role work. The reviewer is read-only, because a reviewer that can edit quietly becomes the author of what it is reviewing; only `coder` and `qa` get a shell; `planner` and `summariser` get nothing, which is a decision rather than an omission. `browser-operator` declares `browser.*`, which matches nothing until M6 registers that server — exactly as the ticket anticipated.
+
 Dependencies: M2-1.
 
 ### M2-6: Prompt assembly and the untrusted-data envelope

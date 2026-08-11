@@ -23,3 +23,13 @@ export type {
   ToolCallAuthorization,
   ToolCallRequest,
 } from './governor/types.ts';
+
+export { createRoleRegistry, STARTER_ROLES } from './runtime/roleRegistry.ts';
+export type {
+  ModelBinding,
+  ModelTier,
+  OutputContract,
+  Role,
+  RoleBudget,
+  RoleRegistry,
+} from './runtime/roleRegistry.ts';

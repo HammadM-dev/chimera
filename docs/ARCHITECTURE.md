@@ -269,6 +269,21 @@ Written by the provider-call path in the runtime when a call completes and the w
 | `id` | integer | Always 1 — single row by construction |
 | `local_only_mode` | integer | 0/1. When 1, the provider registry excludes every connection that could reach a third party (F1.7) |
 
+**`roles`** — added by migration `0003` for M2-5. Workspace-level configuration, not per-workflow: the same `researcher` is used by every workflow in a workspace, and a user who tightens its allowlist expects that to hold everywhere at once. The JSON columns hold shapes owned by `packages/core`; `packages/store` treats them as opaque strings, the same discipline as `connections.capabilities_json`.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | text | Stable identifier, e.g. `researcher`. Referenced by workflow nodes |
+| `name` | text | Display name |
+| `system_prompt` | text | The role's standing instructions. Never empty — the registry refuses to save one that is |
+| `tool_allowlist_json` | text | JSON array of exact tool ids or whole-server grants (`filesystem.*`). A bare `*` is refused |
+| `model_binding_json` | text | `{ "tier": "frontier"\|"balanced"\|"cheap", "preferredModel": string\|null }` — a tier rather than a model id, resolved at M5-4 |
+| `budget_json` | text | `{ "maxTokens", "maxCostUsd", "maxWallClockMs" }`. Read by the Governor |
+| `output_contract_json` | text | `{ "format": "text"\|"json", "schemaId": string\|null }` — the contract M2-8 enforces |
+| `max_iterations` | integer | Hard loop cap. At least 1, refused otherwise (CLAUDE.md: no unbounded loops) |
+| `is_builtin` | integer | 0/1. A starter role shipped by CHIMERA, so a later version can repair or add starters without overwriting a user's edit |
+| `updated_at` | text | Refreshed on every write |
+
 DECISION: this is a table rather than a key in `apps/desktop`'s `local-settings.json`. That file holds cosmetic per-device preferences (`hasSeenSplash`); local-only mode is a security posture a regulated or air-gapped buyer sets once for the workspace and expects to hold wherever that workspace database is opened, including on a different machine. Storing it per-device would silently drop the restriction the moment the workspace moved — the exact failure the flag exists to prevent.
 
 Written by `connection:create`/`connection:update`. `repositories/connections.ts` rejects a write where `auth_ref` looks like a raw key rather than a vault handle: the repository's insert/update methods accept only a branded `AuthRef` type (a nominal wrapper distinct from `string`, produced solely by `vault.setSecret()`), so a caller cannot pass a plain string through by mistake — this is a compile-time boundary, not a runtime string-shape heuristic, backed by a runtime assertion as defence in depth for any payload arriving via IPC (where TypeScript's nominal typing doesn't survive serialization).
