@@ -45,3 +45,14 @@ export type {
   InstructionSource,
   ToolObservation,
 } from './runtime/promptAssembly.ts';
+
+export { runAgentLoop, parseVerification } from './runtime/agentLoop.ts';
+export type {
+  AgentLoopDeps,
+  AgentTask,
+  Cancellation,
+  LoopResult,
+  LoopStatus,
+  LoopStep,
+  Verification,
+} from './runtime/agentLoop.ts';

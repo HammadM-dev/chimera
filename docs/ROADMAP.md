@@ -583,6 +583,18 @@ Acceptance criteria:
 - Cancelling a run mid-loop (via a test harness invoking the same cancellation path `run:cancel` will use) halts the loop within one step boundary, not mid-tool-call.
 - A loop given a budget-denial test double (Governor mock configured to reject) exits cleanly with a `GovernorLimitError`-derived run status, proving the exit path exists correctly even though the real stub never triggers it yet.
 
+DECISION: **verification reads a JSON answer, and anything unreadable is not a pass.** The verify step is a model call that must return `{"verified": bool, "evidence": string}`. Prose, a missing field, a string `"yes"`, unparseable output — all read as not verified. The failure mode of guessing generously is a loop that declares success because its verifier produced a confident-sounding sentence, which is the exact outcome a first-class verify step exists to prevent. (M2-8 replaces the hand-rolled parse with a real output contract; the strictness stays.)
+
+DECISION: **cancellation is checked at step boundaries and never interrupts a running tool.** The criterion says "within one step boundary, not mid-tool-call", and the reason is concrete: a half-executed side effect — a file half-written, a request sent but its response discarded — is worse than one extra completed step. The test cancels from inside a tool invocation and asserts the file the tool was writing is complete on disk *and* that the following verify call never happened.
+
+DECISION: **the Governor's denial is returned, not thrown.** `runAgentLoop` ends with `status: 'denied'` and carries both the `Denied` result and a `GovernorLimitError` built from it. A throw would make every caller wrap the loop in a try/catch to distinguish "the budget ran out", which is an ordinary governed outcome, from "the loop crashed", which is not.
+
+DECISION: **tool names are rewritten for the wire.** Anthropic and OpenAI both constrain tool names to `[a-zA-Z0-9_-]{1,64}`, and CHIMERA's ids contain a dot (`filesystem.readFile`). The dot becomes `__` on the way out and back on the way in, in one place, so nothing above or below has to know two names for one tool. Asserted: no offered name contains a dot.
+
+DECISION: **`irreversible: true` on every tool call, for now.** Tool servers do not yet declare reversibility; M4-3 wires the approval gate and the declaration with it. Until then the conservative answer is the safe one — a call the Governor is told is reversible when it is not would slip past an approval requirement, and the stub authorizes everything anyway, so the cost of being conservative is zero today and the cost of being wrong later is not.
+
+A refused tool becomes an error *observation* rather than an exception: the agent is told it may not do that and gets to react, which is both the useful behaviour and the one the injection corpus depends on. The test uses the real researcher role, whose allowlist genuinely excludes writing.
+
 Dependencies: M2-1, M2-2, M2-6.
 
 ### M2-8: Structured output contracts
