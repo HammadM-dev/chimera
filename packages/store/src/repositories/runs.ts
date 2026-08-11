@@ -129,6 +129,30 @@ export function get(db: Database.Database, id: string): RunRecord | undefined {
   return row ? toRecord(row) : undefined;
 }
 
+/** Adds to the run's totals. Additive for the same reason node spend is. */
+export function addSpend(
+  db: Database.Database,
+  runId: string,
+  tokens: number,
+  costUsd: number,
+): void {
+  db.prepare(
+    `UPDATE runs
+     SET budget_tokens_used = budget_tokens_used + ?,
+         budget_cost_usd_used = budget_cost_usd_used + ?
+     WHERE id = ?`,
+  ).run(tokens, costUsd, runId);
+}
+
+export function spendOf(db: Database.Database, runId: string): { tokens: number; costUsd: number } {
+  const row = db
+    .prepare(
+      'SELECT budget_tokens_used AS tokens, budget_cost_usd_used AS cost FROM runs WHERE id = ?',
+    )
+    .get(runId) as { tokens: number; cost: number } | undefined;
+  return { tokens: row?.tokens ?? 0, costUsd: row?.cost ?? 0 };
+}
+
 export function finish(
   db: Database.Database,
   id: string,

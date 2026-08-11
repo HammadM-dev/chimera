@@ -784,6 +784,18 @@ Acceptance criteria:
 - A run configured with a $1 cap and a task that would cost more than $1 if allowed to continue halts at or before $1 spent, verified by asserting `runs.budget_cost_usd_used` at halt time never exceeds the cap plus one in-flight call's worth of overshoot tolerance (the Governor denies the *next* call once the cap is reached or exceeded; it cannot un-spend a call already dispatched, so the acceptance bound is "no second call is authorized past the cap," not "spend is truncated mid-call").
 - The halted run's status and `error_summary` clearly state the cap was the halt reason (distinguishable from a stall halt or a task-completion halt).
 
+DECISION: **spend is reconciled, not re-charged.** `authorizeModelCall` commits an estimate before dispatch (M3-1); `Governor.reconcile()` applies only the *difference* once the provider reports real usage. It is frequently negative, because an output-length estimate usually overshoots. Without it the Governor's next decision is taken against a forecast rather than against the bill — the test shows a call estimated at a fraction of a cent that actually cost $4, and a Governor that would have authorised three more it could not afford.
+
+DECISION: **the estimate is passed back in rather than remembered by the Governor.** A run making concurrent calls (M5) has several estimates outstanding at once, and a Governor holding "the last one" would reconcile the wrong one.
+
+DECISION: **`node_states` spend is written additively, and `upsert` no longer touches those two columns.** The checkpoint journal and the spend meter write different columns of the same row. Before this ticket, `upsert` set `tokens_used`/`cost_used` from whatever the caller passed — and the caller is a journal, which passes zero. Splitting the writes means neither can clobber the other.
+
+DECISION: **run subscriptions are per `WebContents` with a `destroyed` cleanup.** A run outlives its window; without the cleanup every later emit would throw on a dead reference and take the surviving windows' events with it. Emitting to a run nobody watches is silent — the events are a view of the run, not part of it.
+
+DECISION: **three halts, three summaries.** `outcomeOf()` maps a Governor denial to a `halted` run with the reason spelled out and the code retained, an exhausted loop to `incomplete` rather than `failed` (the work done may still be worth something), and a cancellation to `cancelled`. A user reading "failed" with no reason cannot tell which lever to pull; the test asserts the cap message and the stall message are different strings.
+
+Deviation, stated rather than taken quietly: criterion 1 asks for the meter to be observed "over `run:subscribe`". There is no run executor in the main process until M4-1 — `run:start` is still a stub — so there is nothing yet that starts a run for the channel to report on. The two halves are therefore tested where they exist: the emitter's per-call update sequence is asserted in `spendMeter.test.ts` (three calls, three pushes, each carrying the running total), and the delivery rules — per-run isolation, destroyed-window cleanup, silent emit with no subscribers — in `apps/desktop/src/runs/subscriptions.test.ts` against a fake `WebContents`. `run:subscribe` is now a real handler rather than a stub. M4-6 connects the two ends, and does not need a new mechanism to do it.
+
 Dependencies: M3-1, M3-2.
 
 ### M3-5: Rate-limit governor

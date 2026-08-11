@@ -19,7 +19,7 @@ export type { WorkspaceSettings } from './repositories/settings.ts';
 export * as rolesRepository from './repositories/roles.ts';
 export type { RoleRecord, UpsertRoleInput } from './repositories/roles.ts';
 export * as nodeStatesRepository from './repositories/nodeStates.ts';
-export type { NodeStateRecord } from './repositories/nodeStates.ts';
+export type { NodeStateRecord, UpsertNodeStateInput } from './repositories/nodeStates.ts';
 export * as runsRepository from './repositories/runs.ts';
 export type { RunRecord, CreateRunInput } from './repositories/runs.ts';
 export * as workspaceFactsRepository from './repositories/workspaceFacts.ts';

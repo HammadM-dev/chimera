@@ -122,3 +122,8 @@ export { StallDetector, toolSignature, DEFAULT_STALL_POLICY } from './governor/s
 export type { StallPolicy, IterationOutcome, StallVerdict } from './governor/stallDetector.ts';
 export type { GovernorPolicy } from './governor/Governor.ts';
 export { denialToError } from './governor/Governor.ts';
+
+export { createSpendMeter } from './governor/spendMeter.ts';
+export type { SpendMeter, SpendMeterOptions, SpendSnapshot } from './governor/spendMeter.ts';
+export { finalizeRun, outcomeOf } from './runtime/runOutcome.ts';
+export type { RunOutcome, RunStatus } from './runtime/runOutcome.ts';

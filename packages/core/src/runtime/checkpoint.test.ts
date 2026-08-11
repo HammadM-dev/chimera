@@ -321,8 +321,6 @@ test('a corrupt checkpoint is discarded rather than half-applied', () => {
       nodeId: 'node-1',
       status: 'running',
       iterationCount: 1,
-      tokensUsed: 0,
-      costUsed: 0,
       checkpointJson: '{"version": 1, "iteration": 2, trunca',
     });
     assert.equal(createCheckpointStore(db).load('run-4', 'node-1'), null);
@@ -341,8 +339,6 @@ test('a checkpoint from a future version is refused, not guessed at', () => {
       nodeId: 'node-1',
       status: 'running',
       iterationCount: 1,
-      tokensUsed: 0,
-      costUsed: 0,
       checkpointJson: JSON.stringify({ ...EMPTY_CHECKPOINT, version: 2 }),
     });
     assert.throws(

@@ -100,6 +100,53 @@ export class Governor {
     this.stallDetector?.forget(nodeId);
   }
 
+  /** The matrix entry this Governor is using for a model. Read by M3-4's meter. */
+  capabilitiesOf(model: string): ModelCapabilities {
+    return this.capabilitiesFor(model);
+  }
+
+  /**
+   * Corrects a charge once the provider reports what the call really used.
+   *
+   * `authorizeModelCall` commits an estimate before dispatch, because a cap
+   * enforced after the fact is not a cap. An estimate of output length is a
+   * guess, so without this the running total drifts from reality — in either
+   * direction. Only the *difference* is applied, and it is negative whenever a
+   * call came in cheaper than forecast, which is the common case.
+   *
+   * The estimate is passed back in rather than remembered here: a run making
+   * concurrent calls has several estimates outstanding at once, and a Governor
+   * holding "the last one" would reconcile the wrong one.
+   */
+  reconcile(
+    context: { nodeId: string; roleId: string },
+    call: {
+      model: string;
+      estimatedInputTokens: number;
+      estimatedOutputTokens: number;
+      usage: { inputTokens: number; outputTokens: number };
+    },
+  ): void {
+    const capabilities = this.capabilitiesFor(call.model);
+
+    const estimatedTokens = call.estimatedInputTokens + call.estimatedOutputTokens;
+    const actualTokens = call.usage.inputTokens + call.usage.outputTokens;
+
+    const estimatedCost = costOf(
+      capabilities,
+      call.estimatedInputTokens,
+      call.estimatedOutputTokens,
+    );
+    const actualCost = costOf(capabilities, call.usage.inputTokens, call.usage.outputTokens);
+
+    this.ledger.charge(context, {
+      tokens: actualTokens - estimatedTokens,
+      // Both null for an unpriced model: nothing was charged and nothing is
+      // corrected. Never a one-sided delta, which would invent a cost.
+      costUsd: estimatedCost === null || actualCost === null ? null : actualCost - estimatedCost,
+    });
+  }
+
   /** What has been spent so far. Read by M3-4's meter and by the run trace. */
   spend(): ReturnType<BudgetLedger['snapshot']> {
     return this.ledger.snapshot();

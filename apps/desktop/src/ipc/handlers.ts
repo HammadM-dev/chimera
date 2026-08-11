@@ -14,6 +14,7 @@ import {
 import { detect, importCatalogue } from '../providers/omniroute.ts';
 import { deleteFact, listFacts, setFact } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
+import { subscribe } from '../runs/subscriptions.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -34,7 +35,6 @@ stub(channels.workflowList);
 stub(channels.workflowGet);
 stub(channels.runStart);
 stub(channels.runCancel);
-stub(channels.runSubscribe);
 stub(channels.licenceActivate);
 stub(channels.licenceStatus);
 stub(channels.templateImport);
@@ -73,6 +73,13 @@ registerHandler(channels.chatSend, (payload, context) => startChat(context.webCo
 registerHandler(channels.healthSweep, () => sweepHealth());
 
 registerHandler(channels.runCostPreview, (payload) => previewCost(payload));
+
+// M3-4: the renderer asks to watch a run, and receives `run:event` pushes for
+// it. Subscription is per WebContents, so a second window watching a different
+// run does not receive this one's events.
+registerHandler(channels.runSubscribe, (payload, context) =>
+  subscribe(payload.runId, context.webContents),
+);
 
 registerHandler(channels.memoryListFacts, () => listFacts());
 registerHandler(channels.memorySetFact, (payload) => setFact(payload.key, payload.value));

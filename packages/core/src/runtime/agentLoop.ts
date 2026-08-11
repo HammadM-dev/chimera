@@ -16,6 +16,7 @@ import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
 import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
 import { assertMemoryAvailable, type MemoryConfig } from './memory/vectorStore.ts';
 import { NULL_TRACE_SINK, type TraceSink } from './trace.ts';
+import type { SpendMeter } from '../governor/spendMeter.ts';
 import {
   EMPTY_CHECKPOINT,
   idempotencyKeyFor,
@@ -118,6 +119,11 @@ export interface AgentLoopDeps {
    * whatever it finds rather than starting over.
    */
   checkpoints?: CheckpointStore;
+  /**
+   * The live spend meter (M3-4). Optional for the same reason the checkpoint
+   * store is: an eval or a dry run has no run row to account against.
+   */
+  meter?: SpendMeter;
   /**
    * The audit trace (F7.5). Defaults to discarding, so a unit test or a dry run
    * needs no database — but a real run always passes one, and M4-7's viewer
@@ -334,6 +340,18 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       },
       callOptions,
     );
+
+    // Reconcile the estimate against what the call really used, before the next
+    // authorization is made — otherwise the Governor's next decision is taken
+    // against a forecast rather than against the bill.
+    deps.meter?.record({
+      nodeId: task.nodeId,
+      roleId: task.role.id,
+      model: authorization.request.model,
+      usage: response.usage,
+      estimatedInputTokens: authorization.request.estimatedInputTokens,
+      estimatedOutputTokens: authorization.request.estimatedOutputTokens,
+    });
 
     trace.append({
       nodeId: task.nodeId,

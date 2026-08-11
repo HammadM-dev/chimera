@@ -15,6 +15,16 @@ export interface NodeStateRecord {
   checkpointJson: string | null;
 }
 
+/**
+ * What `upsert` writes.
+ *
+ * Deliberately without the two spend columns. Spend accumulates through
+ * `addSpend`, and a checkpoint write that carried a spend figure would reset it
+ * to whatever the caller happened to pass — which, for a caller whose job is
+ * journaling resumable state rather than accounting, is zero.
+ */
+export type UpsertNodeStateInput = Omit<NodeStateRecord, 'tokensUsed' | 'costUsed'>;
+
 interface NodeStateRow {
   run_id: string;
   node_id: string;
@@ -47,27 +57,17 @@ function toRecord(row: NodeStateRow): NodeStateRecord {
  * The statement is a single atomic upsert, so a failure leaves the previously
  * journaled row exactly as it was.
  */
-export function upsert(db: Database.Database, record: NodeStateRecord): void {
+export function upsert(db: Database.Database, record: UpsertNodeStateInput): void {
   try {
     db.prepare(
       `INSERT INTO node_states (
-         run_id, node_id, status, iteration_count, tokens_used, cost_used, checkpoint_json
-       ) VALUES (?, ?, ?, ?, ?, ?, ?)
+         run_id, node_id, status, iteration_count, checkpoint_json
+       ) VALUES (?, ?, ?, ?, ?)
        ON CONFLICT(run_id, node_id) DO UPDATE SET
          status = excluded.status,
          iteration_count = excluded.iteration_count,
-         tokens_used = excluded.tokens_used,
-         cost_used = excluded.cost_used,
          checkpoint_json = excluded.checkpoint_json`,
-    ).run(
-      record.runId,
-      record.nodeId,
-      record.status,
-      record.iterationCount,
-      record.tokensUsed,
-      record.costUsed,
-      record.checkpointJson,
-    );
+    ).run(record.runId, record.nodeId, record.status, record.iterationCount, record.checkpointJson);
   } catch (err) {
     throw new ChimeraError(
       'STORE_WRITE_FAILED',
@@ -96,6 +96,29 @@ export function listForRun(db: Database.Database, runId: string): NodeStateRecor
       .prepare('SELECT * FROM node_states WHERE run_id = ? ORDER BY node_id')
       .all(runId) as NodeStateRow[]
   ).map(toRecord);
+}
+
+/**
+ * Adds to a node's running spend, creating the row if the node has not been
+ * journaled yet.
+ *
+ * Additive rather than absolute so two writers — the checkpoint journal and the
+ * spend meter — cannot overwrite each other's column.
+ */
+export function addSpend(
+  db: Database.Database,
+  runId: string,
+  nodeId: string,
+  tokens: number,
+  costUsd: number,
+): void {
+  db.prepare(
+    `INSERT INTO node_states (run_id, node_id, status, iteration_count, tokens_used, cost_used)
+     VALUES (?, ?, 'running', 0, ?, ?)
+     ON CONFLICT(run_id, node_id) DO UPDATE SET
+       tokens_used = node_states.tokens_used + excluded.tokens_used,
+       cost_used = node_states.cost_used + excluded.cost_used`,
+  ).run(runId, nodeId, tokens, costUsd);
 }
 
 export function clearRun(db: Database.Database, runId: string): void {
