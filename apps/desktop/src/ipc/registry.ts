@@ -176,6 +176,40 @@ export const healthSweep = defineInvokeChannel({
   }),
 });
 
+// M2-10's workspace facts. The minimal editing surface the ticket asks for:
+// the renderer can list, write and delete, which is what makes the tier
+// "user-editable" rather than a store only agents can reach.
+const workspaceFact = z.object({
+  key: z.string(),
+  value: z.string(),
+  source: z.string(),
+  updatedAt: z.string(),
+});
+
+export const memoryListFacts = defineInvokeChannel({
+  channel: 'memory:listFacts',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ facts: z.array(workspaceFact) }),
+});
+
+export const memorySetFact = defineInvokeChannel({
+  channel: 'memory:setFact',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ key: z.string(), value: z.string() }),
+  responseSchema: z.object({ fact: workspaceFact }),
+});
+
+export const memoryDeleteFact = defineInvokeChannel({
+  channel: 'memory:deleteFact',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ key: z.string() }),
+  responseSchema: z.object({ removed: z.boolean() }),
+});
+
 export const vaultSetSecret = defineInvokeChannel({
   channel: 'vault:setSecret',
   // v2: `scope` narrowed from an open string to the vault's actual scope
@@ -334,6 +368,9 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   connectionCreate,
   connectionList,
   healthSweep,
+  memoryListFacts,
+  memorySetFact,
+  memoryDeleteFact,
   vaultSetSecret,
   vaultHasSecret,
   licenceActivate,

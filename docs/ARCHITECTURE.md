@@ -269,6 +269,15 @@ Written by the provider-call path in the runtime when a call completes and the w
 | `id` | integer | Always 1 — single row by construction |
 | `local_only_mode` | integer | 0/1. When 1, the provider registry excludes every connection that could reach a third party (F1.7) |
 
+**`workspace_facts`** — added by migration `0004` for M2-10, F2.7's second memory tier: curated key-value knowledge that outlives a run. Deliberately not the `cache` table, which holds derived data under an eviction policy — evicting a note a person typed to make room for a cached embedding would be indefensible. `source` records `user` or the id of the run that wrote the fact, and travels with it into the prompt, because what an agent asserted and what a person stated are not equally trustworthy.
+
+| Column | Type | Notes |
+|---|---|---|
+| `key` | text | Primary key. Bounded to 200 characters |
+| `value` | text | Bounded to 4,000 characters — facts go into every prompt for the workspace, and an unbounded one could push the real instructions out of the context window |
+| `source` | text | `user`, or the run id that wrote it |
+| `updated_at` | text | |
+
 **Ad-hoc runs.** `runs.workflow_id` and `runs.workflow_version_id` are `NOT NULL REFERENCES`, and an M2-era agent run has no workflow behind it. Rather than weakening those foreign keys for the milestone that happens to come first — a constraint removed for convenience is never put back — such runs attach to one reserved workflow row (`00000000-0000-0000-0000-00000000ad0c`, "Ad-hoc agent runs") created on demand by `runsRepository.ensureAdHocWorkflow()`. The fixed id makes it recognisable and filterable rather than looking like a workflow the user created and forgot.
 
 **`roles`** — added by migration `0003` for M2-5. Workspace-level configuration, not per-workflow: the same `researcher` is used by every workflow in a workspace, and a user who tightens its allowlist expects that to hold everywhere at once. The JSON columns hold shapes owned by `packages/core`; `packages/store` treats them as opaque strings, the same discipline as `connections.capabilities_json`.

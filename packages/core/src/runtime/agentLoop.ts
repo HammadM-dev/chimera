@@ -13,6 +13,7 @@ import type { CallPurpose, Denied } from '../governor/types.ts';
 import type { Role } from './roleRegistry.ts';
 import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
 import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
+import { assertMemoryAvailable, type MemoryConfig } from './memory/vectorStore.ts';
 import {
   EMPTY_CHECKPOINT,
   idempotencyKeyFor,
@@ -87,6 +88,11 @@ export interface AgentTask {
   model: string;
   /** Nesting depth, for the Governor's recursion limit. */
   depth?: number;
+  /**
+   * Which memory tiers this node wants (M2-10). `vectorStore` is refused until
+   * M9 — loudly, at invocation, rather than by silently doing nothing.
+   */
+  memory?: MemoryConfig;
 }
 
 export interface AgentLoopDeps {
@@ -169,6 +175,10 @@ const VERIFY_INSTRUCTION =
   'Cite what the tools returned. If you cannot point at evidence, answer false.';
 
 export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promise<LoopResult> {
+  // Before anything else, and before any money is spent: a node asking for a
+  // memory tier this build does not have fails where the user can see it.
+  assertMemoryAvailable(task.memory, { runId: task.runId, nodeId: task.nodeId });
+
   const { governor, provider, tools, callOptions } = deps;
   const available = tools.listFor(task.role);
   const definitions = toolDefinitions(available);

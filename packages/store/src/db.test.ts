@@ -164,6 +164,10 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   // Added by 0003 for M2-5's role registry. Workspace-level configuration:
   // roles are shared by every workflow in a workspace, so tightening one
   // holds everywhere rather than in the workflow that happened to be edited.
+  // Added by 0004 for M2-10's workspace facts: curated knowledge that outlives
+  // a run, kept apart from `cache` because a user's own note must never be
+  // evicted to make room for derived data.
+  workspace_facts: ['key', 'value', 'source', 'updated_at'],
   roles: [
     'id',
     'name',

@@ -657,6 +657,20 @@ Acceptance criteria:
 - Workspace facts written by one run are readable by a subsequent, unrelated run against the same workspace, and are editable through a (minimal, dev-only at this stage) UI or IPC call.
 - A node configured with `memory.vectorStore: true` fails fast with a clear, typed, non-crashing error at node-runner invocation time, not a silent pass-through.
 
+DECISION: **the scratchpad is in memory and keyed by run id, not a table.** It is defined as ephemeral and run-scoped, and the storage that matches that definition is the one that cannot outlive the process. A scratchpad persisted "just in case" would leak one task's context into an unrelated one — a correctness problem when a stale fact is asserted confidently, and a privacy one when the two tasks belong to different people.
+
+DECISION: **workspace facts get their own table, not the `cache` table.** `cache` holds derived data under an eviction policy. These are notes a person may have typed. Evicting a user's own note to make room for a cached embedding would be indefensible, and sharing a table is how that eventually happens.
+
+DECISION: **a fact carries its source, and the source is rendered into the prompt.** `user` or the writing run's id. What an agent asserted and what a person stated are not equally trustworthy, and a rendering that flattened the two would launder the difference exactly where it matters most.
+
+DECISION: **facts are bounded — 200 characters of key, 4,000 of value.** They are injected into every prompt for the workspace. An agent able to write an unbounded fact could push the real instructions out of the context window using its own text, which is a prompt-injection vector wearing a different hat.
+
+DECISION: **`assertMemoryAvailable()` runs at the top of the agent loop, before the first model call.** The criterion asks for a fail-fast at node-runner invocation; failing after the first call would bill the user for a run that was never going to work. Asserted with a call counter. It is an invocation-time check rather than a save-time one so it also holds for a workflow imported from elsewhere or edited by hand, which no validator in this build ever saw.
+
+The vector store's error message names what to do instead ("use workspace facts", "arrives at M9") rather than only reporting an absence, and the test asserts that — an error that says only "not implemented" leaves the user with nothing to try.
+
+Editability is proven end to end: `memory:listFacts`, `memory:setFact` and `memory:deleteFact` are exercised through the real preload bridge in `apps/desktop/e2e/memory.spec.ts`, including across an app restart, since a fact that does not outlive the app is not the tier this ticket describes.
+
 Dependencies: M2-5.
 
 ### M2-11: M2 demo — Agent runtime + Tier 0 exit criteria

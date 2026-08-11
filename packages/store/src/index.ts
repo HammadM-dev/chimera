@@ -22,3 +22,5 @@ export * as nodeStatesRepository from './repositories/nodeStates.ts';
 export type { NodeStateRecord } from './repositories/nodeStates.ts';
 export * as runsRepository from './repositories/runs.ts';
 export type { RunRecord, CreateRunInput } from './repositories/runs.ts';
+export * as workspaceFactsRepository from './repositories/workspaceFacts.ts';
+export type { WorkspaceFact } from './repositories/workspaceFacts.ts';

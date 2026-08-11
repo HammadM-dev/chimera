@@ -83,3 +83,22 @@ export type {
   NodeStatus,
   RunCheckpoint,
 } from './runtime/checkpoint.ts';
+
+export {
+  createScratchpad,
+  discardScratchpad,
+  discardAllScratchpads,
+} from './runtime/memory/scratchpad.ts';
+export type { Scratchpad, ScratchpadEntry } from './runtime/memory/scratchpad.ts';
+export { createWorkspaceFacts } from './runtime/memory/workspaceFacts.ts';
+export type { WorkspaceFactsStore, FactSource } from './runtime/memory/workspaceFacts.ts';
+export {
+  assertMemoryAvailable,
+  createVectorStore,
+  VectorStoreUnavailableError,
+} from './runtime/memory/vectorStore.ts';
+export type {
+  VectorStore,
+  VectorSearchResult,
+  MemoryConfig,
+} from './runtime/memory/vectorStore.ts';
