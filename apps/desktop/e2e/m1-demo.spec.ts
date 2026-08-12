@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 
 // M1-11, the milestone's exit criterion: "connect three providers including
 // OmniRoute, chat through each, see live health and cost."
@@ -102,6 +102,7 @@ async function addConnection(
   page: Page,
   fields: { label: string; kind: string; baseUrl: string; key?: string },
 ): Promise<void> {
+  await goTo(page, 'providers');
   await page.getByTestId('connection-label').fill(fields.label);
   await page.getByTestId('connection-kind').selectOption(fields.kind);
   await page.getByTestId('connection-base-url').fill(fields.baseUrl);
@@ -111,6 +112,7 @@ async function addConnection(
 }
 
 async function chatThrough(page: Page, label: string, model: string): Promise<void> {
+  await goTo(page, 'chat');
   await expect(page.getByTestId('connection-select')).toContainText(label);
   // Selected by the option's value (the connection id) rather than its label,
   // because the label carries a live health state that changes under the test.
@@ -159,6 +161,7 @@ test.describe('M1-11 provider layer exit criteria', () => {
       });
 
       // 2. OmniRoute, through M1-7's guided flow rather than the form.
+      await goTo(page, 'providers');
       await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
         timeout: 15_000,
       });

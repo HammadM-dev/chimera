@@ -112,6 +112,12 @@ body {
   --motion-base: 160ms;
   --ease-standard: cubic-bezier(0.2, 0, 0, 1);
 
+  /* A serif display face for the one greeting that opens the app, matching the
+   * warm, editorial tone of the rest of the product. Everything else is the
+   * system UI face: a serif used twice is a voice, used everywhere it is noise. */
+  --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  --sidebar-width: 248px;
+
   --letterspacing-wordmark: 0.18em;
   --letterspacing-label: 0.06em;
 }

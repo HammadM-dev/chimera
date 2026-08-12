@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 
 // M1-10 end to end: a real Electron app, the real preload bridge, the real
 // adapter, and a real SSE stream from a local server. No provider is mocked at
@@ -101,12 +101,14 @@ test.describe('M1-10 streaming chat panel', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
 
       await createConnection(page, stub.baseUrl, 'sk-stub-key');
       // The panel loads its connections on mount; reloading is the simplest
       // honest way to pick up a row created after that.
       await page.reload();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
 
       await page.getByTestId('model-input').fill('stub-model');
@@ -119,7 +121,13 @@ test.describe('M1-10 streaming chat panel', () => {
       const sampler = setInterval(() => {
         void page
           .getByTestId('chat-answer')
-          .textContent()
+          // A short timeout, deliberately. The transcript only creates an agent
+          // turn once a message is sent, so before the click this element does
+          // not exist — and `textContent()` auto-waits 30s for a missing
+          // element. At 40ms a sample that is a hundred pending waits deep
+          // starves the click that follows it, and the test times out having
+          // measured nothing. A miss must be cheap.
+          .textContent({ timeout: 250 })
           .then((text) => {
             if (text !== null) observed.add(text);
           })
@@ -157,9 +165,11 @@ test.describe('M1-10 streaming chat panel', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
       await createConnection(page, stub.baseUrl, 'sk-stub-key');
       await page.reload();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
 
       // A model the capability matrix has a verified price for, so the figure
@@ -191,9 +201,11 @@ test.describe('M1-10 streaming chat panel', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
       await createConnection(page, stub.baseUrl, 'sk-stub-key');
       await page.reload();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
 
       await page.getByTestId('model-input').fill('some-unknown-model');
@@ -223,10 +235,12 @@ test.describe('M1-10 streaming chat panel', () => {
     try {
       const page = await app.firstWindow();
       page.on('pageerror', (err) => pageErrors.push(err.message));
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
 
       await createConnection(page, stub.baseUrl, 'sk-wrong-key');
       await page.reload();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
       page.on('pageerror', (err) => pageErrors.push(err.message));
 
@@ -267,6 +281,7 @@ test.describe('M1-10 streaming chat panel', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'chat');
       await page.waitForSelector('[data-testid="chat-panel"]');
 
       await createConnection(page, stub.baseUrl, canary);

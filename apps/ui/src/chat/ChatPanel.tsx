@@ -4,10 +4,13 @@ import { bridge, describeError, type ChatDelta, type ConnectionSummary } from '.
 import { recordExchange } from '../shell/sessionMeter.ts';
 import './chat.css';
 
-// M1-10's minimal chat panel: pick a connection, send a message, watch the
-// answer stream in with a live token and cost readout. Not the workflow canvas
-// — that is M4. This exists to prove the provider layer works end to end from
-// the renderer, and to be the surface M1-11 demos.
+// A conversation, not a text box.
+//
+// The first version replaced the answer in place and left the prompt sitting in
+// the composer, so there was no record that you had asked anything and no way
+// to see what you had asked two turns ago. What you said and what came back are
+// both turns, they both stay on screen, and the composer empties when you send
+// — which is what every person who has used a messaging app expects.
 
 interface Usage {
   inputTokens: number;
@@ -16,20 +19,19 @@ interface Usage {
 
 type Phase = 'idle' | 'streaming' | 'done' | 'failed';
 
-interface Props {
-  /** Bumped by the connection form so a new connection appears without a reload. */
-  refreshToken: number;
-  /** Reported up for the title bar, which would otherwise fetch the list twice. */
-  onConnectionCount: (count: number) => void;
+interface Turn {
+  id: string;
+  author: 'you' | 'agent';
+  text: string;
 }
 
-export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Element {
+export function ChatPanel(): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [localOnlyMode, setLocalOnlyMode] = useState(false);
   const [selectedId, setSelectedId] = useState('');
   const [model, setModel] = useState('');
   const [prompt, setPrompt] = useState('');
-  const [answer, setAnswer] = useState('');
+  const [turns, setTurns] = useState<Turn[]>([]);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [cost, setCost] = useState<number | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
@@ -39,9 +41,9 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
   // so a late event from an abandoned request cannot overwrite a newer answer.
   const activeStream = useRef<string | null>(null);
   // The usage object already counted towards the session total. Identity, not
-  // value: two identical exchanges are still two exchanges, and editing the
-  // model box after a run must not bill the session a second time.
+  // value: two identical exchanges are still two exchanges.
   const countedUsage = useRef<Usage | null>(null);
+  const transcriptRef = useRef<HTMLDivElement | null>(null);
 
   const refreshConnections = useCallback(async () => {
     try {
@@ -50,17 +52,16 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
         localOnlyMode: boolean;
       }>('connection:list', {});
       setConnections(result.connections);
-      onConnectionCount(result.connections.length);
       setLocalOnlyMode(result.localOnlyMode);
       setSelectedId((current) => current || (result.connections[0]?.id ?? ''));
     } catch (err) {
       setError(describeError(err));
     }
-  }, [onConnectionCount]);
+  }, []);
 
   useEffect(() => {
     void refreshConnections();
-  }, [refreshConnections, refreshToken]);
+  }, [refreshConnections]);
 
   // Subscribed once for the panel's lifetime rather than per send: attaching a
   // listener after the invoke resolves would race the first delta, which on a
@@ -70,12 +71,18 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
       if (delta.streamId !== activeStream.current) return;
 
       if (delta.type === 'text') {
-        setAnswer((current) => current + (delta.text ?? ''));
+        const text = delta.text ?? '';
+        // Appended to the open agent turn. A new turn per delta would render
+        // one bubble per token.
+        setTurns((current) =>
+          current.map((turn, index) =>
+            index === current.length - 1 && turn.author === 'agent'
+              ? { ...turn, text: turn.text + text }
+              : turn,
+          ),
+        );
       } else if (delta.type === 'finish') {
-        setUsage({
-          inputTokens: delta.inputTokens ?? 0,
-          outputTokens: delta.outputTokens ?? 0,
-        });
+        setUsage({ inputTokens: delta.inputTokens ?? 0, outputTokens: delta.outputTokens ?? 0 });
         setPhase('done');
       } else if (delta.type === 'error') {
         setError({
@@ -118,19 +125,34 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
     };
   }, [usage, model]);
 
-  // Keep the chosen model valid for the chosen connection. Switching to a
-  // connection that does not serve the current model would otherwise send a
-  // request guaranteed to fail, and the failure would look like ours.
+  // Keep the chosen model valid for the chosen connection. Switching to one
+  // that does not serve the current model would send a request guaranteed to
+  // fail, and the failure would look like ours.
   useEffect(() => {
     const models = connections.find((entry) => entry.id === selectedId)?.models ?? [];
     if (models.length === 0) return;
     setModel((current) => (models.includes(current) ? current : (models[0] ?? '')));
   }, [connections, selectedId]);
 
-  const send = useCallback(async () => {
-    if (selectedId === '' || model.trim() === '' || prompt.trim() === '') return;
+  // Follow the conversation as it grows, the way a message list does.
+  useEffect(() => {
+    const node = transcriptRef.current;
+    if (node) node.scrollTop = node.scrollHeight;
+  }, [turns]);
 
-    setAnswer('');
+  const send = useCallback(async () => {
+    const text = prompt.trim();
+    if (selectedId === '' || model.trim() === '' || text === '') return;
+
+    const stamp = String(Date.now());
+    setTurns((current) => [
+      ...current,
+      { id: `you-${stamp}`, author: 'you', text },
+      { id: `agent-${stamp}`, author: 'agent', text: '' },
+    ]);
+    // Cleared on send. Leaving the prompt in the box is why the first version
+    // felt like a form rather than a conversation.
+    setPrompt('');
     setUsage(null);
     setCost(null);
     setError(null);
@@ -140,19 +162,19 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
       const { streamId } = await bridge().invoke<{ streamId: string }>('chat:send', {
         connectionId: selectedId,
         model: model.trim(),
-        prompt: prompt.trim(),
+        prompt: text,
       });
       activeStream.current = streamId;
     } catch (err) {
-      // An invalid key surfaces here as ProviderAuthError. Rendered inline as
-      // an ordinary result, not thrown — an unhandled rejection would take the
-      // panel out and tell the user nothing.
+      // An invalid key surfaces here. Rendered inline as an ordinary result,
+      // not thrown — an unhandled rejection would take the panel out.
       setError(describeError(err));
       setPhase('failed');
     }
   }, [selectedId, model, prompt]);
 
   const availableModels = connections.find((entry) => entry.id === selectedId)?.models ?? [];
+  const lastAgentTurn = [...turns].reverse().find((turn) => turn.author === 'agent');
 
   return (
     <section className="chat" data-testid="chat-panel" data-phase={phase}>
@@ -183,7 +205,7 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
           </label>
           {/* A picker when the connection has an imported catalogue, a text box
               when it does not. Typing an exact model id from memory is not a
-              thing anyone can do against a gateway serving hundreds of them. */}
+              thing anyone can do against a gateway serving hundreds. */}
           {availableModels.length > 0 ? (
             <select
               id="chat-model"
@@ -221,23 +243,34 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
         )}
       </header>
 
-      <div className="chat__transcript scroll">
+      <div className="chat__transcript scroll" ref={transcriptRef}>
         <div className="chat__column">
-          {error && (
-            <p className="chat__error" data-testid="chat-error" role="alert">
-              {error.message}
+          {turns.length === 0 && (
+            <p className="chat__placeholder">
+              {connections.length === 0
+                ? 'Add a provider, or import OmniRoute, to start.'
+                : 'Send a message to try a provider before you put it in an automation.'}
             </p>
           )}
 
-          {answer === '' && phase !== 'streaming' ? (
-            <p className="chat__placeholder">
-              {connections.length === 0
-                ? 'Add a connection, or import OmniRoute, to start.'
-                : 'Ask something below.'}
-            </p>
-          ) : (
-            <p className="chat__answer" data-testid="chat-answer">
-              {answer}
+          {turns.map((turn) => (
+            <article
+              key={turn.id}
+              className={`turn turn--${turn.author === 'you' ? 'you' : 'agent'}`}
+            >
+              <p className="turn__author">{turn.author === 'you' ? 'You' : 'Agent'}</p>
+              <p
+                className="turn__text"
+                {...(turn.id === lastAgentTurn?.id ? { 'data-testid': 'chat-answer' } : {})}
+              >
+                {turn.text}
+              </p>
+            </article>
+          ))}
+
+          {error && (
+            <p className="chat__error" data-testid="chat-error" role="alert">
+              {error.message}
             </p>
           )}
         </div>
@@ -252,8 +285,16 @@ export function ChatPanel({ refreshToken, onConnectionCount }: Props): JSX.Eleme
             onChange={(event) => {
               setPrompt(event.target.value);
             }}
+            onKeyDown={(event) => {
+              // Enter sends, shift-Enter breaks the line — the convention every
+              // messaging app shares, and the one people try first.
+              if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                void send();
+              }
+            }}
             placeholder="Ask something"
-            rows={3}
+            rows={2}
           />
 
           <div className="chat__actions">

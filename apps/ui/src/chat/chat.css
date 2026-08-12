@@ -79,17 +79,39 @@
   gap: var(--space-3);
 }
 
-.chat__answer {
+/* ---- turns -------------------------------------------------------------- */
+
+.turn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.turn__author {
   margin: 0;
-  font-family: inherit;
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.turn__text {
+  margin: 0;
   font-size: var(--type-body);
   line-height: var(--line-height-prose);
   color: var(--text-primary);
-  /* Wrapping, not scrolling: a model's answer is prose, and a horizontal
-   * scrollbar under a paragraph is a bug people work around by widening the
-   * window. */
+  /* Wrapping, not scrolling: an answer is prose, and a horizontal scrollbar
+   * under a paragraph is a bug people work around by widening the window. */
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* What you said is set apart from what came back — enough to scan the thread,
+ * not so much that the conversation becomes two columns of coloured bubbles. */
+.turn--you .turn__text {
+  color: var(--text-secondary);
+  border-left: 2px solid var(--border-stronger);
+  padding-left: var(--space-3);
 }
 
 .chat__placeholder {
@@ -101,7 +123,7 @@
 
 /* The caret only exists while tokens are arriving, so a finished answer is not
  * left looking like it is still going. */
-.chat[data-phase='streaming'] .chat__answer::after {
+.chat[data-phase='streaming'] .turn:last-child .turn__text::after {
   content: '';
   display: inline-block;
   width: 7px;
@@ -119,7 +141,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .chat[data-phase='streaming'] .chat__answer::after {
+  .chat[data-phase='streaming'] .turn:last-child .turn__text::after {
     animation: none;
   }
 }

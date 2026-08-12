@@ -1,112 +1,198 @@
-/* The application frame — docs/DESIGN.md section 4.
+/* The application frame.
  *
- * Five regions: a title bar, a rail, the work area, an inspector, and a status
- * bar. The first pass built these as five undifferentiated grey boxes at the
- * documented proportions, which satisfied the spec and looked like scaffolding.
- * What was missing was hierarchy: nothing told the eye where to start, every
- * region padded itself differently, and no seam lined up with another. */
+ * CHIMERA is an automation builder, not a chat client, and the frame has to say
+ * so before a word is read: a persistent sidebar of places you work, and one
+ * main surface that changes. The previous frame put a chat panel in the middle
+ * of five equal grey regions, which told the user this was a chat app with some
+ * settings around it. */
 
 .shell {
   display: grid;
-  grid-template-columns: var(--rail-width) minmax(0, 1fr) var(--inspector-width);
-  grid-template-rows: var(--topbar-height) minmax(0, 1fr) var(--statusbar-height);
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) var(--statusbar-height);
   grid-template-areas:
-    'topbar topbar topbar'
-    'rail canvas inspector'
-    'status status status';
+    'sidebar main'
+    'status status';
   height: 100%;
   background: var(--surface-canvas);
 }
 
-/* ---- title bar ---------------------------------------------------------- */
+/* ---- sidebar ------------------------------------------------------------ */
 
-.shell__topbar {
-  grid-area: topbar;
+.sidebar {
+  grid-area: sidebar;
+  min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-4);
-  padding: 0 var(--space-4);
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3);
   background: var(--surface-panel);
-  border-bottom: var(--border-width) solid var(--border-hairline);
+  border-right: var(--border-width) solid var(--border-hairline);
 }
 
-.shell__wordmark {
+.sidebar__brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2) var(--space-4);
+}
+
+.sidebar__wordmark {
   margin: 0;
   font-size: var(--type-meta);
   font-weight: var(--font-weight-medium);
   letter-spacing: var(--letterspacing-wordmark);
   color: var(--text-primary);
-  /* The trailing letter-space belongs to the gap after the final A, not to the
-   * wordmark's box. Without this the mark sits visually left of centre against
-   * anything aligned to its right edge. */
-  margin-right: calc(var(--letterspacing-wordmark) * -1);
 }
 
-.shell__topbar-meta {
+.sidebar__new {
   display: flex;
   align-items: center;
   gap: var(--space-2);
-  font-size: var(--type-floor);
-  color: var(--text-muted);
-}
-
-/* ---- regions ------------------------------------------------------------ */
-
-.shell__rail {
-  grid-area: rail;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-panel);
-  border-right: var(--border-width) solid var(--border-hairline);
-}
-
-.shell__canvas {
-  grid-area: canvas;
-  min-height: 0;
-  min-width: 0;
-  display: flex;
-  background: var(--surface-canvas);
-}
-
-.shell__inspector {
-  grid-area: inspector;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-panel);
-  border-left: var(--border-width) solid var(--border-hairline);
-}
-
-/* ---- section blocks inside the side panels ------------------------------ */
-
-/* One rhythm for every panel section, so a seam between two of them lands on
- * the same grid as the one above it. */
-.shell__section {
-  padding: var(--space-4);
-  border-bottom: var(--border-width) solid var(--border-hairline);
-}
-
-.shell__section:last-child {
-  border-bottom: none;
-}
-
-.shell__section-title {
-  margin: 0 0 var(--space-3);
-  font-size: var(--type-floor);
+  width: 100%;
+  margin-bottom: var(--space-4);
+  font: inherit;
+  font-size: var(--type-meta);
   font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  text-align: left;
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.sidebar__new:hover {
+  background: var(--surface-popover);
+}
+
+.sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar__item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  font: inherit;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  padding: var(--space-2);
+  text-align: left;
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.sidebar__item:hover {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
+/* The current place, marked by weight and ground rather than a coloured bar:
+ * one accent in the frame, and it belongs to the primary action. */
+.sidebar__item[aria-current='page'] {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.sidebar__icon {
+  width: 15px;
+  height: 15px;
+  flex: none;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.25;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.sidebar__group {
+  margin-top: var(--space-5);
+  padding: 0 var(--space-2) var(--space-2);
+  font-size: var(--type-floor);
   letter-spacing: var(--letterspacing-label);
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-.shell__empty {
+.sidebar__hint {
   margin: 0;
-  max-width: 34ch;
+  padding: 0 var(--space-2);
+  font-size: var(--type-floor);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+.sidebar__spacer {
+  flex: 1;
+  min-height: var(--space-4);
+}
+
+.sidebar__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-top: var(--border-width) solid var(--border-hairline);
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+/* ---- main --------------------------------------------------------------- */
+
+.main {
+  grid-area: main;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.view {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.view__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-5) var(--space-6) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+}
+
+.view__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.view__subtitle {
+  margin: var(--space-1) 0 0;
   font-size: var(--type-meta);
   line-height: var(--line-height-prose);
   color: var(--text-muted);
+  max-width: 62ch;
+}
+
+.view__body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-5) var(--space-6);
 }
 
 /* ---- status bar --------------------------------------------------------- */
@@ -122,8 +208,6 @@
   border-top: var(--border-width) solid var(--border-hairline);
   font-size: var(--type-floor);
   color: var(--text-muted);
-  /* One line, always. A status bar that wraps changes the height of every
-   * region above it. */
   white-space: nowrap;
   overflow: hidden;
 }
@@ -155,7 +239,7 @@
   background: var(--surface-canvas);
   border: var(--border-width) solid var(--border-strong);
   border-radius: var(--radius-control);
-  padding: var(--space-2) var(--space-2);
+  padding: var(--space-2);
   transition: border-color var(--motion-fast) var(--ease-standard);
 }
 
@@ -188,8 +272,6 @@
 
 .button:disabled {
   color: var(--text-muted);
-  /* Dimmed, not hidden: a control that vanishes while busy moves everything
-   * below it, and the user loses their place mid-task. */
   background: var(--surface-panel);
 }
 
@@ -199,17 +281,22 @@
   color: var(--surface-canvas);
 }
 
-.button--primary:hover:not(:disabled) {
-  background: var(--accent-primary);
-  border-color: var(--border-stronger);
-}
-
 .button--primary:disabled {
   background: var(--surface-raised);
   color: var(--text-muted);
 }
 
-/* A state word: healthy, degraded, importing. Reads as data, not decoration. */
+.button--ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-secondary);
+}
+
+.button--ghost:hover:not(:disabled) {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
@@ -236,4 +323,16 @@
 
 .chip--bad::before {
   background: var(--semantic-danger);
+}
+
+/* A tag for a tool grant or a tier. Reads as data, not as a button. */
+.tag {
+  display: inline-block;
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 1px var(--space-2);
+  font-variant-numeric: tabular-nums;
 }

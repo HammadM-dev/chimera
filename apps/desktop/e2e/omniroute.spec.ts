@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 
 // M1-7 end to end. The stub speaks the OpenAI-shaped `/v1/models` OmniRoute
 // exposes; everything above it — the IPC channels, the detection service, the
@@ -53,6 +53,7 @@ test.describe('M1-7 OmniRoute detection and guided setup', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'providers');
       await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
         timeout: 15_000,
       });
@@ -108,12 +109,15 @@ test.describe('M1-7 OmniRoute detection and guided setup', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'providers');
       await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
         timeout: 15_000,
       });
 
       // Before the import there is nothing to chat with.
+      await goTo(page, 'chat');
       await expect(page.getByTestId('connection-select')).toContainText('No connections yet');
+      await goTo(page, 'providers');
 
       await page.getByTestId('omniroute-import').click();
       await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
@@ -121,6 +125,7 @@ test.describe('M1-7 OmniRoute detection and guided setup', () => {
       });
 
       // Immediately selectable — no reload, no restart.
+      await goTo(page, 'chat');
       await expect(page.getByTestId('connection-select')).toContainText('OmniRoute', {
         timeout: 10_000,
       });
@@ -147,6 +152,7 @@ test.describe('M1-7 OmniRoute detection and guided setup', () => {
     try {
       const page = await app.firstWindow();
       page.on('pageerror', (err) => pageErrors.push(err.message));
+      await goTo(page, 'providers');
 
       await expect(page.getByTestId('omniroute-setup')).toHaveAttribute(
         'data-phase',
@@ -183,6 +189,7 @@ test.describe('M1-7 OmniRoute detection and guided setup', () => {
 
     try {
       const page = await app.firstWindow();
+      await goTo(page, 'providers');
       await expect(page.getByTestId('omniroute-setup')).toHaveAttribute(
         'data-phase',
         'not-detected',

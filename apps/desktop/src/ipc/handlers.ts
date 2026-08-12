@@ -15,6 +15,7 @@ import { detect, importCatalogue } from '../providers/omniroute.ts';
 import { deleteFact, listFacts, setFact } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
+import { listRoles } from '../roles/service.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -80,6 +81,8 @@ registerHandler(channels.runCostPreview, (payload) => previewCost(payload));
 registerHandler(channels.runSubscribe, (payload, context) =>
   subscribe(payload.runId, context.webContents),
 );
+
+registerHandler(channels.roleList, () => listRoles());
 
 registerHandler(channels.memoryListFacts, () => listFacts());
 registerHandler(channels.memorySetFact, (payload) => setFact(payload.key, payload.value));

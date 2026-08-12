@@ -1,80 +1,183 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { JSX } from 'react';
 import { ChatPanel } from '../chat/ChatPanel.tsx';
-import { ConnectionForm } from '../connections/ConnectionForm.tsx';
-import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
+import { AgentsView } from '../views/AgentsView.tsx';
+import { BuilderView } from '../views/BuilderView.tsx';
+import { HomeView } from '../views/HomeView.tsx';
+import { ProvidersView } from '../views/ProvidersView.tsx';
 import { StatusBar } from './StatusBar.tsx';
-import { bridge } from '../chat/useChimera.ts';
 import './shell.css';
 
-// Empty-state copy follows docs/DESIGN.md section 8: an invitation with a
-// verb, sentence case, no apology, no exclamation mark.
+// CHIMERA is a place you build automations, so the frame is a sidebar of places
+// and one surface that changes — not a chat window with settings around it.
+// M4's canvas replaces the builder's middle column; the frame does not move.
+
+type View = 'home' | 'build' | 'agents' | 'providers' | 'chat';
+
+const NAV: { view: View; label: string; icon: JSX.Element }[] = [
+  {
+    view: 'home',
+    label: 'Home',
+    icon: <path d="M2.5 6.5 8 2l5.5 4.5V13a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1z" />,
+  },
+  {
+    view: 'build',
+    label: 'Automations',
+    icon: (
+      <>
+        <rect x="2.5" y="2.5" width="4" height="4" rx="1" />
+        <rect x="9.5" y="9.5" width="4" height="4" rx="1" />
+        <path d="M4.5 6.5v3a2 2 0 0 0 2 2h3" />
+      </>
+    ),
+  },
+  {
+    view: 'agents',
+    label: 'Agents',
+    icon: (
+      <>
+        <circle cx="8" cy="5.5" r="2.5" />
+        <path d="M3 13.5a5 5 0 0 1 10 0" />
+      </>
+    ),
+  },
+  {
+    view: 'providers',
+    label: 'Providers',
+    icon: (
+      <>
+        <path d="M6.5 9.5 9 7" />
+        <path d="M4 12a2.5 2.5 0 0 1 0-3.5l1.5-1.5" />
+        <path d="M12 4a2.5 2.5 0 0 1 0 3.5L10.5 9" />
+      </>
+    ),
+  },
+  {
+    view: 'chat',
+    label: 'Test a model',
+    icon: <path d="M2.5 4a1 1 0 0 1 1-1h9a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H6l-3.5 2.5z" />,
+  },
+];
+
+const TITLES: Record<View, { title: string; subtitle: string }> = {
+  home: { title: 'Home', subtitle: '' },
+  build: {
+    title: 'Automation',
+    subtitle: 'Add agents in the order they should run. Each one declares what it may use.',
+  },
+  agents: {
+    title: 'Agents',
+    subtitle: 'The roster an automation draws from. Editing these is a workspace-wide change.',
+  },
+  providers: {
+    title: 'Providers',
+    subtitle: 'Where models come from. Keys go to your OS keychain, never the database.',
+  },
+  chat: {
+    title: 'Test a model',
+    subtitle: 'A direct conversation with one provider, for checking a model before you use it.',
+  },
+};
+
 export function AppShell(): JSX.Element {
-  // One counter, owned here because both the form that invalidates the
-  // connection list and the panel that reads it hang off this component.
+  const [view, setView] = useState<View>('home');
+  const [goal, setGoal] = useState('');
+  // Bumped whenever the set of connections changes, so every view reading it
+  // re-reads rather than each keeping its own copy and disagreeing.
   const [refreshToken, setRefreshToken] = useState(0);
-  const [kinds, setKinds] = useState<string[]>([]);
-  // Reported up by the chat panel, which already reads the list — a second
-  // fetch here would be a second answer to the same question, and they would
-  // disagree for one render every time a connection is added.
-  const [connectionCount, setConnectionCount] = useState(0);
 
-  const onCreated = useCallback(() => {
+  const onChanged = useCallback(() => {
     setRefreshToken((current) => current + 1);
-  }, []);
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        const result = await bridge().invoke<{ kinds: string[] }>('connection:list', {});
-        setKinds(result.kinds);
-      } catch {
-        // The form renders with an empty provider list rather than taking the
-        // shell down; the chat panel surfaces the same failure with a message.
-      }
-    })();
   }, []);
 
   return (
     <div className="shell" data-testid="app-shell">
-      <header className="shell__topbar">
-        <h1 className="shell__wordmark">CHIMERA</h1>
-        <div className="shell__topbar-meta">
-          <span>
-            {connectionCount === 0 ? 'No providers' : `${String(connectionCount)} providers`}
-          </span>
+      <nav className="sidebar" aria-label="Workspace">
+        <div className="sidebar__brand">
+          <h1 className="sidebar__wordmark">CHIMERA</h1>
         </div>
-      </header>
 
-      <nav className="shell__rail" aria-label="Workspace">
-        <div className="shell__section">
-          <h2 className="shell__section-title">Workflows</h2>
-          <p className="shell__empty">Build your first workflow, or start from a template.</p>
+        <button
+          type="button"
+          className="sidebar__new"
+          data-testid="nav-new"
+          onClick={() => {
+            setGoal('');
+            setView('build');
+          }}
+        >
+          <svg className="sidebar__icon" viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
+          New automation
+        </button>
+
+        <div className="sidebar__nav">
+          {NAV.map((item) => (
+            <button
+              key={item.view}
+              type="button"
+              className="sidebar__item"
+              data-testid={`nav-${item.view}`}
+              aria-current={view === item.view ? 'page' : undefined}
+              onClick={() => {
+                setView(item.view);
+              }}
+            >
+              <svg className="sidebar__icon" viewBox="0 0 16 16" aria-hidden="true">
+                {item.icon}
+              </svg>
+              {item.label}
+            </button>
+          ))}
         </div>
-        <div className="shell__section scroll">
-          <h2 className="shell__section-title">Connections</h2>
-          <ConnectionForm kinds={kinds} onCreated={onCreated} />
+
+        <p className="sidebar__group">Recent</p>
+        <p className="sidebar__hint">Automations you save will appear here.</p>
+
+        <div className="sidebar__spacer" />
+
+        <div className="sidebar__footer">
+          <span>Workspace</span>
+          <span className="chip chip--ok">Local</span>
         </div>
       </nav>
 
-      <main className="shell__canvas">
-        {/* M1-10's chat panel stands in for the canvas until M4 builds the
-            real one. It is here rather than in a separate route because M1 has
-            no router and adding one for a single surface would be scaffolding
-            with no second user. */}
-        <ChatPanel refreshToken={refreshToken} onConnectionCount={setConnectionCount} />
-      </main>
+      <main className="main">
+        {view === 'home' ? (
+          <HomeView
+            onDescribe={(description) => {
+              setGoal(description);
+              setView('build');
+            }}
+            onBrowseAgents={() => {
+              setView('agents');
+            }}
+          />
+        ) : (
+          <section className="view">
+            <header className="view__header">
+              <div>
+                <h2 className="view__title">{TITLES[view].title}</h2>
+                <p className="view__subtitle">{TITLES[view].subtitle}</p>
+              </div>
+            </header>
 
-      <aside className="shell__inspector" aria-label="Inspector">
-        <div className="shell__section">
-          <h2 className="shell__section-title">OmniRoute</h2>
-          <OmniRouteSetup onImported={onCreated} />
-        </div>
-        <div className="shell__section">
-          <h2 className="shell__section-title">Inspector</h2>
-          <p className="shell__empty">Select a node to configure it.</p>
-        </div>
-      </aside>
+            {view === 'build' && <BuilderView goal={goal} />}
+            {view === 'chat' && <ChatPanel />}
+            {view === 'agents' && (
+              <div className="view__body scroll">
+                <AgentsView />
+              </div>
+            )}
+            {view === 'providers' && (
+              <div className="view__body scroll">
+                <ProvidersView refreshToken={refreshToken} onChanged={onChanged} />
+              </div>
+            )}
+          </section>
+        )}
+      </main>
 
       <StatusBar />
     </div>

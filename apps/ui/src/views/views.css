@@ -1,0 +1,347 @@
+/* The three surfaces that make CHIMERA an automation builder: the opening
+ * screen, the builder itself, and the agent roster. */
+
+/* ---- home --------------------------------------------------------------- */
+
+.home {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-5);
+  padding: var(--space-6);
+}
+
+.home__greeting {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 34px;
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.home__sub {
+  margin: 0;
+  font-size: var(--type-body);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+/* The composer is the one raised object on the screen, because describing an
+ * automation is the one thing this screen is for. */
+.home__composer {
+  width: 100%;
+  max-width: var(--measure);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-raised);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.home__input {
+  width: 100%;
+  resize: none;
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  padding: var(--space-2);
+}
+
+.home__input:focus {
+  outline: none;
+}
+
+.home__input::placeholder {
+  color: var(--text-muted);
+}
+
+.home__composer-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.home__starters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+  max-width: var(--measure);
+}
+
+.home__starter {
+  font: inherit;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.home__starter:hover {
+  color: var(--text-primary);
+  border-color: var(--border-stronger);
+}
+
+/* ---- builder ------------------------------------------------------------ */
+
+/* Three columns: what you can add, what you have built, and the detail of the
+ * one thing you have selected. A workflow tool that hides the palette behind a
+ * menu makes its own vocabulary invisible. */
+.builder {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr) 288px;
+}
+
+.builder__palette,
+.builder__inspector {
+  min-height: 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.builder__palette {
+  border-right: var(--border-width) solid var(--border-hairline);
+}
+
+.builder__inspector {
+  border-left: var(--border-width) solid var(--border-hairline);
+}
+
+.builder__section {
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: var(--space-2) 0 var(--space-1);
+}
+
+.builder__section:first-child {
+  margin-top: 0;
+}
+
+.palette__agent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.palette__agent:hover {
+  border-color: var(--border-stronger);
+}
+
+.palette__name {
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+}
+
+.palette__meta {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+/* ---- the sequence ------------------------------------------------------- */
+
+.builder__canvas {
+  min-height: 0;
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.sequence {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sequence__empty {
+  margin: auto 0;
+  max-width: 42ch;
+  text-align: center;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+.step {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.step:hover {
+  border-color: var(--border-stronger);
+}
+
+.step[aria-current='true'] {
+  border-color: var(--accent-primary);
+}
+
+.step__index {
+  width: 20px;
+  height: 20px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 50%;
+}
+
+.step__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.step__name {
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+}
+
+.step__meta {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The join between two steps: the automation reads top to bottom. */
+.sequence__link {
+  width: var(--border-width);
+  height: var(--space-3);
+  margin-left: calc(var(--space-3) + 10px);
+  background: var(--border-strong);
+}
+
+/* ---- agent roster ------------------------------------------------------- */
+
+.agents {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  gap: var(--space-3);
+  align-content: start;
+}
+
+.agent-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+}
+
+.agent-card__name {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.agent-card__prompt {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+.agent-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: auto;
+}
+
+/* ---- providers ---------------------------------------------------------- */
+
+.providers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: var(--space-5);
+  align-items: start;
+}
+
+.panel {
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+}
+
+.panel__title {
+  margin: 0 0 var(--space-3);
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.connection-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
+  border-bottom: var(--border-width) solid var(--border-hairline);
+  font-size: var(--type-meta);
+}
+
+.connection-row:last-child {
+  border-bottom: none;
+}
+
+.connection-row__meta {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+}

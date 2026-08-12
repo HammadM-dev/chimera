@@ -261,6 +261,29 @@ export const runCostPreview = defineInvokeChannel({
   }),
 });
 
+// The agent roster the automation builder offers. Real roles from the role
+// registry (M2-5), not a hardcoded list in the renderer — a palette that
+// disagreed with what the runtime will actually execute is worse than none.
+export const roleList = defineInvokeChannel({
+  channel: 'role:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    roles: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        systemPrompt: z.string(),
+        toolAllowlist: z.array(z.string()),
+        tier: z.string(),
+        maxIterations: z.number(),
+        maxCostUsd: z.number().nullable(),
+      }),
+    ),
+  }),
+});
+
 export const vaultSetSecret = defineInvokeChannel({
   channel: 'vault:setSecret',
   // v2: `scope` narrowed from an open string to the vault's actual scope
@@ -419,6 +442,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   connectionCreate,
   connectionList,
   healthSweep,
+  roleList,
   runCostPreview,
   memoryListFacts,
   memorySetFact,

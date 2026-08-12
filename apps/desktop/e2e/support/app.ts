@@ -1,4 +1,4 @@
-import { _electron as electron, type ElectronApplication } from '@playwright/test';
+import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -38,4 +38,20 @@ export function launchApp({ profile, fixture, env }: LaunchOptions): Promise<Ele
     cwd: desktopRoot,
     env: { ...process.env, CHIMERA_E2E_FIXTURE: fixture ?? '', ...env },
   });
+}
+
+/**
+ * Navigates to one of the shell's views.
+ *
+ * The app is an automation builder, so it opens on Home and the chat and
+ * provider surfaces live behind sidebar entries. Tests take the same route a
+ * person does rather than asserting against something that happens to be
+ * mounted.
+ */
+export async function goTo(
+  page: Page,
+  view: 'home' | 'build' | 'agents' | 'providers' | 'chat',
+): Promise<void> {
+  await page.waitForSelector('[data-testid="app-shell"]');
+  await page.getByTestId(`nav-${view}`).click();
 }
