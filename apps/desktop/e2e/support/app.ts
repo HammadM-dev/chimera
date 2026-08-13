@@ -53,5 +53,29 @@ export async function goTo(
   view: 'home' | 'build' | 'agents' | 'providers' | 'chat',
 ): Promise<void> {
   await page.waitForSelector('[data-testid="app-shell"]');
+  // The splash first, then setup. Both are full-screen overlays, and a nav
+  // click made underneath either one is intercepted rather than delivered.
+  await page.waitForSelector('.splash', { state: 'detached' });
+  await dismissOnboarding(page);
   await page.getByTestId(`nav-${view}`).click();
+}
+
+/**
+ * Clears first-launch setup if it is showing.
+ *
+ * Every test starts on a fresh profile with no connections, which is exactly
+ * the condition that triggers the guide — so a test that wants the app has to
+ * get past it, the same way a person would. Tolerant of it being absent so the
+ * helper stays usable from a test that has already connected something.
+ */
+export async function dismissOnboarding(page: Page): Promise<void> {
+  const skip = page.getByTestId('intro-skip').first();
+  // `count()` rather than a timed `waitFor`: absence is the normal case once a
+  // test has connected something, and a five-second wait for an element that
+  // is never coming, paid on every navigation, cost M1-11 twenty seconds of
+  // its budget and made it fail under load. The guide mounts in the same React
+  // commit that unmounts the splash, and `goTo` has already waited for that,
+  // so there is no race left to wait out.
+  if ((await skip.count()) === 0) return;
+  await skip.click();
 }

@@ -121,6 +121,19 @@ function modelsOf(connection: ProviderConnection): string[] {
   return Object.keys(connection.capabilities).sort();
 }
 
+/**
+ * How many connections the workspace has, unfiltered by local-only mode.
+ *
+ * Read at window creation to decide whether this is a first launch. Counts
+ * everything rather than what is currently visible: a workspace with cloud
+ * connections hidden by local-only mode is configured, not empty, and showing
+ * it a setup guide would be telling the user something untrue about their own
+ * workspace.
+ */
+export function connectionCount(): number {
+  return providerRegistry().listAll().length;
+}
+
 function resolve(connectionId: string): ProviderConnection {
   const connection = providerRegistry().get(connectionId);
   if (!connection) {

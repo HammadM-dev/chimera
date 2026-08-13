@@ -1,0 +1,236 @@
+/* First launch. The one screen a person sees before they have decided whether
+ * this app is worth their time, so it does two things and no more: say what
+ * CHIMERA is, and get one provider connected. */
+
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: var(--space-6);
+  background: var(--surface-canvas);
+}
+
+.intro__card {
+  width: 100%;
+  max-width: 560px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Each step arrives rather than appearing, and the pieces arrive in reading
+ * order. Scoped to [data-armed='true'] so nothing animates until the element
+ * is mounted and visible — the lesson from the splash, where a paused
+ * zero-delay animation was still in its active phase at mount. */
+.intro[data-armed='true'] .intro__step > * {
+  opacity: 0;
+  animation: intro-rise var(--intro-duration) var(--ease-standard) forwards;
+}
+
+.intro[data-armed='true'] .intro__step > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.intro[data-armed='true'] .intro__step > *:nth-child(2) {
+  animation-delay: 70ms;
+}
+.intro[data-armed='true'] .intro__step > *:nth-child(3) {
+  animation-delay: 140ms;
+}
+.intro[data-armed='true'] .intro__step > *:nth-child(4) {
+  animation-delay: 210ms;
+}
+.intro[data-armed='true'] .intro__step > *:nth-child(5) {
+  animation-delay: 280ms;
+}
+
+@keyframes intro-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+:root {
+  --intro-duration: 320ms;
+}
+
+/* An entrance is a courtesy, not information. Under reduced motion the same
+ * content is simply present. */
+@media (prefers-reduced-motion: reduce) {
+  .intro[data-armed='true'] .intro__step > * {
+    opacity: 1;
+    animation: none;
+  }
+}
+
+.intro__step {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.intro__eyebrow {
+  margin: 0;
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.intro__title {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: 30px;
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
+  color: var(--text-primary);
+}
+
+.intro__body {
+  margin: 0;
+  max-width: 56ch;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.intro__note {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+/* ---- provider choice ---------------------------------------------------- */
+
+.intro__choices {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.intro__choice {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: var(--space-3) var(--space-4);
+  transition:
+    border-color var(--motion-fast) var(--ease-standard),
+    background var(--motion-fast) var(--ease-standard);
+}
+
+.intro__choice:hover {
+  border-color: var(--border-stronger);
+  background: var(--surface-raised);
+}
+
+.intro__choice-title {
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+}
+
+.intro__choice-detail {
+  font-size: var(--type-meta);
+  color: var(--text-muted);
+}
+
+/* ---- numbered setup steps ----------------------------------------------- */
+
+.intro__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  counter-reset: intro-step;
+}
+
+.intro__steps li {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: var(--space-3);
+  align-items: start;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.intro__steps li::before {
+  counter-increment: intro-step;
+  content: counter(intro-step);
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 50%;
+}
+
+.intro__code {
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 1px var(--space-2);
+}
+
+/* ---- footer ------------------------------------------------------------- */
+
+.intro__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding-top: var(--space-2);
+}
+
+.intro__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--type-meta);
+  color: var(--text-muted);
+}
+
+.intro__error {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--semantic-danger);
+}
+
+.intro__progress {
+  display: flex;
+  gap: var(--space-1);
+}
+
+.intro__pip {
+  width: 18px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-strong);
+}
+
+.intro__pip--on {
+  background: var(--accent-primary);
+}

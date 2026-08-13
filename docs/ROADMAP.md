@@ -1181,6 +1181,17 @@ Dependencies: M7-3.
 
 ### M7-5: Onboarding wizard
 
+STATUS: **delivered ahead of its milestone, at the founder's request**, alongside the M4-5 canvas work. First launch now runs a guide: a welcome, a provider choice (OmniRoute, a provider API key, or a model on this machine), and for OmniRoute a numbered setup walkthrough with live detection and one-step catalogue import. `apps/desktop/e2e/onboarding.spec.ts` covers the OmniRoute path end to end — including the case where OmniRoute is not running yet, the user starts it, and the guide finds it on the second check — plus a key-entry path asserting the credential never reaches a log line, plus skipping.
+
+DECISION: **"needs setup" is derived from the workspace, not stored as a flag.** No connections means not set up. A stored `hasCompletedOnboarding` can drift out of step with reality — a cleared database, a deleted connection, a restored profile — and strand a user in an app with nothing connected and no way back to the guide. Deriving it cannot drift, and it needs no new IPC surface, which is the same reasoning `docs/DESIGN.md` §5.2 applies to the splash flag. The cost is that skipping with nothing connected shows the guide again next launch; for an app that cannot do anything without a provider, that is the right side to err on.
+
+DECISION: **the guide waits for the splash rather than overlapping it.** Two things animating at once is one too many, and the guide's entrance is the first thing it says.
+
+DECISION: **no invented install commands.** The OmniRoute walkthrough tells the user to install and start it, sign in to their own provider accounts inside it, and leave it on its default address — then CHIMERA detects it live and reports what it found. This repository has not verified OmniRoute's actual install procedure, and a confidently wrong `npm install -g` line in a first-run guide is worse than no line: it is the first instruction a new user follows and the first thing that would fail. The exact wording is Hammad's to supply.
+
+What remains for this ticket at M7: measuring time-to-first-successful-run (M7-6), and reusing the shell for the template-first flow once M4-9's templates exist.
+
+
 Description: F11.3, reusing the OmniRoute guided-setup UI shell from M1-7: pick provider, connect, run a template (from M4-9's shipped set), see it work. Time-to-first-successful-run is explicitly called out in the master plan as predicting retention, so this flow should be measured (not just built) — see M7-6.
 
 Acceptance criteria:

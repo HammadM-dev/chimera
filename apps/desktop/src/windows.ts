@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { applyCsp } from './security/cspPolicy.ts';
 import { applyPermissionHandler } from './security/permissionHandler.ts';
 import { applyNavigationGuard } from './security/navigationGuard.ts';
+import { connectionCount } from './providers/service.ts';
 import { consumeSplashDecision } from './settings/localSettings.ts';
 
 // Resolved against this module's own location, not app.getAppPath() —
@@ -46,8 +47,19 @@ export function createWindow(): BrowserWindow {
     // its first paint, so there is no frame in which the splash could flash
     // for a user who has already seen it.
     const playSplash = consumeSplashDecision();
+
+    // Whether to run first-launch setup is answered by the workspace itself:
+    // CHIMERA cannot do anything without a provider, so "no connections" *is*
+    // "not set up yet". Deliberately not a stored `hasСompletedOnboarding`
+    // flag — a flag can drift out of step with reality (cleared database,
+    // deleted connection, restored profile) and leave a user stranded in an
+    // app with nothing connected and no way back to the guide. Deriving it
+    // cannot drift. It also needs no new IPC surface, the same reasoning
+    // docs/DESIGN.md §5.2 applies to the splash flag.
+    const needsSetup = connectionCount() === 0;
+
     void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
-      query: { splash: playSplash ? '1' : '0' },
+      query: { splash: playSplash ? '1' : '0', onboarding: needsSetup ? '1' : '0' },
     });
   }
 

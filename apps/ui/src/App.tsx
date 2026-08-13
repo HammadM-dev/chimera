@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { Splash } from './splash/Splash.tsx';
 import { AppShell } from './shell/AppShell.tsx';
+import { Onboarding } from './onboarding/Onboarding.tsx';
 
 /** Whether to play the splash is decided in the main process, which owns the
  * `hasSeenSplash` flag (apps/desktop/src/settings/localSettings.ts), and is
@@ -42,13 +43,32 @@ function useDocumentVisible(): boolean {
   return visible;
 }
 
+/** Whether this launch runs first-time setup.
+ *
+ * Decided in main from the workspace itself — no connections means not set up
+ * — and handed over on the URL for the same reasons the splash decision is.
+ * See apps/desktop/src/windows.ts. */
+function needsOnboarding(): boolean {
+  return new URLSearchParams(window.location.search).get('onboarding') === '1';
+}
+
 export function App(): JSX.Element {
   const [splashDone, setSplashDone] = useState(!shouldPlaySplash());
+  const [setupDone, setSetupDone] = useState(!needsOnboarding());
   const visible = useDocumentVisible();
 
   return (
     <>
       <AppShell />
+      {/* Setup waits for the splash: two things animating in at once is one
+          too many, and the guide's entrance is the first thing it says. */}
+      {splashDone && !setupDone && (
+        <Onboarding
+          onDone={() => {
+            setSetupDone(true);
+          }}
+        />
+      )}
       {!splashDone && visible && (
         <Splash
           onDone={() => {
