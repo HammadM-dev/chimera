@@ -80,7 +80,19 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   },
 };
 
-export function AppShell(): JSX.Element {
+interface ShellProps {
+  /**
+   * Re-opens first-run setup.
+   *
+   * Reachable at any time, because the alternative — the one this repository
+   * actually shipped for a day — is telling a user to delete a directory to
+   * see their own app's first-run guide. A guide that can only be seen once,
+   * by accident of state, cannot be checked by the person who wrote it either.
+   */
+  onRunSetup: () => void;
+}
+
+export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   const [view, setView] = useState<View>('home');
   const [goal, setGoal] = useState('');
   // Bumped whenever the set of connections changes, so every view reading it
@@ -139,7 +151,14 @@ export function AppShell(): JSX.Element {
         <div className="sidebar__spacer" />
 
         <div className="sidebar__footer">
-          <span>Workspace</span>
+          <button
+            type="button"
+            className="button button--ghost sidebar__setup"
+            data-testid="nav-setup"
+            onClick={onRunSetup}
+          >
+            Setup guide
+          </button>
           <span className="chip chip--ok">Local</span>
         </div>
       </nav>

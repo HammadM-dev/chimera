@@ -3,6 +3,17 @@ import { createWindow } from './windows.ts';
 import { registerIpcMainHandlers } from './ipc/mainDispatch.ts';
 import { openStore, closeStore } from './store/lifecycle.ts';
 
+// Electron derives `userData` from the app name, and unpackaged it reads that
+// from package.json — which here is the scoped npm name `@chimera/desktop`,
+// giving `~/.config/@chimera/desktop`. The packaged build uses
+// electron-builder's `productName`, giving `~/.config/CHIMERA`. Left alone,
+// development and the shipped app read *different workspaces*: a connection
+// added in one is invisible in the other, and a support answer about "delete
+// your workspace to start fresh" is wrong for half the people who follow it.
+// This was found when exactly that instruction sent the founder to the wrong
+// directory. Set before anything reads `getPath('userData')`.
+app.setName('CHIMERA');
+
 void app.whenReady().then(() => {
   // Before any window exists: the store applies pending migrations on open,
   // and a renderer that came up first could invoke a channel whose handler

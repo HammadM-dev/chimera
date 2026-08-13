@@ -59,7 +59,11 @@ export function App(): JSX.Element {
 
   return (
     <>
-      <AppShell />
+      <AppShell
+        onRunSetup={() => {
+          setSetupDone(false);
+        }}
+      />
       {/* Setup waits for the splash: two things animating in at once is one
           too many, and the guide's entrance is the first thing it says. */}
       {splashDone && !setupDone && (

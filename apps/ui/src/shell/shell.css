@@ -137,6 +137,11 @@
   min-height: var(--space-4);
 }
 
+.sidebar__setup {
+  font-size: var(--type-floor);
+  padding: var(--space-1) var(--space-2);
+}
+
 .sidebar__footer {
   display: flex;
   align-items: center;

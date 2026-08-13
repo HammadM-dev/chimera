@@ -1191,6 +1191,12 @@ DECISION: **no invented install commands.** The OmniRoute walkthrough tells the 
 
 What remains for this ticket at M7: measuring time-to-first-successful-run (M7-6), and reusing the shell for the template-first flow once M4-9's templates exist.
 
+Two bugs found by the founder trying to see the guide, neither caught by any test:
+
+**The guide was reachable exactly once.** It showed on a workspace with no connections and there was no way back to it — the only reset was deleting a directory. A first-run screen nobody can re-open is one nobody can check either, including the person who wrote it. There is now a "Setup guide" button in the sidebar footer, and an E2E asserting it re-opens the guide at the beginning rather than resuming halfway through.
+
+**Development and the packaged app used different workspaces.** Electron derives `userData` from the app name; unpackaged it read package.json's scoped name and landed on `~/.config/@chimera/desktop`, while the packaged build uses electron-builder's `productName` and lands on `~/.config/CHIMERA`. A connection added in one build was invisible in the other, and the instruction "delete your workspace to start fresh" was wrong for whichever build the reader was not using — it was wrong for the founder, which is how this surfaced. `main.ts` now calls `app.setName('CHIMERA')` before anything reads `getPath('userData')`, and `workspacePath.spec.ts` asserts the running app's name matches `electron-builder.yml`'s `productName`, so the two cannot drift apart again.
+
 
 Description: F11.3, reusing the OmniRoute guided-setup UI shell from M1-7: pick provider, connect, run a template (from M4-9's shipped set), see it work. Time-to-first-successful-run is explicitly called out in the master plan as predicting retention, so this flow should be measured (not just built) — see M7-6.
 

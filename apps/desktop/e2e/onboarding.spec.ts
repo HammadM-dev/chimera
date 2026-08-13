@@ -144,6 +144,30 @@ test('an API key entered during setup reaches the vault, not the database', asyn
   }
 });
 
+test('the setup guide is reachable again after it has been dismissed', async () => {
+  // The bug this exists for: the guide was reachable exactly once, on a
+  // workspace that happened to have no connections, and the only way back to
+  // it was deleting a directory. A first-run screen nobody can re-open is one
+  // nobody can check either.
+  const profile = freshProfile();
+  const app = await launchApp({ profile });
+
+  try {
+    const page = await app.firstWindow();
+    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 20_000 });
+    await page.getByTestId('intro-skip').click();
+    await expect(page.getByTestId('onboarding')).toHaveCount(0);
+
+    await page.getByTestId('nav-setup').click();
+    await expect(page.getByTestId('onboarding')).toBeVisible();
+    // Back at the beginning, not resumed halfway through.
+    await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'welcome');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+  }
+});
+
 test('setup can be skipped, and does not block the app', async () => {
   const profile = freshProfile();
   const app = await launchApp({ profile });
