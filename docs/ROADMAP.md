@@ -915,6 +915,17 @@ Dependencies: M4-1, M1-3, M4-2.
 
 ### M4-5: React Flow canvas and inspector
 
+STATUS: **partially delivered ahead of its milestone, at the founder's request.** After testing the M3 build, Hammad's objection was that CHIMERA looked and behaved like a chat client rather than the automation builder it is. The frame was rebuilt around that, and the canvas came with it: `@xyflow/react` 12.11.3 installed (already named in CLAUDE.md's stack, so no new decision), agents dragged or clicked out of a palette onto a graph, joined port to port, and each node bound to a specific connection-and-model through an inspector. `apps/desktop/e2e/canvas.spec.ts` covers placement, per-node model binding, binding isolation between nodes, the tool grants shown in the inspector, and drag-to-connect.
+
+What remains for this ticket when M4 reaches it: persistence (a graph is in memory and lost on quit), validation on save (M4-4), the non-agent node types (condition, loop, transform, approval — M4-2 and M4-3), and running the thing. The palette is fed by the real role registry rather than a hardcoded list, so what is assembled is what the runtime would execute.
+
+DECISION: **a node is created unbound, never defaulted to the first available model.** A step silently bound to whatever model happened to be first is how a run ends up on the wrong provider with the wrong bill. An unbound node says "No model chosen" in the warning colour; a node that looked finished and could not run would be worse.
+
+DECISION: **a binding is a connection *and* a model, not a model name.** Two providers can serve the same model id, and which one a run uses has a cost and a data-residency answer attached.
+
+DECISION: **the palette places on click as well as on drag.** Dragging is the natural gesture and the only one some people can make comfortably; a canvas reachable by exactly one input is a canvas some users cannot use at all.
+
+
 Description: `apps/ui/src/canvas/` (React Flow-based graph editor covering all node types: agent, tool, condition, loop, fanout, aggregate, humanApproval, transform, trigger, subworkflow — fanout/aggregate/swarm node *runners* don't execute meaningfully until M5, but the canvas supports placing and configuring them now since the schema already defines their config shape) and `apps/ui/src/inspector/` (right-hand panel editing the selected node's config, per `docs/DESIGN.md`'s layout: left rail, centre canvas, right inspector, bottom drawer, thin status bar). Follows design tokens exactly (no inline hex colours, weights 400/500 only, 0.5px borders, sentence case) per CLAUDE.md.
 
 Acceptance criteria:

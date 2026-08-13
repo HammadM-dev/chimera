@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import type { JSX } from 'react';
 import { ChatPanel } from '../chat/ChatPanel.tsx';
 import { AgentsView } from '../views/AgentsView.tsx';
-import { BuilderView } from '../views/BuilderView.tsx';
+import { CanvasView } from '../views/CanvasView.tsx';
 import { HomeView } from '../views/HomeView.tsx';
 import { ProvidersView } from '../views/ProvidersView.tsx';
 import { StatusBar } from './StatusBar.tsx';
@@ -63,7 +63,8 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   home: { title: 'Home', subtitle: '' },
   build: {
     title: 'Automation',
-    subtitle: 'Add agents in the order they should run. Each one declares what it may use.',
+    subtitle:
+      'Drag agents onto the canvas, join them to say what runs after what, and click one to choose its model.',
   },
   agents: {
     title: 'Agents',
@@ -163,7 +164,7 @@ export function AppShell(): JSX.Element {
               </div>
             </header>
 
-            {view === 'build' && <BuilderView goal={goal} />}
+            {view === 'build' && <CanvasView goal={goal} />}
             {view === 'chat' && <ChatPanel />}
             {view === 'agents' && (
               <div className="view__body scroll">

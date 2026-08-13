@@ -140,35 +140,6 @@
   margin-top: 0;
 }
 
-.palette__agent {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  color: var(--text-primary);
-  background: var(--surface-raised);
-  border: var(--border-width) solid var(--border-hairline);
-  border-radius: var(--radius-control);
-  padding: var(--space-2) var(--space-3);
-  transition: border-color var(--motion-fast) var(--ease-standard);
-}
-
-.palette__agent:hover {
-  border-color: var(--border-stronger);
-}
-
-.palette__name {
-  font-size: var(--type-meta);
-  font-weight: var(--font-weight-medium);
-}
-
-.palette__meta {
-  font-size: var(--type-floor);
-  color: var(--text-muted);
-}
-
 /* ---- the sequence ------------------------------------------------------- */
 
 .builder__canvas {

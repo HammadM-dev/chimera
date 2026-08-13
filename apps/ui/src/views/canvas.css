@@ -1,0 +1,192 @@
+/* The automation canvas.
+ *
+ * React Flow ships a light theme built from its own literals. Rather than
+ * fighting it per-element, its documented CSS variables are re-pointed at our
+ * tokens once, here, so the graph belongs to the same product as the panels
+ * either side of it. */
+
+.canvas {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr) 288px;
+}
+
+.canvas__palette,
+.canvas__inspector {
+  min-height: 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.canvas__palette {
+  border-right: var(--border-width) solid var(--border-hairline);
+}
+
+.canvas__inspector {
+  border-left: var(--border-width) solid var(--border-hairline);
+  gap: var(--space-3);
+}
+
+.canvas__hint,
+.canvas__prompt {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+.canvas__section {
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.canvas__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.canvas__surface {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  background: var(--surface-canvas);
+}
+
+.canvas__empty {
+  position: absolute;
+  inset: auto 0 auto 0;
+  top: 40%;
+  margin: 0 auto;
+  max-width: 40ch;
+  text-align: center;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+  /* Advice, not an obstacle: the canvas underneath still takes the drop. */
+  pointer-events: none;
+}
+
+/* ---- React Flow, in our palette ----------------------------------------- */
+
+.canvas__surface .react-flow {
+  --xy-background-color: var(--surface-canvas);
+  --xy-edge-stroke: var(--border-stronger);
+  --xy-edge-stroke-selected: var(--accent-primary);
+  --xy-connectionline-stroke: var(--accent-primary);
+  --xy-attribution-background-color: transparent;
+  --xy-controls-button-background-color: var(--surface-panel);
+  --xy-controls-button-background-color-hover: var(--surface-raised);
+  --xy-controls-button-color: var(--text-secondary);
+  --xy-controls-button-color-hover: var(--text-primary);
+  --xy-controls-button-border-color: var(--border-hairline);
+  --xy-background-pattern-color: var(--border-hairline);
+}
+
+.canvas__surface .react-flow__attribution {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+.canvas__surface .react-flow__handle {
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-stronger);
+  width: 7px;
+  height: 7px;
+}
+
+.canvas__surface .react-flow__handle:hover {
+  border-color: var(--accent-primary);
+}
+
+/* ---- the node itself ----------------------------------------------------- */
+
+.node {
+  min-width: 168px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: var(--space-3);
+  box-shadow: var(--shadow-raised);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.node:hover {
+  border-color: var(--border-stronger);
+}
+
+.node--selected {
+  border-color: var(--accent-primary);
+}
+
+.node__name {
+  margin: 0;
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.node__model {
+  margin: 0;
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 200px;
+}
+
+/* An unbound step is stated, not hidden. A node that looks finished and cannot
+ * run is worse than one that says what it is missing. */
+.node__model--unset {
+  color: var(--semantic-warning);
+}
+
+.node__tools {
+  margin: 0;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+.palette__agent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  cursor: grab;
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.palette__agent:hover {
+  border-color: var(--border-stronger);
+}
+
+.palette__agent:active {
+  cursor: grabbing;
+}
+
+.palette__name {
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+}
+
+.palette__meta {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}

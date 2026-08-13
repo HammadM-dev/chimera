@@ -1,0 +1,96 @@
+import { test, expect } from '@playwright/test';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+
+// The automation canvas: place agents, join them, choose a model for each.
+// Driven through the real app — the palette is fed by the real role registry
+// and the model list by the real connection catalogue, so a break in either
+// shows up here rather than in a screenshot nobody looks at.
+
+async function startGateway(
+  models: string[],
+): Promise<{ baseUrl: string; close: () => Promise<void> }> {
+  const server: Server = createServer((req, res) => {
+    if (req.url?.startsWith('/v1/models') === true) {
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ data: models.map((id) => ({ id })) }));
+      return;
+    }
+    res.writeHead(404).end();
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    baseUrl: `http://127.0.0.1:${String(port)}/v1`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+
+test('agents are placed on the canvas, joined, and bound to a model', async () => {
+  const gateway = await startGateway(['claude-haiku-4-5', 'llama-3.3-70b']);
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    // A provider first, so the step inspector has real models to offer.
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 15_000,
+    });
+
+    await goTo(page, 'build');
+    await expect(page.getByTestId('canvas-empty')).toBeVisible();
+
+    // The palette is the real roster: eight starter roles from the registry.
+    await expect(page.getByTestId('palette-planner')).toBeVisible();
+    await expect(page.getByTestId('palette-coder')).toBeVisible();
+
+    // Place two agents.
+    await page.getByTestId('palette-planner').click();
+    await page.getByTestId('palette-coder').click();
+    await expect(page.getByTestId('node-planner')).toBeVisible();
+    await expect(page.getByTestId('node-coder')).toBeVisible();
+    await expect(page.getByTestId('canvas-empty')).toHaveCount(0);
+
+    // A newly placed step is unbound, and says so rather than looking finished.
+    await expect(page.getByTestId('node-coder')).toContainText('No model chosen');
+
+    // Choose a model for the selected step — the coder, which was placed last.
+    const picker = page.getByTestId('node-model');
+    await expect(picker).toBeVisible();
+    const offered = await picker.locator('option').allTextContents();
+    expect(offered.some((option) => option.includes('claude-haiku-4-5'))).toBe(true);
+    expect(offered.some((option) => option.includes('llama-3.3-70b'))).toBe(true);
+
+    await picker.selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await expect(page.getByTestId('node-coder')).toContainText('claude-haiku-4-5');
+
+    // The binding belongs to that step alone: selecting the other one shows it
+    // still unbound, rather than the choice leaking across the graph.
+    await page.getByTestId('node-planner').click();
+    await expect(page.getByTestId('node-model')).toHaveValue('');
+    await expect(page.getByTestId('node-planner')).toContainText('No model chosen');
+
+    // The inspector shows what that agent may actually touch.
+    await page.getByTestId('node-coder').click();
+    await expect(page.getByTestId('canvas-view')).toContainText('filesystem.*');
+    await expect(page.getByTestId('canvas-view')).toContainText('shell.exec');
+
+    // Joining two steps: dragging the source port onto the target's.
+    const source = page.locator('[data-testid="node-planner"] .react-flow__handle-bottom');
+    const target = page.locator('[data-testid="node-coder"] .react-flow__handle-top');
+    await source.dragTo(target);
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});
