@@ -30,15 +30,18 @@ function greeting(hour: number): string {
 export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
   const [description, setDescription] = useState('');
   const { choices } = useConnections();
+  const [modelKey, setModelKey] = useState('');
   const [plan, setPlan] = useState<AutomationTemplate | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const design = useCallback(async () => {
-    const first = choices[0];
-    if (!first) {
-      // Said plainly rather than by a disabled button with no explanation: the
-      // planner is a model call, and there is no model to call.
+    // The chosen model, not "whichever sorted first out of 211". Picking for
+    // the user is what produced a 502: OmniRoute serves a catalogue far wider
+    // than the providers any one person has connected, so the first entry
+    // alphabetically is usually one their gateway cannot reach.
+    const chosen = choices.find((choice) => choice.key === modelKey) ?? choices[0];
+    if (!chosen) {
       setError('Connect a provider first — designing an automation is a model call.');
       return;
     }
@@ -46,8 +49,8 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
     setError(null);
     try {
       const result = await bridge().invoke<AutomationTemplate>('automation:plan', {
-        connectionId: first.connectionId,
-        model: first.model,
+        connectionId: chosen.connectionId,
+        model: chosen.model,
         description: description.trim(),
       });
       setPlan(result);
@@ -56,7 +59,7 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
     } finally {
       setBusy(false);
     }
-  }, [choices, description]);
+  }, [choices, description, modelKey]);
 
   return (
     <section className="home" data-testid="home-view">
@@ -77,9 +80,28 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
           }}
         />
         <div className="home__composer-actions">
-          <button type="button" className="button button--ghost" onClick={onBrowseAgents}>
-            Browse agents
-          </button>
+          <div className="brief__left">
+            <button type="button" className="button button--ghost" onClick={onBrowseAgents}>
+              Browse agents
+            </button>
+            {choices.length > 0 && (
+              <select
+                className="chat__control"
+                data-testid="home-model"
+                aria-label="Model to design with"
+                value={modelKey === '' ? (choices[0]?.key ?? '') : modelKey}
+                onChange={(event) => {
+                  setModelKey(event.target.value);
+                }}
+              >
+                {choices.map((choice) => (
+                  <option key={choice.key} value={choice.key}>
+                    {choice.connectionLabel} · {choice.model}
+                  </option>
+                ))}
+              </select>
+            )}
+          </div>
           <div className="brief__left">
             <button
               type="button"

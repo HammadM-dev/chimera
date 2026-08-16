@@ -73,11 +73,38 @@ export const workflowGet = defineInvokeChannel({
   responseSchema: z.object({ workflow: z.unknown() }),
 });
 
+const briefSchema = z.object({
+  name: z.string(),
+  instruction: z.string(),
+  attachments: z.array(
+    z.object({
+      name: z.string(),
+      path: z.string(),
+      kind: z.enum(['text', 'image', 'binary']),
+      content: z.string(),
+      note: z.string(),
+    }),
+  ),
+  steps: z.array(
+    z.object({
+      nodeId: z.string(),
+      roleId: z.string(),
+      instruction: z.string(),
+      connectionId: z.string(),
+      model: z.string(),
+    }),
+  ),
+  edges: z.array(z.tuple([z.string(), z.string()])),
+});
+
 export const runStart = defineInvokeChannel({
   channel: 'run:start',
-  v: 1,
+  // v2: takes the canvas's brief directly. v1 took a `workflowVersionId` for
+  // saved workflows, which do not exist yet — M4-9 brings them back and this
+  // channel gains the id alongside the brief rather than instead of it.
+  v: 2,
   sensitive: false,
-  requestSchema: z.object({ workflowVersionId: z.string(), input: z.unknown() }),
+  requestSchema: z.object({ brief: briefSchema }),
   responseSchema: z.object({ runId: z.string() }),
 });
 

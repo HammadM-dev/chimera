@@ -336,3 +336,38 @@
 .canvas__instruction::placeholder {
   color: var(--text-muted);
 }
+
+.node__status {
+  margin: 0;
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+}
+
+.node__status--running {
+  color: var(--accent-primary);
+}
+
+.node__status--succeeded {
+  color: var(--semantic-success);
+}
+
+.node__status--denied,
+.node__status--exhausted,
+.node__status--cancelled {
+  color: var(--semantic-warning);
+}
+
+.brief__output {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  font-family: inherit;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+  white-space: pre-wrap;
+}

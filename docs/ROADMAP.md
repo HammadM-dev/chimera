@@ -1,32 +1,32 @@
-# CHIMERA — build roadmap
+# CHIMERA roadmap
 
-Status: contract for build order. Source: `docs/MASTER_PLAN.md` §5, condensed and expanded into tickets against the shared kernel used by `docs/ARCHITECTURE.md`, `docs/WORKFLOW_SCHEMA.md`, `docs/SECURITY.md`, `docs/DESIGN.md`, `docs/TESTING.md`, and `docs/LICENSING.md`.
+Rebuilt on 16 August 2026, after the founder used the M3 build and the product's shape changed under it. The original plan sequenced infrastructure first and a user interface last; what shipping to one real user showed is that a milestone nobody can *see* is a milestone nobody can *check* — three separate defects survived a green test suite because no test drove the app the way a person does.
 
-## How to read this document
+So the order has changed. Everything that makes the product usable — the canvas, the brief, the planner, first-run setup, and now the executor — has been pulled forward and is done. What remains is depth behind surfaces that already exist, and it is scheduled against what a user can do at the end of each milestone rather than against which layer it belongs to.
 
-Ticket IDs are `M<milestone>-<n>`, e.g. `M2-7`. Each ticket has a title, a description, testable acceptance criteria, and a dependency list of other ticket IDs. A ticket with no listed dependency inside its own milestone depends only on that milestone's entry dependency (the previous milestone's demo ticket).
+## Where this stands
 
-**M0, M1, M2 are broken to full ticket granularity** — every deliverable named in the master plan's milestone description for these three, plus the two kernel-mandated additions (unsigned CI matrix at M0, Governor stub at M2). **M3 through M10 are specified at milestone-deliverable granularity**: fewer tickets, each still naming a concrete file, table, or UI surface rather than restating the one-line master-plan summary. Each milestone still gets full ticket-level breakdown at the start of its own build window, following this same format, once M0–M2 have established the pattern in practice.
-
-**Milestone discipline.** CLAUDE.md: "work one milestone at a time... don't start the next until the current one has tests and is demoable." This document enforces that mechanically: the first ticket of every milestone after M0 lists that milestone's own setup work as its only in-milestone dependency, and every milestone ends in a numbered **demo ticket** whose acceptance criteria are the master plan's stated "Exit" line for that milestone (verbatim where the plan states one; invented and marked `DECISION` where it does not — see M9 and M10). No ticket in milestone N+1 should be started, in practice, before milestone N's demo ticket is closed, even though the dependency graph below only encodes this formally for each milestone's first ticket.
-
-Milestone overview (weeks are focused-work estimates per the master plan; see its "timeline reality check" — real-world elapsed time is 1.5–2x this for a solo builder):
-
-| Milestone | Weeks | Focus |
+| Milestone | Done | What a user can do when it closes |
 |---|---|---|
-| M0 | 1–2 | Foundations: repo, hardened Electron shell, SQLite, vault, CI, splash |
-| M1 | 3–4 | Provider layer: registry, adapters, OmniRoute, capability matrix |
-| M2 | 5–8 | Agent runtime + Tier 0 machine control, Governor stub |
-| M3 | 9–10 | Governor: real budget/limit/rate enforcement |
-| M4 | 11–16 | Workflow engine + canvas — first shippable product |
-| M5 | 17–20 | Swarm: fan-out and collaborative |
-| M6 | 21–23 | Tier 1 browser control |
-| M7 | 24–26 | Commercial: licensing, installers, onboarding |
-| M8 | 27–30 | Tier 2 native control, Windows |
-| M9 | 31–34 | Triggers, evals, observability |
-| M10 | 35+ | Platform expansion: Linux/macOS Tier 2, Wayland, teams |
+| M0 Foundations | 10 / 11 | Launch a hardened app with a real workspace database and a credential vault |
+| M1 Provider layer | 11 / 11 | Connect providers, chat through them, watch health and cost live |
+| M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
+| M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
+| **M4 Automations** | **8 / 14** | **Describe an automation, watch it built, run it, see it work** |
+| M5 Swarm | 0 / 6 | Point a team of agents at a batch |
+| M6 Browser control | 0 / 5 | Agents use sites that have no API |
+| M7 Commercial | 1 / 8 | Buy it, install it, get updates |
+| M8 Native control | 0 / 6 | Agents drive desktop applications |
+| M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
+| M10 Platform | 0 / 5 | The same automation runs on every OS |
 
----
+**44 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+
+Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates.
+
+## How this plan is followed
+
+Each ticket keeps its original acceptance criteria unless it says otherwise. `DECISION:` blocks record choices made while building, including the ones that turned out wrong; they are not edited after the fact. A ticket is done when a stranger can verify it from the outside — for anything with a screen, that means an end-to-end test that drives the app the way a person would, because that is the standard three shipped defects failed to meet.
 
 ## M0 — Foundations
 
@@ -868,7 +868,11 @@ Delivered ahead of this milestone, at the founder's request: the React Flow canv
 
 ### M4-1: Run brief and the execution contract
 
-Description: The typed object a run starts from — the overall instruction, the attachments read at pick time, the ordered steps with their per-step instructions and model bindings, and the workflow policy. `packages/core/src/engine/runBrief.ts`. This is what the canvas produces and the executor consumes, and it exists as its own ticket because both halves are already being built against it.
+STATUS: **done.** `packages/core/src/engine/runBrief.ts` — the typed brief, `validateBrief` reporting *every* problem at once rather than the first, and `executionOrder`'s topological sort.
+
+DECISION: **validation reports all problems together.** A user fixing one and being shown the next is doing the validator's bookkeeping by hand.
+
+Original description: The typed object a run starts from — the overall instruction, the attachments read at pick time, the ordered steps with their per-step instructions and model bindings, and the workflow policy. `packages/core/src/engine/runBrief.ts`. This is what the canvas produces and the executor consumes, and it exists as its own ticket because both halves are already being built against it.
 
 Acceptance criteria:
 - A brief assembled in the canvas round-trips through `packages/store` and back without loss, including attachment content.
@@ -879,12 +883,19 @@ Dependencies: M2-6, M2-11.
 
 ### M4-2: DAG executor core
 
-Description: Topological execution of the brief's graph, one agent node per step, each through `runAgentLoop` with the Governor enforcing. Sequential first; fan-out is M5.
+STATUS: **done.** `packages/core/src/engine/runAutomation.ts` walks the brief in topological order, runs each step through `runAgentLoop` with the Governor enforcing each role's declared budget, and carries each step's output into the next. `apps/desktop/e2e/run.spec.ts` builds a two-agent automation in the real app — palette, model bindings, per-step instructions, brief — presses Run, and asserts both nodes reach `succeeded` on the canvas and the run's output appears.
 
-Acceptance criteria:
-- A two-step automation runs both steps in order, the second seeing the first's output.
-- A step that halts (budget, stall, refusal) halts the run, and the run row records which step and why.
-- Cancelling mid-run stops at the next step boundary and leaves a resumable checkpoint.
+DECISION: **sequential, and fan-out stays M5.** A parallel executor has its own failure modes — partial completion, interleaved spend, ordering of shared state — and a sequential one that works is worth more than a parallel one that mostly does.
+
+DECISION: **a halted step halts the run.** Continuing would spend the next step's budget on input the halted step never finished producing.
+
+DECISION: **attachments reach the first step as observations, not as instruction text.** A file a user attached is still untrusted content — a README containing "SYSTEM: ignore your instructions" is a README — so it goes through M2-6's envelope in the data position. They reach the first step only; re-attaching at every hop would re-pay for the same tokens.
+
+DECISION: **a cycle is refused, not run.** `executionOrder` reports one rather than hanging: CLAUDE.md's no-unbounded-loops rule is about time, and a graph waiting for itself is the same failure wearing a different shape.
+
+DECISION: **`run:start` returns a run id immediately and the run proceeds in the background.** Holding an IPC channel open for a run that may take minutes would block it; the renderer subscribes and watches instead, over the `run:event` machinery M3-4 built and left without a consumer.
+
+What remains: resuming a *run* (steps resume individually via M2-9's journal, but a killed app does not pick the automation back up), and the run's brief is not yet persisted for replay — both fall out of M4-9.
 
 Dependencies: M4-1, M3-6.
 

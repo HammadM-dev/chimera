@@ -130,3 +130,8 @@ export type { RunOutcome, RunStatus } from './runtime/runOutcome.ts';
 
 export { RateLimiter, backoffDelayMs, DEFAULT_RATE_POLICY } from './governor/rateLimiter.ts';
 export type { BucketPolicy, RateLimitPolicy, RateVerdict } from './governor/rateLimiter.ts';
+
+export { runAutomation } from './engine/runAutomation.ts';
+export type { RunAutomationDeps, RunOutcomeSummary, StepOutcome } from './engine/runAutomation.ts';
+export { validateBrief, executionOrder } from './engine/runBrief.ts';
+export type { RunBrief, BriefStep, BriefAttachment, BriefProblem } from './engine/runBrief.ts';

@@ -34,6 +34,8 @@ export interface AgentNodeData extends Record<string, unknown> {
   role: AgentRole;
   /** `connectionId::model`, or null while the step is still unbound. */
   binding: ModelChoice | null;
+  /** Live run state: running, succeeded, denied… Empty when idle. */
+  status?: string;
   /**
    * What this agent is told to do in *this* automation.
    *
@@ -49,7 +51,7 @@ type AgentNode = Node<AgentNodeData, 'agent'>;
 
 /** One step. Shows the two facts that decide what it will do: who, and on what. */
 function AgentNodeBody({ data, selected }: NodeProps<AgentNode>): JSX.Element {
-  const { role, binding } = data;
+  const { role, binding, status } = data;
 
   return (
     <div
@@ -61,6 +63,9 @@ function AgentNodeBody({ data, selected }: NodeProps<AgentNode>): JSX.Element {
       <p className={`node__model ${binding === null ? 'node__model--unset' : ''}`}>
         {binding === null ? 'No model chosen' : binding.model}
       </p>
+      {typeof status === 'string' && status !== '' && (
+        <p className={`node__status node__status--${status}`}>{status}</p>
+      )}
       <p className="node__tools">
         {role.toolAllowlist.length === 0
           ? 'No tools'
@@ -101,6 +106,10 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachNote, setAttachNote] = useState('');
   const appliedTemplate = useRef<AutomationTemplate | null>(null);
+  const [runId, setRunId] = useState<string | null>(null);
+  const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
+  const [runNote, setRunNote] = useState('');
+  const [runOutput, setRunOutput] = useState('');
   const wrapper = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
 
@@ -182,6 +191,79 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
       setAttachNote(describeError(err).message);
     }
   }, []);
+
+  // Live run events. Subscribed for the panel's lifetime; a listener attached
+  // after `run:start` resolves would miss the first step.
+  useEffect(() => {
+    return bridge().on<{ runId: string; type: string; data: unknown }>('run:event', (event) => {
+      if (event.runId !== runId) return;
+
+      if (event.type.startsWith('step:')) {
+        const detail = event.data as {
+          nodeId: string;
+          phase: string;
+          outcome?: { status: string };
+        };
+        setStepStatus((current) => ({
+          ...current,
+          [detail.nodeId]:
+            detail.phase === 'started' ? 'running' : (detail.outcome?.status ?? 'done'),
+        }));
+      } else if (event.type === 'finished') {
+        const detail = event.data as { status: string; summary: string | null; output: string };
+        setRunNote(detail.summary ?? `Run ${detail.status}.`);
+        setRunOutput(detail.output);
+        setRunId(null);
+      } else if (event.type === 'failed') {
+        setRunNote((event.data as { message: string }).message);
+        setRunId(null);
+      }
+    });
+  }, [runId]);
+
+  const start = useCallback(async () => {
+    setRunNote('');
+    setRunOutput('');
+    setStepStatus({});
+    try {
+      const brief_ = {
+        name: 'Automation',
+        instruction: brief,
+        attachments: attachments.map((file) => ({
+          name: file.name,
+          path: file.path,
+          kind: file.kind,
+          content: file.content,
+          note: file.note,
+        })),
+        steps: nodes.map((node) => ({
+          nodeId: node.id,
+          roleId: node.data.role.id,
+          instruction: node.data.instruction,
+          connectionId: node.data.binding?.connectionId ?? '',
+          model: node.data.binding?.model ?? '',
+        })),
+        edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
+      };
+
+      const started = await bridge().invoke<{ runId: string }>('run:start', { brief: brief_ });
+      setRunId(started.runId);
+      await bridge().invoke('run:subscribe', { runId: started.runId });
+    } catch (err) {
+      setRunNote(describeError(err).message);
+    }
+  }, [brief, attachments, nodes, edges]);
+
+  // Why Run is unavailable, said rather than left to a greyed-out button. An
+  // unexplained disabled control is the same dead end as no control at all.
+  const blocked =
+    nodes.length === 0
+      ? 'Add an agent first.'
+      : nodes.some((node) => node.data.binding === null)
+        ? 'Every step needs a model.'
+        : brief.trim() === '' && nodes.every((node) => node.data.instruction.trim() === '')
+          ? 'Write a brief, or give a step its own instruction.'
+          : '';
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -276,7 +358,12 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
           onDrop={onDrop}
         >
           <ReactFlow
-            nodes={nodes}
+            // Live status is merged in at render rather than written into the
+            // node data, so a run cannot dirty the graph the user is editing.
+            nodes={nodes.map((node) => ({
+              ...node,
+              data: { ...node.data, status: stepStatus[node.id] ?? '' },
+            }))}
             edges={edges}
             nodeTypes={NODE_TYPES}
             onNodesChange={onNodesChange}
@@ -378,16 +465,28 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
                   type="button"
                   className="button button--primary"
                   data-testid="brief-run"
-                  disabled
-                  title="The engine that executes a graph arrives in M4-1"
+                  disabled={blocked !== '' || runId !== null}
+                  title={blocked}
+                  onClick={() => void start()}
                 >
-                  Run
+                  {runId === null ? 'Run' : 'Running'}
                 </button>
               </div>
-              <p className="brief__note">
-                Running a graph arrives with the engine. The brief and its files are kept with the
-                automation until then.
-              </p>
+              {blocked !== '' && (
+                <p className="brief__note" data-testid="brief-blocked">
+                  {blocked}
+                </p>
+              )}
+              {runNote !== '' && (
+                <p className="brief__note" data-testid="run-note">
+                  {runNote}
+                </p>
+              )}
+              {runOutput !== '' && (
+                <pre className="brief__output" data-testid="run-output">
+                  {runOutput}
+                </pre>
+              )}
             </div>
           )}
         </section>

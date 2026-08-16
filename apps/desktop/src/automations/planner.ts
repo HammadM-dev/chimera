@@ -43,6 +43,16 @@ const SCHEMA = {
   },
 };
 
+/**
+ * Designs an automation from a description.
+ *
+ * A failure here is usually the gateway's, not ours — a 502 from OmniRoute
+ * means the upstream provider it routes to refused or is not configured for
+ * that model. The adapter's error carries the provider's own message, and it
+ * is passed through rather than replaced with something tidier, because
+ * "OmniRoute returned 502" is the sentence that tells the user to check which
+ * model they picked.
+ */
 export async function planAutomation(input: {
   connectionId: string;
   model: string;

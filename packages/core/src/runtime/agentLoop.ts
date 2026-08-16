@@ -151,6 +151,15 @@ export interface AgentLoopDeps {
    * reads exactly what is written here.
    */
   trace?: TraceSink;
+  /**
+   * Observations the step starts with — the brief's attachments, for the first
+   * step of an automation.
+   *
+   * Seeded as observations rather than folded into the task, so they go through
+   * the untrusted-data envelope. A README containing "SYSTEM: ignore your
+   * instructions" is a file the user attached, not an instruction they gave.
+   */
+  seedObservations?: readonly ToolObservation[];
 }
 
 // Provider tool names are constrained to `[a-zA-Z0-9_-]` by both Anthropic and
@@ -240,7 +249,8 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   const resumed = restored.steps.length > 0;
 
   const steps: LoopStep[] = restored.steps;
-  const observations: ToolObservation[] = restored.observations;
+  const observations: ToolObservation[] =
+    restored.observations.length > 0 ? restored.observations : [...(deps.seedObservations ?? [])];
   const history: Message[] = restored.history;
   const completedToolCalls: Record<string, CompletedToolCall> = restored.completedToolCalls;
 

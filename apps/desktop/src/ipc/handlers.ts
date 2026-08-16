@@ -15,6 +15,7 @@ import { detect, importCatalogue } from '../providers/omniroute.ts';
 import { deleteFact, listFacts, setFact } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
+import { cancelRun, startRun } from '../runs/service.ts';
 import { listRoles } from '../roles/service.ts';
 import { pickAttachments } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
@@ -36,8 +37,6 @@ function stub<TReq, TRes>(def: InvokeChannelDefinition<TReq, TRes>): void {
 stub(channels.workflowSave);
 stub(channels.workflowList);
 stub(channels.workflowGet);
-stub(channels.runStart);
-stub(channels.runCancel);
 stub(channels.licenceActivate);
 stub(channels.licenceStatus);
 stub(channels.templateImport);
@@ -83,6 +82,9 @@ registerHandler(channels.runCostPreview, (payload) => previewCost(payload));
 registerHandler(channels.runSubscribe, (payload, context) =>
   subscribe(payload.runId, context.webContents),
 );
+
+registerHandler(channels.runStart, (payload) => startRun(payload.brief));
+registerHandler(channels.runCancel, (payload) => cancelRun(payload.runId));
 
 registerHandler(channels.roleList, () => listRoles());
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
