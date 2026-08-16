@@ -82,12 +82,13 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
 
 interface ShellProps {
   /**
-   * Re-opens first-run setup.
+   * Replays the first-run experience: the splash, then the setup guide.
    *
-   * Reachable at any time, because the alternative — the one this repository
-   * actually shipped for a day — is telling a user to delete a directory to
-   * see their own app's first-run guide. A guide that can only be seen once,
-   * by accident of state, cannot be checked by the person who wrote it either.
+   * Reachable at any time. The alternative — the one this repository actually
+   * shipped for two days — was telling a user to delete a directory, and both
+   * screens are gated on state that a working install has already moved past:
+   * the splash on `hasSeenSplash`, the guide on having no connections. Neither
+   * could be seen again by the person who built them.
    */
   onRunSetup: () => void;
 }
@@ -157,7 +158,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
             data-testid="nav-setup"
             onClick={onRunSetup}
           >
-            Setup guide
+            Replay intro
           </button>
           <span className="chip chip--ok">Local</span>
         </div>

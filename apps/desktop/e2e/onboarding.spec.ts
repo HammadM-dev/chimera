@@ -144,6 +144,71 @@ test('an API key entered during setup reaches the vault, not the database', asyn
   }
 });
 
+test('the whole intro replays on demand, splash included', async () => {
+  // The bug this exists for, in the founder's words: "the intro showed up when
+  // I first did it, then I stopped it and retried and now neither the splash
+  // nor the welcome shows". Both were correct — the splash plays once per
+  // workspace, the guide only when nothing is connected — and both were
+  // therefore unwatchable the moment the app was working, including by the
+  // person who built them.
+  const profile = freshProfile();
+  const app = await launchApp({ profile });
+
+  try {
+    const page = await app.firstWindow();
+
+    // First launch: splash, then the guide. Skip it and connect nothing.
+    await page.waitForSelector('.splash');
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
+    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
+    await page.getByTestId('intro-skip').click();
+    await expect(page.getByTestId('onboarding')).toHaveCount(0);
+
+    // On demand, both come back — in order, and from the beginning.
+    await page.getByTestId('nav-setup').click();
+    await page.waitForSelector('.splash');
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
+    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'welcome');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+  }
+});
+
+test('the intro replays even on a workspace that is already set up', async () => {
+  // The state the founder was actually in: splash seen, a provider connected.
+  // Neither gate would fire again, which is correct and is exactly why the
+  // replay has to be independent of both.
+  const profile = freshProfile();
+  const app = await launchApp({ profile });
+
+  try {
+    const page = await app.firstWindow();
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
+    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
+
+    // Connect something, so both gates are now closed.
+    await page.getByTestId('intro-start').click();
+    await page.getByTestId('choose-cloud').click();
+    await page.getByTestId('intro-key').fill('sk-a-real-looking-key');
+    await page.getByTestId('intro-connect').click();
+    await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'done', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('intro-finish').click();
+    await expect(page.getByTestId('onboarding')).toHaveCount(0);
+
+    await page.getByTestId('nav-setup').click();
+    await page.waitForSelector('.splash');
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
+    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
+  } finally {
+    await app.close();
+    removeProfile(profile);
+  }
+});
+
 test('the setup guide is reachable again after it has been dismissed', async () => {
   // The bug this exists for: the guide was reachable exactly once, on a
   // workspace that happened to have no connections, and the only way back to
@@ -159,7 +224,8 @@ test('the setup guide is reachable again after it has been dismissed', async () 
     await expect(page.getByTestId('onboarding')).toHaveCount(0);
 
     await page.getByTestId('nav-setup').click();
-    await expect(page.getByTestId('onboarding')).toBeVisible();
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
+    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
     // Back at the beginning, not resumed halfway through.
     await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'welcome');
   } finally {

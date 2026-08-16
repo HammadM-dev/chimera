@@ -61,6 +61,11 @@ export function App(): JSX.Element {
     <>
       <AppShell
         onRunSetup={() => {
+          // The whole first-run experience, not just the guide: splash, then
+          // welcome. Both are things a person builds and then wants to watch
+          // again, and the only way to do that was deleting a directory —
+          // which meant the author could not check their own work either.
+          setSplashDone(false);
           setSetupDone(false);
         }}
       />
