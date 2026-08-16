@@ -22,6 +22,7 @@ const PROVIDER_KINDS = [
   'openrouter',
   'omniroute',
   'ollama',
+  'ollama-cloud',
   'lmstudio',
   'openai-compatible',
 ] as const;

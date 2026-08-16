@@ -234,3 +234,56 @@
 .intro__pip--on {
   background: var(--accent-primary);
 }
+
+/* ---- provider marks ------------------------------------------------------ */
+
+.mark {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+}
+
+.mark svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* The choice cards become rows: mark, then title and detail. Reading a logo is
+ * faster than reading a name, which is the whole point of putting one there. */
+.intro__choice {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: var(--space-3);
+  row-gap: 2px;
+  align-items: center;
+}
+
+.intro__choice .mark {
+  grid-row: 1 / span 2;
+}
+
+/* A corner overlay on the cloud card: the four providers it covers, stacked so
+ * the card says which without spelling them out. */
+.intro__stack {
+  grid-column: 2;
+  display: flex;
+  gap: var(--space-1);
+  margin-top: var(--space-1);
+}
+
+.intro__stack .mark {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+}
+
+.intro__stack .mark svg {
+  width: 12px;
+  height: 12px;
+}

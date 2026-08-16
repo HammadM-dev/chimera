@@ -4,6 +4,7 @@ import { GoogleAdapter } from './adapters/google.ts';
 import { OpenRouterAdapter } from './adapters/openrouter.ts';
 import { OmniRouteAdapter } from './adapters/omniroute.ts';
 import { OllamaAdapter } from './adapters/ollama.ts';
+import { OllamaCloudAdapter } from './adapters/ollamaCloud.ts';
 import { LmStudioAdapter } from './adapters/lmstudio.ts';
 import { OpenAiCompatibleAdapter } from './adapters/openaiCompatible.ts';
 import { defaultDependencies, type AdapterDependencies } from './adapters/http.ts';
@@ -25,6 +26,7 @@ const BUILDERS: Readonly<Record<ProviderKind, Builder>> = {
   openrouter: (deps) => new OpenRouterAdapter(deps),
   omniroute: (deps) => new OmniRouteAdapter(deps),
   ollama: (deps) => new OllamaAdapter(deps),
+  'ollama-cloud': (deps) => new OllamaCloudAdapter(deps),
   lmstudio: (deps) => new LmStudioAdapter(deps),
   'openai-compatible': (deps) =>
     new OpenAiCompatibleAdapter(

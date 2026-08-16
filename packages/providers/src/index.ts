@@ -51,6 +51,7 @@ export type { OpenAiCompatibleConfig } from './adapters/openaiCompatible.ts';
 export { OpenRouterAdapter } from './adapters/openrouter.ts';
 export { OmniRouteAdapter, OMNIROUTE_DEFAULT_BASE_URL } from './adapters/omniroute.ts';
 export { OllamaAdapter } from './adapters/ollama.ts';
+export { OllamaCloudAdapter } from './adapters/ollamaCloud.ts';
 export { LmStudioAdapter } from './adapters/lmstudio.ts';
 export {
   CircuitBreaker,

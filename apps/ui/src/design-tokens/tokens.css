@@ -118,6 +118,17 @@ body {
   --font-serif: 'Source Serif 4', Georgia, 'Times New Roman', serif;
   --sidebar-width: 248px;
 
+  /* Provider marks. Each provider's own colour, so a choice is recognisable
+   * before it is read — the one place in this UI where the palette is not
+   * ours to choose. */
+  --mark-anthropic: #d97757;
+  --mark-openai: #10a37f;
+  --mark-google: #4285f4;
+  --mark-openrouter: #8b7fd4;
+  --mark-ollama: #dcdcdc;
+  --mark-omniroute: #5ac8c8;
+  --mark-lmstudio: #e0a458;
+
   --letterspacing-wordmark: 0.18em;
   --letterspacing-label: 0.06em;
 }

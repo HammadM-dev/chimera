@@ -115,6 +115,12 @@ test('an API key entered during setup reaches the vault, not the database', asyn
 
     await page.getByTestId('intro-start').click();
     await page.getByTestId('choose-cloud').click();
+    // Ollama Cloud is offered alongside the other key-based providers, and is
+    // its own kind rather than local Ollama pointed elsewhere.
+    const offered = await page.getByTestId('intro-kind').locator('option').allTextContents();
+    expect(offered).toContain('Ollama Cloud');
+    expect(offered).toContain('Anthropic');
+
     await page.getByTestId('intro-kind').selectOption('anthropic');
     await page.getByTestId('intro-key').fill(canary);
     await page.getByTestId('intro-connect').click();

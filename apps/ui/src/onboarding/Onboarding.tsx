@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
+import { ProviderMark } from './ProviderMark.tsx';
 import './onboarding.css';
 
 // First launch: welcome, choose where models come from, connect one.
@@ -25,6 +26,9 @@ const CLOUD_KINDS = [
   { kind: 'openai', label: 'OpenAI' },
   { kind: 'google', label: 'Google' },
   { kind: 'openrouter', label: 'OpenRouter' },
+  // Hosted Ollama. Its own kind rather than local Ollama with a different
+  // address, because it takes a key and local-only mode has to exclude it.
+  { kind: 'ollama-cloud', label: 'Ollama Cloud' },
 ];
 
 const LOCAL_KINDS = [
@@ -189,6 +193,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                   void check();
                 }}
               >
+                <ProviderMark id="omniroute" />
                 <span className="intro__choice-title">OmniRoute</span>
                 <span className="intro__choice-detail">
                   A gateway you run and sign in to yourself. One connection, every model it serves.
@@ -202,10 +207,17 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                   setStep('cloud');
                 }}
               >
+                <ProviderMark id="anthropic" />
                 <span className="intro__choice-title">A provider API key</span>
                 <span className="intro__choice-detail">
-                  Anthropic, OpenAI, Google or OpenRouter. The key goes to your OS keychain, never
-                  the database.
+                  Anthropic, OpenAI, Google, OpenRouter or Ollama Cloud. The key goes to your OS
+                  keychain, never the database.
+                </span>
+                <span className="intro__stack">
+                  <ProviderMark id="openai" />
+                  <ProviderMark id="google" />
+                  <ProviderMark id="openrouter" />
+                  <ProviderMark id="ollama-cloud" />
                 </span>
               </button>
               <button
@@ -218,6 +230,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                   setLabel('Ollama');
                 }}
               >
+                <ProviderMark id="ollama" />
                 <span className="intro__choice-title">A model on this machine</span>
                 <span className="intro__choice-detail">
                   Ollama or LM Studio. Nothing leaves the machine, and nothing costs anything.
