@@ -1,5 +1,8 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import type { JSX } from 'react';
+import { bridge, describeError } from '../chat/useChimera.ts';
+import { useConnections } from './useConnections.ts';
+import type { AutomationTemplate } from './CanvasView.tsx';
 import './views.css';
 
 // The opening screen. One question, one input, and three ways in — because the
@@ -7,7 +10,8 @@ import './views.css';
 // what they want automated.
 
 interface Props {
-  onDescribe: (description: string) => void;
+  /** Opens the canvas with a draft the planner built, or with a bare goal. */
+  onDescribe: (description: string, template: AutomationTemplate | null) => void;
   onBrowseAgents: () => void;
 }
 
@@ -25,6 +29,34 @@ function greeting(hour: number): string {
 
 export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
   const [description, setDescription] = useState('');
+  const { choices } = useConnections();
+  const [plan, setPlan] = useState<AutomationTemplate | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const design = useCallback(async () => {
+    const first = choices[0];
+    if (!first) {
+      // Said plainly rather than by a disabled button with no explanation: the
+      // planner is a model call, and there is no model to call.
+      setError('Connect a provider first — designing an automation is a model call.');
+      return;
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const result = await bridge().invoke<AutomationTemplate>('automation:plan', {
+        connectionId: first.connectionId,
+        model: first.model,
+        description: description.trim(),
+      });
+      setPlan(result);
+    } catch (err) {
+      setError(describeError(err).message);
+    } finally {
+      setBusy(false);
+    }
+  }, [choices, description]);
 
   return (
     <section className="home" data-testid="home-view">
@@ -48,19 +80,68 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
           <button type="button" className="button button--ghost" onClick={onBrowseAgents}>
             Browse agents
           </button>
-          <button
-            type="button"
-            className="button button--primary"
-            data-testid="home-build"
-            disabled={description.trim() === ''}
-            onClick={() => {
-              onDescribe(description.trim());
-            }}
-          >
-            Start building
-          </button>
+          <div className="brief__left">
+            <button
+              type="button"
+              className="button"
+              data-testid="home-blank"
+              disabled={description.trim() === ''}
+              onClick={() => {
+                onDescribe(description.trim(), null);
+              }}
+            >
+              Start blank
+            </button>
+            <button
+              type="button"
+              className="button button--primary"
+              data-testid="home-design"
+              disabled={busy || description.trim() === ''}
+              onClick={() => void design()}
+            >
+              {busy ? 'Designing' : 'Design it for me'}
+            </button>
+          </div>
         </div>
       </div>
+
+      {error !== null && (
+        <p className="connections__error" data-testid="home-error">
+          {error}
+        </p>
+      )}
+
+      {plan && (
+        <section className="plan" data-testid="home-plan">
+          <h2 className="plan__name">{plan.name}</h2>
+          <p className="plan__summary">{plan.summary}</p>
+          <ol className="plan__steps">
+            {plan.steps.map((step, index) => (
+              <li key={`${step.roleId}-${String(index)}`} className="plan__step">
+                <span className="plan__index">{index + 1}</span>
+                <span>
+                  <span className="plan__role">{step.roleId}</span> — {step.instruction}
+                </span>
+              </li>
+            ))}
+          </ol>
+          <div className="home__composer-actions">
+            <span className="intro__status">
+              {plan.steps.length} step{plan.steps.length === 1 ? '' : 's'}, ready to edit
+            </span>
+            <button
+              type="button"
+              className="button button--primary"
+              data-testid="home-open-plan"
+              onClick={() => {
+                onDescribe(description.trim(), plan);
+              }}
+            >
+              Open in Automations
+            </button>
+          </div>
+        </section>
+      )}
 
       <div className="home__starters">
         {STARTERS.map((starter) => (

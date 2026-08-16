@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import type { JSX } from 'react';
 import { ChatPanel } from '../chat/ChatPanel.tsx';
 import { AgentsView } from '../views/AgentsView.tsx';
-import { CanvasView } from '../views/CanvasView.tsx';
+import { CanvasView, type AutomationTemplate } from '../views/CanvasView.tsx';
 import { HomeView } from '../views/HomeView.tsx';
 import { ProvidersView } from '../views/ProvidersView.tsx';
 import { StatusBar } from './StatusBar.tsx';
@@ -96,6 +96,7 @@ interface ShellProps {
 export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   const [view, setView] = useState<View>('home');
   const [goal, setGoal] = useState('');
+  const [template, setTemplate] = useState<AutomationTemplate | null>(null);
   // Bumped whenever the set of connections changes, so every view reading it
   // re-reads rather than each keeping its own copy and disagreeing.
   const [refreshToken, setRefreshToken] = useState(0);
@@ -117,6 +118,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
           data-testid="nav-new"
           onClick={() => {
             setGoal('');
+            setTemplate(null);
             setView('build');
           }}
         >
@@ -167,8 +169,9 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
       <main className="main">
         {view === 'home' ? (
           <HomeView
-            onDescribe={(description) => {
+            onDescribe={(description, planned) => {
               setGoal(description);
+              setTemplate(planned);
               setView('build');
             }}
             onBrowseAgents={() => {
@@ -184,7 +187,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
               </div>
             </header>
 
-            {view === 'build' && <CanvasView goal={goal} />}
+            {view === 'build' && <CanvasView goal={goal} template={template} />}
             {view === 'chat' && <ChatPanel />}
             {view === 'agents' && (
               <div className="view__body scroll">

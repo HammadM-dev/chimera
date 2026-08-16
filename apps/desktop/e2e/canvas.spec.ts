@@ -83,6 +83,29 @@ test('agents are placed on the canvas, joined, and bound to a model', async () =
     await expect(page.getByTestId('canvas-view')).toContainText('filesystem.*');
     await expect(page.getByTestId('canvas-view')).toContainText('shell.exec');
 
+    // The brief: one instruction for the whole automation, collapsible, and
+    // its own instruction per step.
+    await expect(page.getByTestId('brief-input')).toBeVisible();
+    await page.getByTestId('brief-input').fill('Summarise every invoice in the folder.');
+    await page.getByTestId('brief-toggle').click();
+    await expect(page.getByTestId('brief-input')).toHaveCount(0);
+    await expect(page.getByTestId('brief')).toContainText('Summarise every invoice');
+    await page.getByTestId('brief-toggle').click();
+    await expect(page.getByTestId('brief-input')).toHaveValue(
+      'Summarise every invoice in the folder.',
+    );
+
+    // A step's own instruction is separate from the role, and separate per
+    // step: the coder is still the coder in the next automation.
+    await page.getByTestId('node-coder').click();
+    await page.getByTestId('node-instruction').fill('Write the summary to report.md.');
+    await page.getByTestId('node-planner').click();
+    await expect(page.getByTestId('node-instruction')).toHaveValue('');
+    await page.getByTestId('node-coder').click();
+    await expect(page.getByTestId('node-instruction')).toHaveValue(
+      'Write the summary to report.md.',
+    );
+
     // Joining two steps: dragging the source port onto the target's.
     const source = page.locator('[data-testid="node-planner"] .react-flow__handle-bottom');
     const target = page.locator('[data-testid="node-coder"] .react-flow__handle-top');

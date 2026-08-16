@@ -860,142 +860,117 @@ Dependencies: M3-3, M3-6.
 
 ---
 
-## M4 — Workflow engine + canvas
+## M4 — Automation engine and canvas
 
-Master plan deliverables: DAG executor, loops, conditions, transforms, subworkflows, human-approval nodes, React Flow canvas, inspector, live run view, audit trace, versioning, templates. Schema (`docs/WORKFLOW_SCHEMA.md`, schemaVersion 1) is already authored and is a frozen contract for this session — this milestone implements against it, does not modify it.
+Reshaped after the founder used the M3 build. The original M4 was "a DAG executor, then a canvas to draw one". What the product actually needs first is the thing a person does on day one: say what they want automated, watch it become a graph, tell each agent what to do, attach the files it works on, and press go. The canvas, the brief and the planner landed early (see M4-5, M7-5); the executor is what stands between all of that and a product.
 
-**Open item (not resolved in this document):** the master plan's own open decision 5 states that the choice of first vertical (which industry/workflow domain the shipped 10–15 templates target) decides the design-partner list and is explicitly the founder's call, tied to who they can actually recruit as design partners. This roadmap does not pick one — M4-9 below schedules the *mechanism* of shipping templates, not their subject matter, and the actual template content is blocked on that founder decision.
+Delivered ahead of this milestone, at the founder's request: the React Flow canvas with drag-and-drop agents and per-node model binding (M4-5), the docked brief with attachments and per-step instructions (M4-11), the conversational planner on Home (M4-12), and first-run setup (M7-5).
 
-### M4-1: DAG executor core
+### M4-1: Run brief and the execution contract
 
-Description: `packages/core/src/engine/dagExecutor.ts` executes a workflow's `nodes[]`/`edges[]` graph: topological traversal outside loop bodies (cycles are only legal inside a loop node's body, per the schema's design rules), data flowing through named ports only (no implicit previous-node-output magic), edges typed `data | control | error`. Every model/tool call any node runner makes still routes through the Governor (M3) — the executor itself never imports an adapter or a tool server directly, same structural discipline as `agentLoop.ts`.
-
-Acceptance criteria:
-- A five-node linear workflow executes nodes in dependency order, verified against `traces` event ordering.
-- A workflow containing a cycle outside any loop node's body is rejected before execution (this specific check is schema validation rule 1, formally implemented in M4-4's validator — this ticket's executor also independently refuses to execute such a graph as defence in depth, mirroring the pattern used for egress/approval checks elsewhere).
-- Data declared on a node's `ports.out` is correctly delivered to a downstream node's matching `ports.in` by port key, and a downstream node never sees a value from a port it isn't wired to.
-- Error edges (`kind: error`) correctly carry a failure from a node with `onError: route_to_error_port` to its designated downstream error handler, verified with a node forced to fail.
-
-Dependencies: M3-7.
-
-### M4-2: Node runners — condition, loop, transform, subworkflow
-
-Description: `packages/core/src/engine/nodeRunners/condition.ts` (sandboxed expression language: comparisons, boolean ops, property access, `length()`, `contains()`, no arbitrary code execution — per the schema), `loop.ts` (enforces at least one of `exit.maxIterations`/`exit.condition`/`exit.verifiedGoal` at runtime, mirroring the save-time rule; `collect: last|all|none`), `transform.ts` (deterministic, no model call, expression-based mapping/filtering/JSON path extraction), `subworkflow.ts` (invokes another workflow by `workflowId`+`version`, with budget nesting — a subworkflow cannot exceed the parent's remaining budget, enforced via the Governor reading the parent run's remaining budget as the ceiling for the child).
+Description: The typed object a run starts from — the overall instruction, the attachments read at pick time, the ordered steps with their per-step instructions and model bindings, and the workflow policy. `packages/core/src/engine/runBrief.ts`. This is what the canvas produces and the executor consumes, and it exists as its own ticket because both halves are already being built against it.
 
 Acceptance criteria:
-- A condition node correctly routes to its `true`/`false` branch node ids for a representative set of expressions, and a condition expression that attempts something outside the sandboxed grammar (e.g. a property-access chain simulating code injection) fails to parse rather than executing.
-- A loop node with no `exit.maxIterations`, no `exit.condition`, and no `exit.verifiedGoal` set cannot be executed (defence in depth alongside the M4-4 validator's save-time block on this).
-- A subworkflow node whose child run would exceed the parent's remaining budget is denied by the Governor before the child run starts, not partway through.
-- `transform.ts` never issues a model or tool call — a static check confirms no import of the Governor or any adapter/tool path in this file.
+- A brief assembled in the canvas round-trips through `packages/store` and back without loss, including attachment content.
+- Attachment content enters a prompt only through M2-6's untrusted-data envelope; a test puts an injection payload in an attached file and asserts it lands inside the envelope and not in the instruction position.
+- A brief whose step names a role that no longer exists fails validation at save time with the role named, rather than at run time.
 
-Dependencies: M4-1.
+Dependencies: M2-6, M2-11.
 
-### M4-3: Node runner — human approval
+### M4-2: DAG executor core
 
-Description: `packages/core/src/engine/nodeRunners/humanApproval.ts` (F7.3): pauses the run, surfaces a card with context and the proposed action, waits for approve/reject/edit, fires a desktop notification, respects `timeoutSec`/`onTimeout: reject`. This is the concrete runtime enforcement half of CLAUDE.md's "irreversible actions require a gate" and schema validation rule 7 (a node calling a tool in `policy.requireApprovalFor` needs an approval node upstream, or an explicit pre-authorisation flag) — `dagExecutor.ts` refuses to execute such a node without one, independent of what the save-time validator already checked, so a workflow edited post-tagging to remove the approval node is still caught at run time.
-
-Acceptance criteria:
-- A run reaching a `humanApproval` node pauses and the run's status reflects "awaiting approval," visible via `run:subscribe`.
-- Approving resumes the run into the approved branch; rejecting halts or routes to the rejection path per the node's configured options; editing substitutes the edited payload before resuming.
-- A run that times out with no response and `onTimeout: reject` configured automatically rejects and proceeds accordingly.
-- A workflow with a tool node matching `policy.requireApprovalFor` and no upstream approval node, and no pre-authorisation flag, is refused execution by `dagExecutor.ts` at run time even if it somehow passed save-time validation (simulated by directly constructing such a graph in a test, bypassing the save path).
-
-Dependencies: M4-1.
-
-### M4-4: Validator — schema save-time rules
-
-Description: `packages/core/src/engine/validator.ts` implements all eight save-time validation rules from `docs/WORKFLOW_SCHEMA.md`: (1) acyclic outside loop bodies, (2) every loop has an exit condition, (3) port type compatibility, (4) every `modelBinding` satisfies the node's capability requirements (using M1-3's capability matrix), (5) every node reachable from a trigger (warn only), (6) sum of node budgets doesn't exceed workflow budget, (7) approval-gated tools have an upstream approval node or a pre-authorisation flag, (8) `fanout.concurrency` doesn't exceed rate-limit headroom (fan-out itself ships M5; this rule's check exists here and is exercised fully once M5 lands). Rules 1, 2, 4, 7 block save; the rest warn, per the schema.
+Description: Topological execution of the brief's graph, one agent node per step, each through `runAgentLoop` with the Governor enforcing. Sequential first; fan-out is M5.
 
 Acceptance criteria:
-- Each of the eight rules has at least one positive (passes) and one negative (correctly blocks or warns) unit test case — this is explicitly one of CLAUDE.md's named unit-test targets ("schema validation").
-- Rules 1, 2, 4, 7 prevent `workflow:save` from succeeding when violated (IPC call returns a `ValidationError`); rules 3, 5, 6, 8 allow save but return warnings in the response payload.
-- Binding a tool-requiring agent node to a model the capability matrix marks as non-tool-calling is blocked at save time with a clear message naming the offending node and model — the literal example the master plan gives for rule 4.
+- A two-step automation runs both steps in order, the second seeing the first's output.
+- A step that halts (budget, stall, refusal) halts the run, and the run row records which step and why.
+- Cancelling mid-run stops at the next step boundary and leaves a resumable checkpoint.
 
-Dependencies: M4-1, M1-3, M4-2.
+Dependencies: M4-1, M3-6.
+
+### M4-3: Node runners — condition, loop, transform, subworkflow
+
+Description: The non-agent node types, each declaring its own bound (CLAUDE.md: no unbounded loops).
+
+Acceptance criteria: as the original M4-2 — a condition branches on a prior step's structured output; a loop refuses to save without a bound; a transform reshapes without a model call; a subworkflow's depth counts toward the Governor's recursion limit.
+
+Dependencies: M4-2.
+
+### M4-4: Human approval node
+
+Description: A run pauses and waits. The runtime half of the irreversible-action gate.
+
+Acceptance criteria: a run reaching an approval node persists as `awaiting_approval` and survives a restart in that state; approving resumes it; rejecting ends it as `cancelled` with the rejection recorded.
+
+Dependencies: M4-2.
 
 ### M4-5: React Flow canvas and inspector
 
-STATUS: **partially delivered ahead of its milestone, at the founder's request.** After testing the M3 build, Hammad's objection was that CHIMERA looked and behaved like a chat client rather than the automation builder it is. The frame was rebuilt around that, and the canvas came with it: `@xyflow/react` 12.11.3 installed (already named in CLAUDE.md's stack, so no new decision), agents dragged or clicked out of a palette onto a graph, joined port to port, and each node bound to a specific connection-and-model through an inspector. `apps/desktop/e2e/canvas.spec.ts` covers placement, per-node model binding, binding isolation between nodes, the tool grants shown in the inspector, and drag-to-connect.
+STATUS: **largely delivered early.** See the decisions recorded below this milestone's original position. What remains: persistence, the non-agent node types on the palette, and a run control that is not disabled.
 
-What remains for this ticket when M4 reaches it: persistence (a graph is in memory and lost on quit), validation on save (M4-4), the non-agent node types (condition, loop, transform, approval — M4-2 and M4-3), and running the thing. The palette is fed by the real role registry rather than a hardcoded list, so what is assembled is what the runtime would execute.
+### M4-6: Validator — save-time rules
 
-DECISION: **a node is created unbound, never defaulted to the first available model.** A step silently bound to whatever model happened to be first is how a run ends up on the wrong provider with the wrong bill. An unbound node says "No model chosen" in the warning colour; a node that looked finished and could not run would be worse.
+Description: `packages/core/src/engine/validator.ts`. Refuses to save a broken automation, including the pre-authorisation gap the founder approved at M0.
 
-DECISION: **a binding is a connection *and* a model, not a model name.** Two providers can serve the same model id, and which one a run uses has a cost and a data-residency answer attached.
+Acceptance criteria: unbounded loop refused; a node bound to a model whose capability matrix entry cannot do what the node needs refused; an irreversible tool without an upstream approval node or explicit pre-authorisation refused; every refusal names the node.
 
-DECISION: **the palette places on click as well as on drag.** Dragging is the natural gesture and the only one some people can make comfortably; a canvas reachable by exactly one input is a canvas some users cannot use at all.
+Dependencies: M4-1, M4-3.
 
+### M4-7: Live run view
 
-Description: `apps/ui/src/canvas/` (React Flow-based graph editor covering all node types: agent, tool, condition, loop, fanout, aggregate, humanApproval, transform, trigger, subworkflow — fanout/aggregate/swarm node *runners* don't execute meaningfully until M5, but the canvas supports placing and configuring them now since the schema already defines their config shape) and `apps/ui/src/inspector/` (right-hand panel editing the selected node's config, per `docs/DESIGN.md`'s layout: left rail, centre canvas, right inspector, bottom drawer, thin status bar). Follows design tokens exactly (no inline hex colours, weights 400/500 only, 0.5px borders, sentence case) per CLAUDE.md.
+Description: The canvas while it runs — per-node status, the spend meter M3-4 already pushes, and the trace appending. Uses `run:subscribe`, which is already a real handler with no consumer.
 
-Acceptance criteria:
-- Every node type in the schema can be placed on the canvas, connected via edges respecting port type-compatibility (client-side mirror of validator rule 3, giving immediate visual feedback before save), and configured through the inspector.
-- Attempting to save a workflow that violates a save-blocking rule (M4-4) surfaces the specific error inline in the UI, naming the offending node.
-- A visual/lint check confirms zero inline hex colour literals in `apps/ui/src/canvas` and `apps/ui/src/inspector` (grep-based CI check against the design-tokens file's exported token names).
+Acceptance criteria: node status changes visible within one step; the spend figure matches `runs.budget_cost_usd_used`; a halted run shows which node stopped it and why.
 
-Dependencies: M4-4.
+Dependencies: M4-2, M3-4.
 
-### M4-6: Live run view
+### M4-8: Trace viewer and export
 
-Description: `apps/ui/src/runView/` (F7.4): the DAG with per-node status, streaming output, per-node token/cost counters, elapsed time, pause/resume/cancel/step-through, subscribing to `run:subscribe`. Idle nodes render as silent hairline outlines; an executing node gets a single slow pulse on its border, nothing else — per `docs/DESIGN.md`'s one deliberate signature risk, no spinners/progress bars/colour-cycling.
+Description: Renders what M2-11 has been writing since. Export to JSON.
 
-Acceptance criteria:
-- A running workflow's canvas correctly highlights the currently-executing node(s) with the pulse treatment and no other node gets any animated treatment.
-- Per-node token/cost counters update live and match the values independently readable from `node_states` for the same run.
-- Pause/resume/cancel/step-through controls each produce the expected `run:*` IPC calls and the expected resulting run state.
-- A 40-node workflow with 3 nodes running is visually distinguishable "at a glance" — operationalised as: a screenshot-diff test confirms exactly 3 nodes carry the pulse treatment and 37 do not, with no other visual noise (spinners, colour changes) present anywhere on the canvas.
+Dependencies: M4-2.
 
-Dependencies: M4-5.
+### M4-9: Persistence and versioning
 
-### M4-7: Audit trace viewer and export
+Description: Automations are saved, listed in the sidebar's Recent, versioned so editing one does not break a run in flight.
 
-Description: F7.5. A trace panel (likely inside the bottom drawer per `docs/DESIGN.md`'s layout) rendering every `traces` row for a run — prompt/response/tool_call/tool_result/retry/decision/checkpoint/compaction — timestamped and attributed, with a JSON export action. This ticket is largely a UI layer over data every prior milestone has already been writing correctly (M2's checkpoint journaling, M2's structured-output repair attempts as `retry` events, M3's governor decisions as `decision` events).
+Acceptance criteria: a graph survives quitting; a run holds the version it started with; the sidebar lists saved automations.
 
-Acceptance criteria:
-- Every trace event type the kernel defines is rendered distinctly and legibly in the viewer for a representative run.
-- Exporting a run's trace produces a JSON file whose contents match the `traces` table rows for that run exactly (round-trip test: export, re-parse, compare against a direct DB query).
-- No secret value ever appears in an exported trace (re-exercises the vault/redaction discipline from M0-6/M0-7 against real trace data for the first time, using a run that legitimately used a credential-backed connection).
+Dependencies: M4-1.
 
-Dependencies: M4-6.
+### M4-10: Templates
 
-### M4-8: Workflow versioning
+Description: Shipped automations to start from. **Blocked on the first-vertical decision.**
 
-Description: F7.6. Every save creates a new `workflow_versions` row (workflows are JSON, so this is cheap, per the plan). UI to diff two versions, roll back to a prior version, and tag a version `production`. Tagging `production` is gated on that version's evals passing (evals themselves ship in M9 — until then, the gate is a no-op that always passes, structured so M9 only needs to implement the actual check, not build the gating call site; this mirrors M2-1/M3-1's stub-then-real-implementation pattern).
+Dependencies: M4-9, M4-12.
 
-Acceptance criteria:
-- Saving a workflow twice produces two `workflow_versions` rows with incrementing `version_number`, both retrievable and diffable.
-- The diff view correctly highlights added/removed/changed nodes and edges between two versions.
-- Rolling back sets `workflows.latest_version_id` (or the equivalent "currently open" pointer) to the prior version without destroying the newer version's row (roll-back is non-destructive).
-- Tagging a version `production` sets `workflow_versions.tag = 'production'` and clears any prior `production` tag on the same workflow (only one production version per workflow at a time).
+### M4-11: The brief — instruction, attachments, per-step instructions
 
-Dependencies: M4-4.
+STATUS: **delivered early.** A docked, collapsible brief under the canvas carrying the overall instruction; `files:pick` reads attached files and one level of an attached folder, capped, with unreadable files marked rather than silently empty; each node carries its own instruction, separate from the role's system prompt.
 
-### M4-9: Templates
+What remains: the brief is not yet persisted (M4-9) and not yet executed (M4-2), and image attachments are named but not read — vision needs the agent runtime's image support.
 
-Description: F7.7. Ship 10–15 real, working templates under `templates/`, each running as a golden eval in CI (CLAUDE.md: "every shipped template runs as a golden eval on each commit... a broken template blocks the release"). **Open item, explicitly not resolved here:** which vertical/domain these templates target is the master plan's open decision 5 — stated by the plan itself to be the founder's call, tied to design-partner recruitment, not something to be invented in this document. This ticket schedules the infrastructure (template packaging format, import/export, golden-eval wiring) and a placeholder count; actual template authorship is blocked on that founder decision and is not further specified here.
+DECISION: **attachment content is read at pick time, not at run time.** The path a user picked may not be inside the run's sandbox, and the filesystem tool is correctly refused outside it. Reading at pick time is the user's own act of handing a file over; a run that could open arbitrary paths later would be a sandbox hole wearing a feature's clothes.
 
-Acceptance criteria:
-- `templates/` has an import/export mechanism (F7.10 — portable JSON files) wired to a `template:import` IPC channel and a corresponding export action.
-- At least one representative template (a simple, domain-agnostic example — e.g. a summarisation or data-extraction pipeline — used to prove the mechanism, not intended as one of the eventual 10–15 vertical-specific templates) runs successfully end to end against the mock provider.
-- A golden-eval CI job runs every template under `templates/` against the mock provider on every commit and fails the build if any template's evals fail.
-- This ticket's completion notes explicitly flag the 10–15-template, vertical-specific content as blocked on the founder's design-partner decision, not as done.
+DECISION: **the brief is docked, not floating.** It floated first, and a node placed near the bottom ended up underneath it — unclickable, with no sign of why. Caught by its own E2E, which is the second time in this milestone a canvas layout bug was found by a test driving it like a person.
 
-Dependencies: M4-8, M1-6.
+DECISION: **a per-step instruction is separate from the role's system prompt.** A researcher is a researcher in every automation; what it researches is this step's business. One field for both would mean editing the role every time it was reused.
 
-### M4-10: M4 demo — Workflow engine + canvas exit criteria
+### M4-12: Conversational planner
 
-Description: Milestone demo ticket. Exit criterion per master plan: **"build a five-node workflow in the GUI, run it, watch it, replay the trace, roll back a version."** The master plan notes M0–M4 together constitute a shippable product and flags this as a natural point to consider a paid beta — noted here for context, not acted on by this document.
+STATUS: **delivered early.** Home takes a description, calls the bound model with a structured-output contract, and returns a named draft with a one-line summary and ordered steps, each naming a real role and carrying its instruction. "Open in Automations" builds it as connected nodes.
 
-Acceptance criteria:
-- A five-node workflow (mixing at least an agent node, a condition node, and a human-approval node) is built entirely through the canvas (M4-5), saved (passing M4-4's validator), and run.
-- The live run view (M4-6) shows correct per-node status and the pulse treatment on the correct node(s) throughout execution, including a pause at the approval node and correct resumption after approving.
-- The completed run's trace is replayable in the trace viewer (M4-7) and exports correctly.
-- Editing the workflow, saving again, and rolling back to the original version (M4-8) restores the original five-node graph exactly.
-- All M4 tickets' acceptance criteria pass, including the golden-eval CI job (M4-9); `npm test` is green.
+DECISION: **the planner may only name agents that exist.** The roster is in its system prompt and any step naming an unknown role is dropped rather than rendered as a node that cannot be built. A planner free to invent agents produces a template that reads well and cannot run.
 
-Dependencies: M4-3, M4-7, M4-9.
+DECISION: **the planner is a governed model call like any other**, through `Governor.authorizeModelCall` and M2-8's output contract with one repair attempt.
 
----
+What remains: the planner does not yet consider attachments or the existing graph, and cannot revise a plan conversationally — it answers once. Both are M5-scale once the executor exists.
+
+### M4-13: M4 demo — build it, run it, watch it
+
+Description: Milestone demo. Exit criterion, revised from "build a workflow visually and see the trace" to the founder's actual test: **describe an automation on Home, open the generated draft, attach a file, press Run, and watch it execute node by node with live spend.**
+
+Dependencies: M4-2, M4-6, M4-7, M4-9.
 
 ## M5 — Swarm
 

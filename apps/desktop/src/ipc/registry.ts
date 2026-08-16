@@ -284,6 +284,47 @@ export const roleList = defineInvokeChannel({
   }),
 });
 
+// Attachments for an automation brief: the OS picker, and the text read out of
+// what came back. Paths are the user's own choice, so this is not an egress
+// surface — but the content is untrusted the moment it reaches a prompt, and
+// M2-6's envelope is what handles that.
+export const filesPick = defineInvokeChannel({
+  channel: 'files:pick',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ mode: z.enum(['files', 'folder']) }),
+  responseSchema: z.object({
+    truncated: z.boolean(),
+    attachments: z.array(
+      z.object({
+        path: z.string(),
+        name: z.string(),
+        kind: z.enum(['text', 'image', 'binary']),
+        bytes: z.number(),
+        content: z.string(),
+        note: z.string(),
+      }),
+    ),
+  }),
+});
+
+// "Describe what you want automated" → a draft built from the real roster.
+export const automationPlan = defineInvokeChannel({
+  channel: 'automation:plan',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    connectionId: z.string(),
+    model: z.string(),
+    description: z.string(),
+  }),
+  responseSchema: z.object({
+    name: z.string(),
+    summary: z.string(),
+    steps: z.array(z.object({ roleId: z.string(), instruction: z.string() })),
+  }),
+});
+
 export const vaultSetSecret = defineInvokeChannel({
   channel: 'vault:setSecret',
   // v2: `scope` narrowed from an open string to the vault's actual scope
@@ -445,6 +486,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   connectionList,
   healthSweep,
   roleList,
+  filesPick,
+  automationPlan,
   runCostPreview,
   memoryListFacts,
   memorySetFact,

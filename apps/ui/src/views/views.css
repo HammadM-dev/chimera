@@ -316,3 +316,67 @@
   color: var(--text-muted);
   font-size: var(--type-floor);
 }
+
+/* ---- the planner's answer ------------------------------------------------ */
+
+.plan {
+  width: 100%;
+  max-width: var(--measure);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  padding: var(--space-4);
+}
+
+.plan__name {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.plan__summary {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.plan__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.plan__step {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: var(--space-3);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.plan__index {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 50%;
+}
+
+.plan__role {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}

@@ -134,6 +134,11 @@ export function connectionCount(): number {
   return providerRegistry().listAll().length;
 }
 
+/** The connection a caller outside this module needs, resolved and checked. */
+export function connectionFor(connectionId: string): ProviderConnection {
+  return resolve(connectionId);
+}
+
 function resolve(connectionId: string): ProviderConnection {
   const connection = providerRegistry().get(connectionId);
   if (!connection) {

@@ -53,6 +53,11 @@
 }
 
 .canvas__surface {
+  /* Explicit flex growth, not just `min-height: 0`. React Flow positions its
+   * nodes absolutely inside this box; with no height to grow into, the box
+   * collapsed and the nodes were painted over the brief docked beneath it —
+   * visible, and unclickable, because the brief was on top. */
+  flex: 1;
   position: relative;
   min-height: 0;
   min-width: 0;
@@ -188,5 +193,146 @@
 
 .palette__meta {
   font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+/* ---- the brief ----------------------------------------------------------- */
+
+/* The instruction the whole automation starts from, and the files it starts
+ * with. Floating over the canvas rather than docked beside it: it belongs to
+ * the graph as a whole, and a panel that stole a column would shrink the thing
+ * you are actually arranging. Collapsible, because once written it is reference
+ * rather than workspace. */
+.canvas__main {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Docked under the canvas, not floating over it.
+ *
+ * It floated first, and a node placed near the bottom ended up underneath it —
+ * unclickable, with no sign of why. A panel that can hide the thing you are
+ * arranging is worse than one that costs a strip of height, and the strip is
+ * reclaimed by collapsing it. */
+.brief {
+  flex: none;
+  background: var(--surface-panel);
+  border-top: var(--border-width) solid var(--border-hairline);
+}
+
+.brief__bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+}
+
+.brief__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.brief__summary {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+
+.brief__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: 0 var(--space-3) var(--space-3);
+}
+
+.brief__input {
+  width: 100%;
+  resize: none;
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-3);
+}
+
+.brief__input::placeholder {
+  color: var(--text-muted);
+}
+
+.brief__actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.brief__left {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.brief__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.brief__file {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  padding: 1px var(--space-2);
+}
+
+/* An attachment that could not be read says so on itself. A file listed as
+ * attached and silently empty is a lie the agent inherits. */
+.brief__file--unread {
+  color: var(--semantic-warning);
+}
+
+.brief__note {
+  margin: 0;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+.canvas__instruction {
+  width: 100%;
+  resize: vertical;
+  min-height: 72px;
+  font: inherit;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+  background: var(--surface-canvas);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  padding: var(--space-2);
+}
+
+.canvas__instruction::placeholder {
   color: var(--text-muted);
 }

@@ -16,6 +16,8 @@ import { deleteFact, listFacts, setFact } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
 import { listRoles } from '../roles/service.ts';
+import { pickAttachments } from '../files/service.ts';
+import { planAutomation } from '../automations/planner.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -83,6 +85,8 @@ registerHandler(channels.runSubscribe, (payload, context) =>
 );
 
 registerHandler(channels.roleList, () => listRoles());
+registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
+registerHandler(channels.automationPlan, (payload) => planAutomation(payload));
 
 registerHandler(channels.memoryListFacts, () => listFacts());
 registerHandler(channels.memorySetFact, (payload) => setFact(payload.key, payload.value));
