@@ -111,6 +111,33 @@ test('agents are placed on the canvas, joined, and bound to a model', async () =
     const target = page.locator('[data-testid="node-coder"] .react-flow__handle-top');
     await source.dragTo(target);
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+
+    // Saved, and still there after a restart — the whole point of saving.
+    await page.getByTestId('brief-name').fill('Invoice summariser');
+    await page.getByTestId('brief-save').click();
+    await expect(page.getByTestId('run-note')).toContainText('Saved as version 1');
+    await expect(page.getByTestId('saved-list')).toContainText('Invoice summariser');
+
+    await page.reload();
+    await page.waitForSelector('[data-testid="app-shell"]');
+    // By position in the list rather than by its text: the sidebar's provider
+    // count and Recent list both settle after their own fetches, so the row
+    // moves for a moment and a text locator catches it mid-shift.
+    const savedRow = page.getByTestId('saved-list').locator('button').first();
+    await expect(savedRow).toHaveText('Invoice summariser');
+    await savedRow.click();
+
+    // The graph comes back with its steps, its instructions and its brief —
+    // not just a name in a list.
+    await expect(page.getByTestId('node-coder')).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByTestId('node-planner')).toBeVisible();
+    await expect(page.getByTestId('brief-input')).toHaveValue(
+      'Summarise every invoice in the folder.',
+    );
+    await page.getByTestId('node-coder').click();
+    await expect(page.getByTestId('node-instruction')).toHaveValue(
+      'Write the summary to report.md.',
+    );
   } finally {
     await app.close();
     removeProfile(profile);

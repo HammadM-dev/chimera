@@ -51,8 +51,43 @@ const MARKS: Record<MarkId, { tint: string; glyph: JSX.Element }> = {
   lmstudio: { tint: 'var(--mark-lmstudio)', glyph: <text {...LETTER}>M</text> },
 };
 
+/**
+ * Real logos, if any have been dropped into assets/providers.
+ *
+ * Globbed at build time rather than imported one by one, so adding a file is
+ * the whole of adding a logo — no import to remember, no switch to extend, and
+ * a half-filled folder renders correctly instead of showing gaps. The monogram
+ * below is the fallback, which is what every provider gets until its file
+ * arrives.
+ */
+const LOGOS = import.meta.glob<string>('../assets/providers/*.{png,svg,webp}', {
+  eager: true,
+  query: '?url',
+  import: 'default',
+});
+
+function logoFor(id: MarkId): string | undefined {
+  const match = Object.entries(LOGOS).find(([path]) => {
+    const file = path.split('/').pop() ?? '';
+    return file.replace(/\.[^.]+$/, '') === id;
+  });
+  return match?.[1];
+}
+
 export function ProviderMark({ id }: { id: MarkId }): JSX.Element {
   const mark = MARKS[id];
+  const logo = logoFor(id);
+
+  if (logo !== undefined) {
+    // No tint on a real logo: these arrive with their own colour, and a brand
+    // recoloured to fit a palette is a brand used wrongly.
+    return (
+      <span className="mark mark--logo" aria-hidden="true">
+        <img src={logo} alt="" />
+      </span>
+    );
+  }
+
   return (
     <span className="mark" style={{ color: mark.tint }} aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">

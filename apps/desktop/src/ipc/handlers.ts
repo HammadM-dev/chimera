@@ -19,6 +19,7 @@ import { cancelRun, startRun } from '../runs/service.ts';
 import { listRoles } from '../roles/service.ts';
 import { pickAttachments } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
+import { getAutomation, listAutomations, saveAutomation } from '../automations/store.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -34,9 +35,6 @@ function stub<TReq, TRes>(def: InvokeChannelDefinition<TReq, TRes>): void {
   });
 }
 
-stub(channels.workflowSave);
-stub(channels.workflowList);
-stub(channels.workflowGet);
 stub(channels.licenceActivate);
 stub(channels.licenceStatus);
 stub(channels.templateImport);
@@ -85,6 +83,16 @@ registerHandler(channels.runSubscribe, (payload, context) =>
 
 registerHandler(channels.runStart, (payload) => startRun(payload.brief));
 registerHandler(channels.runCancel, (payload) => cancelRun(payload.runId));
+
+registerHandler(channels.workflowSave, (payload) =>
+  saveAutomation({
+    ...(payload.id === undefined ? {} : { id: payload.id }),
+    name: payload.name,
+    definition: payload.definition,
+  }),
+);
+registerHandler(channels.workflowList, () => listAutomations());
+registerHandler(channels.workflowGet, (payload) => getAutomation(payload.id));
 
 registerHandler(channels.roleList, () => listRoles());
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));

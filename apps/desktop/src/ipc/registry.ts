@@ -47,33 +47,6 @@ import type { ChannelDefinition } from './types.ts';
 // one reaches native modules that cannot load there at all. Handlers live in
 // handlers.ts, which only the main process imports.
 
-export const workflowSave = defineInvokeChannel({
-  channel: 'workflow:save',
-  v: 1,
-  sensitive: false,
-  requestSchema: z.object({ id: z.string().optional(), definition: z.unknown() }),
-  responseSchema: z.object({ id: z.string(), version: z.number() }),
-});
-
-export const workflowList = defineInvokeChannel({
-  channel: 'workflow:list',
-  v: 1,
-  sensitive: false,
-  requestSchema: z.object({ status: z.string().optional() }),
-  responseSchema: z.object({ workflows: z.array(z.unknown()) }),
-});
-
-export const workflowGet = defineInvokeChannel({
-  channel: 'workflow:get',
-  v: 1,
-  sensitive: false,
-  requestSchema: z.object({
-    id: z.string(),
-    version: z.union([z.string(), z.number()]).optional(),
-  }),
-  responseSchema: z.object({ workflow: z.unknown() }),
-});
-
 const briefSchema = z.object({
   name: z.string(),
   instruction: z.string(),
@@ -96,6 +69,44 @@ const briefSchema = z.object({
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),
+});
+
+export const workflowSave = defineInvokeChannel({
+  channel: 'workflow:save',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    definition: briefSchema,
+  }),
+  responseSchema: z.object({ id: z.string(), versionId: z.string(), version: z.number() }),
+});
+
+export const workflowList = defineInvokeChannel({
+  channel: 'workflow:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ status: z.string().optional() }),
+  responseSchema: z.object({
+    workflows: z.array(z.object({ id: z.string(), name: z.string(), updatedAt: z.string() })),
+  }),
+});
+
+export const workflowGet = defineInvokeChannel({
+  channel: 'workflow:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    id: z.string(),
+    version: z.union([z.string(), z.number()]).optional(),
+  }),
+  responseSchema: z.object({
+    id: z.string(),
+    name: z.string(),
+    version: z.number(),
+    definition: briefSchema,
+  }),
 });
 
 export const runStart = defineInvokeChannel({

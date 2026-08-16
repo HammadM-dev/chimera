@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { ChatPanel } from '../chat/ChatPanel.tsx';
 import { AgentsView } from '../views/AgentsView.tsx';
@@ -6,6 +6,7 @@ import { CanvasView, type AutomationTemplate } from '../views/CanvasView.tsx';
 import { HomeView } from '../views/HomeView.tsx';
 import { ProvidersView } from '../views/ProvidersView.tsx';
 import { StatusBar } from './StatusBar.tsx';
+import { bridge } from '../chat/useChimera.ts';
 import './shell.css';
 
 // CHIMERA is a place you build automations, so the frame is a sidebar of places
@@ -97,6 +98,8 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   const [view, setView] = useState<View>('home');
   const [goal, setGoal] = useState('');
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
+  const [openId, setOpenId] = useState<string | null>(null);
+  const [saved, setSaved] = useState<{ id: string; name: string }[]>([]);
   // Bumped whenever the set of connections changes, so every view reading it
   // re-reads rather than each keeping its own copy and disagreeing.
   const [refreshToken, setRefreshToken] = useState(0);
@@ -104,6 +107,23 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   const onChanged = useCallback(() => {
     setRefreshToken((current) => current + 1);
   }, []);
+
+  const loadSaved = useCallback(async () => {
+    try {
+      const result = await bridge().invoke<{ workflows: { id: string; name: string }[] }>(
+        'workflow:list',
+        {},
+      );
+      setSaved(result.workflows);
+    } catch {
+      // An empty list reads as "nothing saved yet", which is the honest answer
+      // to both no automations and a failed read.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadSaved();
+  }, [loadSaved, refreshToken]);
 
   return (
     <div className="shell" data-testid="app-shell">
@@ -119,6 +139,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
           onClick={() => {
             setGoal('');
             setTemplate(null);
+            setOpenId(null);
             setView('build');
           }}
         >
@@ -149,7 +170,27 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
         </div>
 
         <p className="sidebar__group">Recent</p>
-        <p className="sidebar__hint">Automations you save will appear here.</p>
+        {saved.length === 0 ? (
+          <p className="sidebar__hint">Automations you save will appear here.</p>
+        ) : (
+          <div className="sidebar__nav" data-testid="saved-list">
+            {saved.map((automation) => (
+              <button
+                key={automation.id}
+                type="button"
+                className="sidebar__item"
+                data-testid={`saved-${automation.id}`}
+                onClick={() => {
+                  setTemplate(null);
+                  setOpenId(automation.id);
+                  setView('build');
+                }}
+              >
+                {automation.name}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="sidebar__spacer" />
 
@@ -172,6 +213,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
             onDescribe={(description, planned) => {
               setGoal(description);
               setTemplate(planned);
+              setOpenId(null);
               setView('build');
             }}
             onBrowseAgents={() => {
@@ -187,7 +229,14 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
               </div>
             </header>
 
-            {view === 'build' && <CanvasView goal={goal} template={template} />}
+            {view === 'build' && (
+              <CanvasView
+                goal={goal}
+                template={template}
+                openId={openId}
+                onSaved={() => void loadSaved()}
+              />
+            )}
             {view === 'chat' && <ChatPanel />}
             {view === 'agents' && (
               <div className="view__body scroll">

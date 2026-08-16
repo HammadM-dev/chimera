@@ -371,3 +371,21 @@
   padding: var(--space-3);
   white-space: pre-wrap;
 }
+
+.brief__name {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+  background: transparent;
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  padding: var(--space-1) var(--space-2);
+}
+
+.brief__name:hover,
+.brief__name:focus {
+  border-color: var(--border-strong);
+}

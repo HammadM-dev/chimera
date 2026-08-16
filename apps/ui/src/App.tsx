@@ -55,7 +55,35 @@ function needsOnboarding(): boolean {
 export function App(): JSX.Element {
   const [splashDone, setSplashDone] = useState(!shouldPlaySplash());
   const [setupDone, setSetupDone] = useState(!needsOnboarding());
+  // An explicit replay outranks the workspace check below. Without this, asking
+  // to watch the intro on a set-up workspace showed it for one frame and then
+  // dismissed it — the check doing its job to the wrong question.
+  const [replaying, setReplaying] = useState(false);
   const visible = useDocumentVisible();
+
+  // The URL's answer is from window creation. A reload keeps that URL, so a
+  // workspace that has since connected a provider would be shown first-run
+  // setup again — over the top of an app it has no business covering. Checked
+  // against the live workspace on mount, which is the same question asked at
+  // the moment it matters.
+  useEffect(() => {
+    if (setupDone || replaying) return;
+    void (async () => {
+      try {
+        const chimera = (
+          window as unknown as { chimera?: { invoke: (c: string, p: unknown) => Promise<unknown> } }
+        ).chimera;
+        if (!chimera) return;
+        const result = (await chimera.invoke('connection:list', {})) as {
+          connections: unknown[];
+        };
+        if (result.connections.length > 0) setSetupDone(true);
+      } catch {
+        // Unanswerable means leave the guide up: a workspace whose connections
+        // cannot be read is not one to declare set up.
+      }
+    })();
+  }, [setupDone, replaying]);
 
   return (
     <>
@@ -65,6 +93,7 @@ export function App(): JSX.Element {
           // welcome. Both are things a person builds and then wants to watch
           // again, and the only way to do that was deleting a directory —
           // which meant the author could not check their own work either.
+          setReplaying(true);
           setSplashDone(false);
           setSetupDone(false);
         }}
@@ -75,6 +104,7 @@ export function App(): JSX.Element {
         <Onboarding
           onDone={() => {
             setSetupDone(true);
+            setReplaying(false);
           }}
         />
       )}

@@ -53,7 +53,10 @@ test.describe('M0-4 preload bridge and IPC registry', () => {
       const result = await page.evaluate(async () => {
         const chimera = (window as unknown as { chimera: ChimeraBridge }).chimera;
         try {
-          await chimera.invoke('workflow:list', { status: 'active' });
+          // `licence:activate` is still a stub — `workflow:list` was, and is
+          // now real, which is what this assertion is for: an unimplemented
+          // channel must fail as one rather than looking unregistered.
+          await chimera.invoke('licence:activate', { token: 'x' });
           return { threw: false };
         } catch (err) {
           const parsed = chimera.parseError(err);
@@ -84,6 +87,7 @@ test.describe('M0-4 preload bridge and IPC registry', () => {
         const chimera = (window as unknown as { chimera: ChimeraBridge }).chimera;
         try {
           // run:start requires workflowVersionId: string — send a number instead.
+          // A payload that fails the schema: `brief` is required and absent.
           await chimera.invoke('run:start', { workflowVersionId: 12345 });
           return { threw: false };
         } catch (err) {

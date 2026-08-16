@@ -26,3 +26,5 @@ export * as workspaceFactsRepository from './repositories/workspaceFacts.ts';
 export type { WorkspaceFact } from './repositories/workspaceFacts.ts';
 export * as tracesRepository from './repositories/traces.ts';
 export type { TraceRecord, AppendTraceInput, TraceEventType } from './repositories/traces.ts';
+export * as workflowsRepository from './repositories/workflows.ts';
+export type { WorkflowSummary, WorkflowVersion } from './repositories/workflows.ts';

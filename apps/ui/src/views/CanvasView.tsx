@@ -95,7 +95,7 @@ export interface AutomationTemplate {
   steps: { roleId: string; instruction: string }[];
 }
 
-function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
+function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): JSX.Element {
   const roles = useRoles();
   const { choices, loaded } = useConnections();
   const [nodes, setNodes, onNodesChange] = useNodesState<AgentNode>([]);
@@ -110,6 +110,8 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
   const [runNote, setRunNote] = useState('');
   const [runOutput, setRunOutput] = useState('');
+  const [savedId, setSavedId] = useState<string | null>(null);
+  const [name, setName] = useState('Untitled automation');
   const wrapper = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
 
@@ -178,6 +180,74 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
     setSelectedId(built[0]?.id ?? null);
   }, [template, roles, setNodes, setEdges]);
 
+  // Restoring a saved automation: nodes back where they were, with their
+  // instructions and bindings, and the brief and attachments as they were left.
+  useEffect(() => {
+    if (openId === null || openId === savedId || roles.length === 0) return;
+    void (async () => {
+      try {
+        const loaded = await bridge().invoke<{
+          id: string;
+          name: string;
+          definition: {
+            instruction: string;
+            attachments: Attachment[];
+            steps: {
+              nodeId: string;
+              roleId: string;
+              instruction: string;
+              connectionId: string;
+              model: string;
+            }[];
+            edges: [string, string][];
+            layout?: { nodeId: string; x: number; y: number }[];
+          };
+        }>('workflow:get', { id: openId });
+
+        const restored: AgentNode[] = [];
+        loaded.definition.steps.forEach((step, index) => {
+          const role = roles.find((candidate) => candidate.id === step.roleId);
+          if (!role) return;
+          const at = loaded.definition.layout?.find((entry) => entry.nodeId === step.nodeId);
+          restored.push({
+            id: step.nodeId,
+            type: 'agent',
+            position: { x: at?.x ?? 120, y: at?.y ?? 60 + index * 132 },
+            data: {
+              role,
+              instruction: step.instruction,
+              binding:
+                step.model === ''
+                  ? null
+                  : {
+                      key: `${step.connectionId}::${step.model}`,
+                      connectionId: step.connectionId,
+                      connectionLabel: '',
+                      model: step.model,
+                    },
+            },
+          });
+        });
+
+        setNodes(restored);
+        setEdges(
+          loaded.definition.edges.map(([from, to]) => ({
+            id: `edge-${from}-${to}`,
+            source: from,
+            target: to,
+            animated: true,
+          })),
+        );
+        setBrief(loaded.definition.instruction);
+        setAttachments(loaded.definition.attachments);
+        setName(loaded.name);
+        setSavedId(loaded.id);
+      } catch (err) {
+        setRunNote(describeError(err).message);
+      }
+    })();
+  }, [openId, savedId, roles, setNodes, setEdges]);
+
   const attach = useCallback(async (mode: 'files' | 'folder') => {
     try {
       const result = await bridge().invoke<{ attachments: Attachment[]; truncated: boolean }>(
@@ -221,38 +291,62 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
     });
   }, [runId]);
 
+  const currentBrief = useCallback(
+    () => ({
+      name,
+      instruction: brief,
+      attachments: attachments.map((file) => ({
+        name: file.name,
+        path: file.path,
+        kind: file.kind,
+        content: file.content,
+        note: file.note,
+      })),
+      steps: nodes.map((node) => ({
+        nodeId: node.id,
+        roleId: node.data.role.id,
+        instruction: node.data.instruction,
+        connectionId: node.data.binding?.connectionId ?? '',
+        model: node.data.binding?.model ?? '',
+      })),
+      edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
+      // Positions are not part of the run, but they are part of the thing the
+      // user arranged. Losing the layout on reload would make saving feel like
+      // it half-worked.
+      layout: nodes.map((node) => ({ nodeId: node.id, x: node.position.x, y: node.position.y })),
+    }),
+    [name, brief, attachments, nodes, edges],
+  );
+
+  const save = useCallback(async () => {
+    try {
+      const result = await bridge().invoke<{ id: string; version: number }>('workflow:save', {
+        ...(savedId === null ? {} : { id: savedId }),
+        name,
+        definition: currentBrief(),
+      });
+      setSavedId(result.id);
+      setRunNote(`Saved as version ${String(result.version)}.`);
+      onSaved?.();
+    } catch (err) {
+      setRunNote(describeError(err).message);
+    }
+  }, [savedId, name, currentBrief, onSaved]);
+
   const start = useCallback(async () => {
     setRunNote('');
     setRunOutput('');
     setStepStatus({});
     try {
-      const brief_ = {
-        name: 'Automation',
-        instruction: brief,
-        attachments: attachments.map((file) => ({
-          name: file.name,
-          path: file.path,
-          kind: file.kind,
-          content: file.content,
-          note: file.note,
-        })),
-        steps: nodes.map((node) => ({
-          nodeId: node.id,
-          roleId: node.data.role.id,
-          instruction: node.data.instruction,
-          connectionId: node.data.binding?.connectionId ?? '',
-          model: node.data.binding?.model ?? '',
-        })),
-        edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
-      };
-
-      const started = await bridge().invoke<{ runId: string }>('run:start', { brief: brief_ });
+      const started = await bridge().invoke<{ runId: string }>('run:start', {
+        brief: currentBrief(),
+      });
       setRunId(started.runId);
       await bridge().invoke('run:subscribe', { runId: started.runId });
     } catch (err) {
       setRunNote(describeError(err).message);
     }
-  }, [brief, attachments, nodes, edges]);
+  }, [currentBrief]);
 
   // Why Run is unavailable, said rather than left to a greyed-out button. An
   // unexplained disabled control is the same dead end as no control at all.
@@ -403,6 +497,23 @@ function CanvasInner({ goal, template }: CanvasProps): JSX.Element {
               }}
             >
               {briefOpen ? '▾' : '▸'} Brief
+            </button>
+            <input
+              className="brief__name"
+              data-testid="brief-name"
+              value={name}
+              aria-label="Automation name"
+              onChange={(event) => {
+                setName(event.target.value);
+              }}
+            />
+            <button
+              type="button"
+              className="button"
+              data-testid="brief-save"
+              onClick={() => void save()}
+            >
+              Save
             </button>
             {!briefOpen && (
               <span className="brief__summary">
@@ -576,14 +687,23 @@ export interface CanvasProps {
   goal: string;
   /** A draft from the Home planner, turned into nodes on arrival. */
   template?: AutomationTemplate | null;
+  /** A saved automation to open. */
+  openId?: string | null;
+  /** Called after a save, so the sidebar's list refreshes. */
+  onSaved?: () => void;
 }
 
-export function CanvasView({ goal, template = null }: CanvasProps): JSX.Element {
+export function CanvasView({
+  goal,
+  template = null,
+  openId = null,
+  onSaved,
+}: CanvasProps): JSX.Element {
   // The provider owns the viewport, so `screenToFlowPosition` can turn a drop
   // at a screen coordinate into the right place on a panned or zoomed canvas.
   return (
     <ReactFlowProvider>
-      <CanvasInner goal={goal} template={template} />
+      <CanvasInner goal={goal} template={template} openId={openId} onSaved={onSaved} />
     </ReactFlowProvider>
   );
 }
