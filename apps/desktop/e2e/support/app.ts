@@ -30,13 +30,32 @@ export interface LaunchOptions {
   fixture?: string;
   /** Extra environment for the main process, e.g. an OmniRoute stub URL. */
   env?: Record<string, string>;
+  /**
+   * Plays the splash, as production does on every launch.
+   *
+   * Off by default for the suite: a test about connections should not spend
+   * 2.3s watching an animation, and one of them was pushed past its timeout by
+   * exactly that. `splash.spec.ts` turns it on, so the thing under test is the
+   * real behaviour rather than a test-only path.
+   */
+  splash?: boolean;
 }
 
-export function launchApp({ profile, fixture, env }: LaunchOptions): Promise<ElectronApplication> {
+export function launchApp({
+  profile,
+  fixture,
+  env,
+  splash = false,
+}: LaunchOptions): Promise<ElectronApplication> {
   return electron.launch({
     args: [mainEntry, `--user-data-dir=${profile}`],
     cwd: desktopRoot,
-    env: { ...process.env, CHIMERA_E2E_FIXTURE: fixture ?? '', ...env },
+    env: {
+      ...process.env,
+      CHIMERA_E2E_FIXTURE: fixture ?? '',
+      ...(splash ? {} : { CHIMERA_E2E_NO_SPLASH: '1' }),
+      ...env,
+    },
   });
 }
 
@@ -55,7 +74,7 @@ export async function goTo(
   await page.waitForSelector('[data-testid="app-shell"]');
   // The splash first, then setup. Both are full-screen overlays, and a nav
   // click made underneath either one is intercepted rather than delivered.
-  await page.waitForSelector('.splash', { state: 'detached' });
+  await page.waitForSelector('.splash', { state: 'detached', timeout: 20_000 });
   await dismissOnboarding(page);
   await page.getByTestId(`nav-${view}`).click();
 }

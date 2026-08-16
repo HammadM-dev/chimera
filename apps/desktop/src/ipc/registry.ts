@@ -391,9 +391,11 @@ export const chatEstimateCost = defineInvokeChannel({
 /** F1.5 detection. Never rejects for "not installed" — that is a normal answer. */
 export const omnirouteDetect = defineInvokeChannel({
   channel: 'omniroute:detect',
-  v: 1,
-  sensitive: false,
-  requestSchema: z.object({ baseUrl: z.string().optional() }),
+  // v2: carries an optional API key, for an OmniRoute configured to require
+  // one. Sensitive from here on — the payload holds a credential.
+  v: 2,
+  sensitive: true,
+  requestSchema: z.object({ baseUrl: z.string().optional(), apiKey: z.string().optional() }),
   responseSchema: z.object({
     state: z.enum(['detected', 'not-detected']),
     baseUrl: z.string(),
@@ -403,9 +405,9 @@ export const omnirouteDetect = defineInvokeChannel({
 
 export const omnirouteImport = defineInvokeChannel({
   channel: 'omniroute:import',
-  v: 1,
-  sensitive: false,
-  requestSchema: z.object({ baseUrl: z.string().optional() }),
+  v: 2,
+  sensitive: true,
+  requestSchema: z.object({ baseUrl: z.string().optional(), apiKey: z.string().optional() }),
   responseSchema: z.object({
     connectionId: z.string(),
     modelCount: z.number(),

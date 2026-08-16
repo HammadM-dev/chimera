@@ -152,7 +152,7 @@ test('the whole intro replays on demand, splash included', async () => {
   // therefore unwatchable the moment the app was working, including by the
   // person who built them.
   const profile = freshProfile();
-  const app = await launchApp({ profile });
+  const app = await launchApp({ profile, splash: true });
 
   try {
     const page = await app.firstWindow();
@@ -181,7 +181,7 @@ test('the intro replays even on a workspace that is already set up', async () =>
   // Neither gate would fire again, which is correct and is exactly why the
   // replay has to be independent of both.
   const profile = freshProfile();
-  const app = await launchApp({ profile });
+  const app = await launchApp({ profile, splash: true });
 
   try {
     const page = await app.firstWindow();

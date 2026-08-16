@@ -114,39 +114,53 @@ test.describe('M1-10 streaming chat panel', () => {
       await page.getByTestId('model-input').fill('stub-model');
       await page.getByTestId('prompt-input').fill('say hello');
 
-      // Sample the answer element while the stream is in flight. A panel that
-      // rendered one blob at the end would only ever be observed empty and
-      // then complete — never partial.
-      const observed = new Set<string>();
-      const sampler = setInterval(() => {
-        void page
-          .getByTestId('chat-answer')
-          // A short timeout, deliberately. The transcript only creates an agent
-          // turn once a message is sent, so before the click this element does
-          // not exist — and `textContent()` auto-waits 30s for a missing
-          // element. At 40ms a sample that is a hundred pending waits deep
-          // starves the click that follows it, and the test times out having
-          // measured nothing. A miss must be cheap.
-          .textContent({ timeout: 250 })
-          .then((text) => {
-            if (text !== null) observed.add(text);
-          })
-          .catch(() => undefined);
-      }, 40);
+      // Every distinct render of the answer, recorded inside the page by a
+      // MutationObserver rather than sampled from the test runner.
+      //
+      // This was a 40ms polling loop, and it failed four times under a loaded
+      // machine while passing alone every time: the stream's chunks are 120ms
+      // apart, and a starved runner samples either side of them. An observer
+      // cannot miss a render, however busy the machine is, and it is the
+      // stronger claim anyway — it sees *every* intermediate state, not
+      // whichever ones a timer happened to land on. The same technique the
+      // splash spec uses, for the same reason.
+      await page.evaluate(() => {
+        const store = window as unknown as { __answers?: string[] };
+        store.__answers = [];
+        const panel = document.querySelector('[data-testid="chat-panel"]');
+        if (!panel) throw new Error('the chat panel is not mounted');
+
+        const record = (): void => {
+          const answer = document.querySelector('[data-testid="chat-answer"]');
+          const text = answer?.textContent ?? null;
+          if (text === null) return;
+          const seen = store.__answers ?? [];
+          if (seen[seen.length - 1] !== text) seen.push(text);
+        };
+
+        new MutationObserver(record).observe(panel, {
+          childList: true,
+          subtree: true,
+          characterData: true,
+        });
+      });
 
       await page.getByTestId('send-button').click();
       await expect(page.getByTestId('chat-panel')).toHaveAttribute('data-phase', 'done', {
         timeout: 15_000,
       });
-      clearInterval(sampler);
+
+      const observed = await page.evaluate(
+        () => (window as unknown as { __answers?: string[] }).__answers ?? [],
+      );
 
       const final = (await page.getByTestId('chat-answer').textContent()) ?? '';
       expect(final).toBe('Hello from the stub');
 
-      const partials = [...observed].filter((text) => text !== '' && text !== final);
+      const partials = observed.filter((text) => text !== '' && text !== final);
       expect(
         partials.length,
-        `expected to observe partial renders, saw only: ${JSON.stringify([...observed])}`,
+        `expected to observe partial renders, saw only: ${JSON.stringify(observed)}`,
       ).toBeGreaterThan(0);
       // Every partial must be a prefix of the final answer — otherwise the
       // panel is re-rendering rather than accumulating.

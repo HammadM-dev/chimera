@@ -13,8 +13,8 @@ import { getStore } from '../store/lifecycle.ts';
 
 export type OmniRouteState = 'detected' | 'not-detected';
 
-// Never dereferenced: the probe adapter's resolveSecret ignores it. It exists
-// only because AdapterCallOptions requires the field.
+// Never dereferenced: the probe adapter's resolveSecret answers from its own
+// argument. It exists only because AdapterCallOptions requires the field.
 const PROBE_AUTH_REF = 'vault:connection:00000000-0000-0000-0000-000000000000' as AuthRef;
 
 /**
@@ -46,14 +46,18 @@ export interface DetectionResult {
  * the correct response to "no OmniRoute here" is install guidance, not an
  * error.
  */
-export async function detect(baseUrl = defaultBaseUrl()): Promise<DetectionResult> {
+export async function detect(
+  baseUrl = defaultBaseUrl(),
+  apiKey?: string,
+): Promise<DetectionResult> {
   // Detection runs before any connection exists, so there is no vault handle to
-  // resolve. Resolving to undefined rather than passing a fabricated handle:
-  // reading a handle the vault never wrote raises VaultError, and that error —
-  // caught below — would report a running OmniRoute as absent.
+  // read. The key — set by the user in OmniRoute's Endpoints section, and
+  // absent for the common unauthenticated case — is resolved straight from the
+  // argument. Passing a fabricated handle instead would raise VaultError, and
+  // that error, caught below, would report a running OmniRoute as absent.
   const adapter = new OmniRouteAdapter({
     transport: defaultTransport,
-    resolveSecret: () => undefined,
+    resolveSecret: () => (apiKey === undefined || apiKey === '' ? undefined : apiKey),
   });
   try {
     const models = await adapter.listModels({
@@ -84,9 +88,12 @@ export interface ImportResult {
  * when a user installs OmniRoute mid-flow, and a second run must not leave two
  * identical connections behind.
  */
-export async function importCatalogue(baseUrl = defaultBaseUrl()): Promise<ImportResult> {
+export async function importCatalogue(
+  baseUrl = defaultBaseUrl(),
+  apiKey?: string,
+): Promise<ImportResult> {
   const db = getStore();
-  const detection = await detect(baseUrl);
+  const detection = await detect(baseUrl, apiKey);
   if (detection.state === 'not-detected') {
     return { connectionId: '', modelCount: 0, created: false };
   }
@@ -104,13 +111,14 @@ export async function importCatalogue(baseUrl = defaultBaseUrl()): Promise<Impor
     return { connectionId: existing.id, modelCount: detection.models.length, created: false };
   }
 
-  // An empty secret rather than none: the column holds a vault handle by
-  // contract, and a local gateway with no key still needs a well-formed one.
+  // The user's key when they set one, an empty secret when they did not: the
+  // column holds a vault handle by contract, and a gateway with no key still
+  // needs a well-formed one.
   const created = connectionsRepository.create(db, {
     label: 'OmniRoute',
     kind: 'omniroute',
     baseUrl,
-    authRef: setSecret('connection', ''),
+    authRef: setSecret('connection', apiKey ?? ''),
     capabilitiesJson,
     healthState: 'healthy',
   });

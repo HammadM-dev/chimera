@@ -135,6 +135,10 @@ This design system does not currently define a light theme; the token block abov
 
 ---
 
+### 2.4b The splash plays on every launch
+
+DECISION (founder, overriding M0-8's original "second launch skips it"): the splash runs every time the app opens. It is the product's one brand moment, it lasts 2.3 seconds, and any key or click cuts it short — so a returning user in a hurry loses nothing. The behaviour it replaces made the screen unwatchable the moment the app was working, which meant nobody could check it, including whoever built it. `hasSeenSplash` is still recorded, because "was this a genuinely first launch" is a different question from "should the splash play" and the setup guide's own gate does not answer it.
+
 ### 2.5 Spacing, elevation and motion
 
 A four-point spacing scale (`--space-1` 4px through `--space-6` 32px), plus the frame's fixed dimensions (`--rail-width`, `--inspector-width`, `--topbar-height`, `--statusbar-height`) and one reading measure (`--measure`, 720px).

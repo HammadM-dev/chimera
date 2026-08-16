@@ -89,10 +89,12 @@ registerHandler(channels.memorySetFact, (payload) => setFact(payload.key, payloa
 registerHandler(channels.memoryDeleteFact, (payload) => deleteFact(payload.key));
 
 registerHandler(channels.omnirouteDetect, async (payload) => {
-  const result = await detect(payload.baseUrl);
+  const result = await detect(payload.baseUrl, payload.apiKey);
   return { state: result.state, baseUrl: result.baseUrl, modelCount: result.models.length };
 });
-registerHandler(channels.omnirouteImport, (payload) => importCatalogue(payload.baseUrl));
+registerHandler(channels.omnirouteImport, (payload) =>
+  importCatalogue(payload.baseUrl, payload.apiKey),
+);
 
 registerHandler(channels.chatEstimateCost, (payload) => ({
   cost: estimateCost(payload.model, payload.inputTokens, payload.outputTokens),

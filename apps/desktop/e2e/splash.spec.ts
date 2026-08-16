@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import { freshProfile, launchApp, removeProfile } from './support/app.ts';
 
 function launch(profile: string): Promise<ElectronApplication> {
-  return launchApp({ profile });
+  // The one spec that wants the real thing.
+  return launchApp({ profile, splash: true });
 }
 
 interface TimelineEntry {
@@ -171,7 +172,12 @@ test.describe('M0-8 splash sequence', () => {
     }
   });
 
-  test('second launch on the same profile skips the animation and goes straight to the app shell', async () => {
+  test('the splash plays on every launch, not only the first', async () => {
+    // M0-8 originally specified "second launch skips the animation". The
+    // founder overrode that: the splash is the product's one brand moment, it
+    // is 2.3s, and any key or click cuts it short — while a splash nobody can
+    // see twice is one nobody can check, which is how it went unnoticed that
+    // the setup guide had the same problem.
     const profile = freshProfile();
     try {
       const first = await launch(profile);
@@ -179,8 +185,10 @@ test.describe('M0-8 splash sequence', () => {
       await firstPage.waitForSelector('.splash');
       await first.close();
 
-      // The flag is device-local and outside SQLite, per docs/DESIGN.md
-      // section 5.2 — assert where it actually landed, not just its effect.
+      // The flag is still recorded — it answers "was this a genuinely first
+      // launch", which the setup guide's own gate does not — and it is still
+      // device-local and outside SQLite, per docs/DESIGN.md section 5.2. It no
+      // longer decides whether the splash plays.
       const settings: unknown = JSON.parse(
         fs.readFileSync(path.join(profile, 'local-settings.json'), 'utf8'),
       );
@@ -191,14 +199,13 @@ test.describe('M0-8 splash sequence', () => {
         const page = await second.firstWindow();
         await page.waitForLoadState('domcontentloaded');
 
-        expect(page.url()).toContain('splash=0');
-        await expect(page.getByTestId('app-shell')).toBeVisible();
+        expect(page.url()).toContain('splash=1');
+        await page.waitForSelector('.splash');
 
-        // Not merely "gone by now": the splash is never mounted at all, so
-        // there is no window in which it could flash.
-        await page.waitForTimeout(1_000);
-        await expect(page.locator('.splash')).toHaveCount(0);
-        expect(await readTimeline(page)).toEqual([]);
+        // And it is the real sequence, not a mounted element that skips: it
+        // runs and then resolves to the shell on its own.
+        await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
+        await expect(page.getByTestId('app-shell')).toBeVisible();
       } finally {
         await second.close();
       }

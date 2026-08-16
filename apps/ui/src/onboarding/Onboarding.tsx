@@ -5,6 +5,11 @@ import './onboarding.css';
 
 // First launch: welcome, choose where models come from, connect one.
 //
+// The OmniRoute commands below come from that project's own setup guide
+// (github.com/diegosouzapw/OmniRoute, docs/guides/SETUP_GUIDE.md), not from
+// memory. A wrong command in a first-run guide is the first instruction a new
+// user follows and the first thing that fails them.
+//
 // It stops at exactly one connected provider. An onboarding that also explained
 // agents, the canvas and the Governor would be a manual, and nobody reads a
 // manual before they have seen the thing work once.
@@ -71,7 +76,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
         state: 'detected' | 'not-detected';
         baseUrl: string;
         modelCount: number;
-      }>('omniroute:detect', {});
+      }>('omniroute:detect', apiKey === '' ? {} : { apiKey });
       setDetected({
         found: result.state === 'detected',
         models: result.modelCount,
@@ -82,7 +87,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [apiKey]);
 
   const importOmniRoute = useCallback(async () => {
     setBusy(true);
@@ -90,20 +95,21 @@ export function Onboarding({ onDone }: Props): JSX.Element {
     try {
       const result = await bridge().invoke<{ connectionId: string; modelCount: number }>(
         'omniroute:import',
-        {},
+        apiKey === '' ? {} : { apiKey },
       );
       if (result.connectionId === '') {
         setError('OmniRoute stopped answering before the import finished. Check it is running.');
         return;
       }
       setConnected(`OmniRoute · ${String(result.modelCount)} models`);
+      setApiKey('');
       setStep('done');
     } catch (err) {
       setError(describeError(err).message);
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [apiKey]);
 
   const createConnection = useCallback(async () => {
     setBusy(true);
@@ -243,30 +249,66 @@ export function Onboarding({ onDone }: Props): JSX.Element {
             <ol className="intro__steps">
               <li>
                 <span>
-                  Install OmniRoute and start it. CHIMERA does not install or update it for you.
-                </span>
-              </li>
-              <li>
-                <span>
-                  Sign in to your own provider accounts inside OmniRoute. CHIMERA never supplies
-                  tokens — the accounts and the billing stay yours.
-                </span>
-              </li>
-              <li>
-                <span>
-                  Leave it running on its default address,{' '}
+                  Install it. In a terminal:{' '}
+                  <code className="intro__code">npm install -g omniroute</code> — or with Docker,{' '}
                   <code className="intro__code">
-                    {detected?.baseUrl ?? 'http://localhost:20128'}
+                    docker run -p 20128:20128 diegosouzapw/omniroute
                   </code>
                   .
                 </span>
               </li>
               <li>
                 <span>
-                  Come back here and check. Its whole model catalogue imports in one step.
+                  Run <code className="intro__code">omniroute setup</code> once. It asks for a
+                  password and walks you through your first provider.
+                </span>
+              </li>
+              <li>
+                <span>
+                  Start it with <code className="intro__code">omniroute</code>. Its dashboard opens
+                  at <code className="intro__code">http://localhost:20128</code>.
+                </span>
+              </li>
+              <li>
+                <span>
+                  In the dashboard, open <strong>Providers</strong> and connect at least one, by
+                  OAuth or API key. These are your accounts and your billing — CHIMERA never
+                  supplies tokens.
+                </span>
+              </li>
+              <li>
+                <span>
+                  Optional: in <strong>Endpoints</strong>, create an API key if you want OmniRoute
+                  to require one. Paste it below if you do.
+                </span>
+              </li>
+              <li>
+                <span>
+                  Leave OmniRoute running, then check below. CHIMERA reads its whole catalogue at{' '}
+                  <code className="intro__code">
+                    {detected?.baseUrl ?? 'http://localhost:20128/v1'}
+                  </code>{' '}
+                  in one step — every model every connected provider serves.
                 </span>
               </li>
             </ol>
+
+            <div className="field">
+              <label className="field__label" htmlFor="intro-omniroute-key">
+                OmniRoute API key
+              </label>
+              <input
+                id="intro-omniroute-key"
+                className="control"
+                data-testid="intro-omniroute-key"
+                type="password"
+                value={apiKey}
+                placeholder="Only if you created one in Endpoints"
+                onChange={(event) => {
+                  setApiKey(event.target.value);
+                }}
+              />
+            </div>
 
             {detected !== null && (
               <p className="intro__status" data-testid="intro-detect-result">

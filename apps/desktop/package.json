@@ -14,7 +14,8 @@
     "postbuild": "node scripts/copy-app-assets.mjs",
     "start": "npm run build && electron .",
     "test:e2e": "npm run build && playwright test",
-    "package": "npm run build && electron-builder --publish=never"
+    "package": "npm run build && electron-builder --publish=never",
+    "dev:fresh": "npm run build && node scripts/dev-fresh.mjs"
   },
   "devDependencies": {
     "electron": "43.3.0",
