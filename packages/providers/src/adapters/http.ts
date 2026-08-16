@@ -60,6 +60,40 @@ function retryAfterMs(headers: Headers): number | undefined {
  * Scrubbing every candidate rather than reasoning about which paths are safe:
  * the reasoning is what failed last time.
  */
+/**
+ * How long any one provider call may hang.
+ *
+ * There was no timeout at all, and a gateway that accepts a connection and then
+ * never answers — a real OmniRoute, routing to a provider it has no credential
+ * for — left the app waiting on a dead socket and then reporting "body was not
+ * valid JSON", which is true and tells the user nothing. Two minutes is longer
+ * than any reasonable completion and far shorter than forever.
+ */
+export const REQUEST_TIMEOUT_MS = 120_000;
+
+/** An abort signal that fires on timeout, combined with any caller's own. */
+export function withTimeout(signal?: AbortSignal): { signal: AbortSignal; done: () => void } {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    controller.abort(new Error('timeout'));
+  }, REQUEST_TIMEOUT_MS);
+
+  if (signal) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else
+      signal.addEventListener('abort', () => {
+        controller.abort(signal.reason);
+      });
+  }
+
+  return {
+    signal: controller.signal,
+    done: () => {
+      clearTimeout(timer);
+    },
+  };
+}
+
 export function scrub(text: string, secrets: readonly string[]): string {
   let scrubbed = text;
   for (const secret of secrets) {
@@ -141,12 +175,13 @@ export interface PostOptions {
 
 async function send(options: PostOptions): Promise<Response> {
   let response: Response;
+  const timeout = withTimeout(options.signal);
   try {
     response = await options.transport.fetch(options.url, {
       method: 'POST',
       headers: { 'content-type': 'application/json', ...options.headers },
       body: JSON.stringify(options.body),
-      ...(options.signal ? { signal: options.signal } : {}),
+      signal: timeout.signal,
     });
   } catch (err) {
     // A transport failure is not a provider failure — surface it as one
@@ -158,7 +193,9 @@ async function send(options: PostOptions): Promise<Response> {
     const message = scrub(raw, options.secrets ?? []);
     throw new ProviderError(
       'PROVIDER_UNREACHABLE',
-      `Could not reach ${options.provider}: ${message}`,
+      message === 'timeout' || /aborted|timeout/i.test(message)
+        ? `${options.provider} accepted the connection and sent nothing back within ${String(REQUEST_TIMEOUT_MS / 1000)}s. The gateway is running but the model you picked is not answering — check that provider is connected in its dashboard.`
+        : `Could not reach ${options.provider}: ${message}`,
       { provider: options.provider },
     );
   }
@@ -179,20 +216,25 @@ async function send(options: PostOptions): Promise<Response> {
 /** A GET, for catalogue endpoints like `/v1/models`. */
 export async function getJson<T>(options: Omit<PostOptions, 'body'>): Promise<T> {
   let response: Response;
+  const timeout = withTimeout(options.signal);
   try {
     response = await options.transport.fetch(options.url, {
       method: 'GET',
       headers: options.headers,
-      ...(options.signal ? { signal: options.signal } : {}),
+      signal: timeout.signal,
     });
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') throw err;
     const message = scrub(err instanceof Error ? err.message : String(err), options.secrets ?? []);
     throw new ProviderError(
       'PROVIDER_UNREACHABLE',
-      `Could not reach ${options.provider}: ${message}`,
+      message === 'timeout' || /aborted|timeout/i.test(message)
+        ? `${options.provider} accepted the connection and sent nothing back within ${String(REQUEST_TIMEOUT_MS / 1000)}s. The gateway is running but the model you picked is not answering — check that provider is connected in its dashboard.`
+        : `Could not reach ${options.provider}: ${message}`,
       { provider: options.provider },
     );
+  } finally {
+    timeout.done();
   }
   if (!response.ok) {
     const text = await response.text().catch(() => '');
@@ -208,8 +250,32 @@ export async function getJson<T>(options: Omit<PostOptions, 'body'>): Promise<T>
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw invalidResponse(options.provider, 'body was not valid JSON');
+    throw unreadableBody(options.provider, response, text);
   }
+}
+
+/**
+ * Says what actually came back.
+ *
+ * "body was not valid JSON" is true and useless: it does not say what the
+ * status was, what content type arrived, or what the first bytes looked like —
+ * the three facts that distinguish a gateway's HTML error page from an empty
+ * body from a stream sent to a non-streaming endpoint. A real OmniRoute that
+ * accepted the connection and answered nothing produced exactly this message,
+ * and it sent the user nowhere.
+ */
+function unreadableBody(provider: string, response: Response, text: string): Error {
+  const type = response.headers.get('content-type') ?? 'no content type';
+  const opening = text.trim().slice(0, 120);
+  const detail =
+    text.trim() === ''
+      ? 'the body was empty'
+      : `the body starts "${opening}${text.length > 120 ? '…' : ''}"`;
+
+  return invalidResponse(
+    provider,
+    `HTTP ${String(response.status)}, ${type}, and ${detail}. That is not the JSON this endpoint returns — check the model is one your gateway can actually route.`,
+  );
 }
 
 export async function postJson<T>(options: PostOptions): Promise<T> {
@@ -218,7 +284,7 @@ export async function postJson<T>(options: PostOptions): Promise<T> {
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw invalidResponse(options.provider, 'body was not valid JSON');
+    throw unreadableBody(options.provider, response, text);
   }
 }
 
