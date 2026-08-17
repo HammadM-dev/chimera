@@ -1,3 +1,5 @@
+import type { NodeConfig, NodeType } from './nodeTypes.ts';
+
 // What a run starts from: the instruction, the files, and the ordered steps.
 // The canvas produces this and the executor consumes it — one shape, so a
 // graph that can be drawn is a graph that can be run.
@@ -13,6 +15,11 @@ export interface BriefAttachment {
 
 export interface BriefStep {
   nodeId: string;
+  /** What kind of node this is. Absent means `agent`, which is what every
+   * brief written before the other types existed contains. */
+  type?: NodeType;
+  /** Per-type settings. Only the field matching `type` is read. */
+  config?: NodeConfig;
   roleId: string;
   /** What this agent does here. Empty falls back to the brief's instruction. */
   instruction: string;
@@ -44,12 +51,23 @@ export interface BriefProblem {
 export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): BriefProblem[] {
   const problems: BriefProblem[] = [];
 
+  const agentSteps = brief.steps.filter((step) => (step.type ?? 'agent') === 'agent');
+
   if (brief.steps.length === 0) {
     problems.push({ nodeId: null, message: 'Add at least one agent.' });
+  } else if (agentSteps.length === 0) {
+    // The shaping types branch, repeat, reshape and pause a run. None of them
+    // does the work, so a graph made only of them has nothing to shape.
+    problems.push({
+      nodeId: null,
+      message:
+        'Add at least one agent — the other node types shape a run, they do not do the work.',
+    });
   }
+
   if (
     brief.instruction.trim() === '' &&
-    brief.steps.every((step) => step.instruction.trim() === '')
+    agentSteps.every((step) => step.instruction.trim() === '')
   ) {
     problems.push({
       nodeId: null,
@@ -58,11 +76,61 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   }
 
   for (const step of brief.steps) {
-    if (!knownRoles.includes(step.roleId)) {
-      problems.push({ nodeId: step.nodeId, message: `No agent called "${step.roleId}".` });
+    const type = step.type ?? 'agent';
+
+    // Only an agent step needs a role and a model. A condition that demanded
+    // one would be asking the user to bind a model to something that makes no
+    // model call.
+    if (type === 'agent') {
+      if (!knownRoles.includes(step.roleId)) {
+        problems.push({ nodeId: step.nodeId, message: `No agent called "${step.roleId}".` });
+      }
+      if (step.model === '' || step.connectionId === '') {
+        problems.push({ nodeId: step.nodeId, message: 'Choose a model for this step.' });
+      }
     }
-    if (step.model === '' || step.connectionId === '') {
-      problems.push({ nodeId: step.nodeId, message: 'Choose a model for this step.' });
+
+    if (type === 'loop') {
+      const loop = step.config?.type === 'loop' ? step.config.loop : undefined;
+      // CLAUDE.md: "Every loop node declares max iterations... The editor must
+      // refuse to save without one." This is that refusal.
+      if (!loop || !Number.isFinite(loop.maxIterations) || loop.maxIterations < 1) {
+        problems.push({
+          nodeId: step.nodeId,
+          message: 'This loop needs a maximum number of iterations.',
+        });
+      } else if (loop.body.length === 0) {
+        problems.push({ nodeId: step.nodeId, message: 'This loop has no steps to repeat.' });
+      }
+    }
+
+    if (type === 'condition') {
+      const condition = step.config?.type === 'condition' ? step.config.condition : undefined;
+      if (!condition) {
+        problems.push({ nodeId: step.nodeId, message: 'This branch has no test.' });
+      } else if (condition.whenTrue.length === 0 && condition.whenFalse.length === 0) {
+        problems.push({
+          nodeId: step.nodeId,
+          message: 'This branch goes nowhere — give it a step for at least one outcome.',
+        });
+      }
+    }
+
+    if (type === 'approval') {
+      const approval = step.config?.type === 'approval' ? step.config.approval : undefined;
+      if (!approval || approval.prompt.trim() === '') {
+        problems.push({
+          nodeId: step.nodeId,
+          message: 'An approval step needs a question for the person approving it.',
+        });
+      }
+    }
+
+    if (type === 'transform') {
+      const transform = step.config?.type === 'transform' ? step.config.transform : undefined;
+      if (!transform || transform.template.trim() === '') {
+        problems.push({ nodeId: step.nodeId, message: 'This transform has no template.' });
+      }
     }
   }
 

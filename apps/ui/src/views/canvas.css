@@ -389,3 +389,91 @@
 .brief__name:focus {
   border-color: var(--border-strong);
 }
+
+/* The shaping node types. Same frame as an agent, deliberately — they are steps
+ * in the same graph — with a colour and a left edge that says which is which at
+ * a glance, because a canvas of identical boxes is a canvas you have to read. */
+.node--shaping {
+  border-style: dashed;
+}
+
+.node--condition {
+  border-left: 2px solid var(--semantic-warning);
+}
+
+.node--loop {
+  border-left: 2px solid var(--accent-primary);
+}
+
+.node--transform {
+  border-left: 2px solid var(--border-strong);
+}
+
+.node--approval {
+  border-left: 2px solid var(--semantic-danger);
+}
+
+.node__portLabel {
+  position: absolute;
+  bottom: -18px;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+.node__portLabel--true {
+  left: 18%;
+}
+
+.node__portLabel--false {
+  left: 62%;
+}
+
+.palette__agent--flow .palette__meta {
+  line-height: var(--line-height-prose);
+}
+
+/* The approval gate. Over the canvas rather than in the brief: a run that has
+ * stopped for a person should interrupt, and a control docked at the bottom of
+ * a panel the user has collapsed does not. */
+.approval {
+  position: absolute;
+  right: var(--space-4);
+  top: var(--space-4);
+  z-index: 6;
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-popover);
+}
+
+.approval__prompt {
+  margin: 0;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+}
+
+.approval__context {
+  margin: 0;
+  max-height: 160px;
+  overflow: auto;
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  background: var(--surface-canvas);
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
+.approval__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}

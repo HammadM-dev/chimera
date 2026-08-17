@@ -135,3 +135,13 @@ export { runAutomation } from './engine/runAutomation.ts';
 export type { RunAutomationDeps, RunOutcomeSummary, StepOutcome } from './engine/runAutomation.ts';
 export { validateBrief, executionOrder } from './engine/runBrief.ts';
 export type { RunBrief, BriefStep, BriefAttachment, BriefProblem } from './engine/runBrief.ts';
+
+export { evaluateCondition, applyTransform } from './engine/nodeTypes.ts';
+export type {
+  NodeType,
+  NodeConfig,
+  ConditionConfig,
+  LoopConfig,
+  TransformConfig,
+  ApprovalConfig,
+} from './engine/nodeTypes.ts';

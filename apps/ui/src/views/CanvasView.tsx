@@ -30,8 +30,44 @@ import './canvas.css';
 // is the product's vocabulary, so it is on screen from the first step rather
 // than hidden behind a mode.
 
-export interface AgentNodeData extends Record<string, unknown> {
-  role: AgentRole;
+export type StepKind = 'agent' | 'condition' | 'loop' | 'transform' | 'approval';
+
+/**
+ * Everything the shaping node types need, in one flat shape.
+ *
+ * Flat rather than a discriminated union in component state: a user who places
+ * a branch, fills its test in, and changes their mind about the node type
+ * should not lose what they typed. Only the fields belonging to the current
+ * kind are read when the brief is built.
+ */
+export interface StepSettings {
+  /** Condition: whose output to test. Empty means the step before it. */
+  source: string;
+  test: 'contains' | 'equals' | 'matches' | 'isEmpty' | 'notEmpty';
+  value: string;
+  /** Transform: a template with `{{step-id}}` placeholders. */
+  template: string;
+  /** Approval: what the person approving is asked. */
+  prompt: string;
+  showSource: string;
+  /** Loop: the bound CLAUDE.md requires every loop to declare. */
+  maxIterations: number;
+}
+
+const DEFAULT_SETTINGS: StepSettings = {
+  source: '',
+  test: 'contains',
+  value: '',
+  template: '{{previous}}',
+  prompt: '',
+  showSource: '',
+  maxIterations: 3,
+};
+
+export interface StepNodeData extends Record<string, unknown> {
+  kind: StepKind;
+  /** The agent. Null for the shaping types, which make no model call. */
+  role: AgentRole | null;
   /** `connectionId::model`, or null while the step is still unbound. */
   binding: ModelChoice | null;
   /** Live run state: running, succeeded, denied… Empty when idle. */
@@ -45,21 +81,56 @@ export interface AgentNodeData extends Record<string, unknown> {
    * role every time you reused it.
    */
   instruction: string;
+  settings: StepSettings;
 }
 
-type AgentNode = Node<AgentNodeData, 'agent'>;
+type StepNode = Node<StepNodeData>;
 
-/** One step. Shows the two facts that decide what it will do: who, and on what. */
-function AgentNodeBody({ data, selected }: NodeProps<AgentNode>): JSX.Element {
+const KIND_LABEL: Record<StepKind, string> = {
+  agent: 'Agent',
+  condition: 'Branch',
+  loop: 'Loop',
+  transform: 'Reshape',
+  approval: 'Approval',
+};
+
+const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
+  condition: 'Sends the run one way or the other',
+  loop: 'Repeats the steps below it, a set number of times',
+  transform: 'Joins earlier answers together, without a model',
+  approval: 'Pauses until a person says yes',
+};
+
+/** The one line a shaping node shows about what it will do. */
+function summarise(data: StepNodeData): string {
+  const settings = data.settings;
+  switch (data.kind) {
+    case 'condition':
+      return settings.test === 'isEmpty' || settings.test === 'notEmpty'
+        ? `${settings.source === '' ? 'previous' : settings.source} is ${settings.test === 'isEmpty' ? 'empty' : 'not empty'}`
+        : `${settings.source === '' ? 'previous' : settings.source} ${settings.test} "${settings.value}"`;
+    case 'loop':
+      return `Up to ${String(settings.maxIterations)} times`;
+    case 'transform':
+      return settings.template === '' ? 'No template' : settings.template;
+    case 'approval':
+      return settings.prompt === '' ? 'No question yet' : settings.prompt;
+    default:
+      return '';
+  }
+}
+
+/** One agent step. Shows the two facts that decide what it will do: who, and on what. */
+function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
   const { role, binding, status } = data;
 
   return (
     <div
       className={`node ${selected === true ? 'node--selected' : ''}`}
-      data-testid={`node-${role.id}`}
+      data-testid={`node-${role?.id ?? 'agent'}`}
     >
       <Handle type="target" position={Position.Top} className="node__port" />
-      <p className="node__name">{role.name}</p>
+      <p className="node__name">{role?.name ?? 'Agent'}</p>
       <p className={`node__model ${binding === null ? 'node__model--unset' : ''}`}>
         {binding === null ? 'No model chosen' : binding.model}
       </p>
@@ -67,7 +138,7 @@ function AgentNodeBody({ data, selected }: NodeProps<AgentNode>): JSX.Element {
         <p className={`node__status node__status--${status}`}>{status}</p>
       )}
       <p className="node__tools">
-        {role.toolAllowlist.length === 0
+        {role === null || role.toolAllowlist.length === 0
           ? 'No tools'
           : `${String(role.toolAllowlist.length)} tools`}
       </p>
@@ -76,7 +147,60 @@ function AgentNodeBody({ data, selected }: NodeProps<AgentNode>): JSX.Element {
   );
 }
 
-const NODE_TYPES = { agent: AgentNodeBody };
+/**
+ * One shaping step.
+ *
+ * A branch gets two source ports, labelled, because which line means "yes" is
+ * the single thing a reader of somebody else's automation most needs to know,
+ * and an unlabelled pair of lines makes them guess.
+ */
+function ShapingNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
+  const { kind, status } = data;
+
+  return (
+    <div
+      className={`node node--shaping node--${kind} ${selected === true ? 'node--selected' : ''}`}
+      data-testid={`node-${kind}`}
+    >
+      <Handle type="target" position={Position.Top} className="node__port" />
+      <p className="node__name">{KIND_LABEL[kind]}</p>
+      <p className="node__model">{summarise(data)}</p>
+      {typeof status === 'string' && status !== '' && (
+        <p className={`node__status node__status--${status}`}>{status}</p>
+      )}
+      {kind === 'condition' ? (
+        <>
+          <span className="node__portLabel node__portLabel--true">yes</span>
+          <span className="node__portLabel node__portLabel--false">no</span>
+          <Handle
+            id="true"
+            type="source"
+            position={Position.Bottom}
+            className="node__port node__port--true"
+            style={{ left: '28%' }}
+          />
+          <Handle
+            id="false"
+            type="source"
+            position={Position.Bottom}
+            className="node__port node__port--false"
+            style={{ left: '72%' }}
+          />
+        </>
+      ) : (
+        <Handle type="source" position={Position.Bottom} className="node__port" />
+      )}
+    </div>
+  );
+}
+
+const NODE_TYPES = {
+  agent: AgentNodeBody,
+  condition: ShapingNodeBody,
+  loop: ShapingNodeBody,
+  transform: ShapingNodeBody,
+  approval: ShapingNodeBody,
+};
 
 let nodeSeq = 0;
 
@@ -95,10 +219,27 @@ export interface AutomationTemplate {
   steps: { roleId: string; instruction: string }[];
 }
 
+/** The wire shape of one saved or runnable step. */
+interface BriefStepWire {
+  nodeId: string;
+  type?: StepKind;
+  config?: Record<string, unknown>;
+  roleId: string;
+  instruction: string;
+  connectionId: string;
+  model: string;
+}
+
+interface PendingApproval {
+  nodeId: string;
+  prompt: string;
+  context: string;
+}
+
 function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): JSX.Element {
   const roles = useRoles();
   const { choices, loaded } = useConnections();
-  const [nodes, setNodes, onNodesChange] = useNodesState<AgentNode>([]);
+  const [nodes, setNodes, onNodesChange] = useNodesState<StepNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [brief, setBrief] = useState(goal);
@@ -110,28 +251,32 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
   const [runNote, setRunNote] = useState('');
   const [runOutput, setRunOutput] = useState('');
+  const [pending, setPending] = useState<PendingApproval | null>(null);
+  const [approvalNote, setApprovalNote] = useState('');
   const [savedId, setSavedId] = useState<string | null>(null);
   const [name, setName] = useState('Untitled automation');
   const wrapper = useRef<HTMLDivElement | null>(null);
   const { screenToFlowPosition, fitView } = useReactFlow();
 
-  const addAgent = useCallback(
-    (role: AgentRole, position: { x: number; y: number }) => {
+  const addStep = useCallback(
+    (kind: StepKind, role: AgentRole | null, position: { x: number; y: number }) => {
       nodeSeq += 1;
-      const id = `${role.id}-${String(nodeSeq)}`;
+      const id = `${role?.id ?? kind}-${String(nodeSeq)}`;
       setNodes((current) => [
         ...current,
         {
           id,
-          type: 'agent',
+          type: kind,
           position,
           data: {
+            kind,
             role,
             // Left unset rather than defaulted to the first model that happens
             // to exist: a step silently bound to a model nobody chose is how a
             // run ends up on the wrong provider.
             binding: null,
             instruction: '',
+            settings: { ...DEFAULT_SETTINGS },
           },
         },
       ]);
@@ -154,7 +299,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
     if (!template || roles.length === 0 || appliedTemplate.current === template) return;
     appliedTemplate.current = template;
 
-    const built: AgentNode[] = [];
+    const built: StepNode[] = [];
     template.steps.forEach((step, index) => {
       const role = roles.find((candidate) => candidate.id === step.roleId);
       if (!role) return;
@@ -163,7 +308,13 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         id: `${role.id}-${String(nodeSeq)}`,
         type: 'agent',
         position: { x: 120, y: 60 + index * 132 },
-        data: { role, binding: null, instruction: step.instruction },
+        data: {
+          kind: 'agent',
+          role,
+          binding: null,
+          instruction: step.instruction,
+          settings: { ...DEFAULT_SETTINGS },
+        },
       });
     });
 
@@ -192,30 +343,58 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
           definition: {
             instruction: string;
             attachments: Attachment[];
-            steps: {
-              nodeId: string;
-              roleId: string;
-              instruction: string;
-              connectionId: string;
-              model: string;
-            }[];
+            steps: BriefStepWire[];
             edges: [string, string][];
             layout?: { nodeId: string; x: number; y: number }[];
           };
         }>('workflow:get', { id: openId });
 
-        const restored: AgentNode[] = [];
+        const restored: StepNode[] = [];
+        // Which side of a branch each edge came off, recovered from the saved
+        // condition rather than from the edge list — the wire format carries
+        // edges as plain pairs, and the yes/no distinction lives in the config.
+        const falseBranch = new Set<string>();
+
         loaded.definition.steps.forEach((step, index) => {
-          const role = roles.find((candidate) => candidate.id === step.roleId);
-          if (!role) return;
+          const kind = step.type ?? 'agent';
+          const role = roles.find((candidate) => candidate.id === step.roleId) ?? null;
+          if (kind === 'agent' && role === null) return;
           const at = loaded.definition.layout?.find((entry) => entry.nodeId === step.nodeId);
+          const settings = { ...DEFAULT_SETTINGS };
+
+          const config = step.config;
+          if (config && config['type'] === 'condition') {
+            const condition = config['condition'] as {
+              source: string;
+              test: StepSettings['test'];
+              value: string;
+              whenFalse: string[];
+            };
+            settings.source = condition.source;
+            settings.test = condition.test;
+            settings.value = condition.value;
+            for (const target of condition.whenFalse) {
+              falseBranch.add(`${step.nodeId}->${target}`);
+            }
+          } else if (config && config['type'] === 'loop') {
+            settings.maxIterations = (config['loop'] as { maxIterations: number }).maxIterations;
+          } else if (config && config['type'] === 'transform') {
+            settings.template = (config['transform'] as { template: string }).template;
+          } else if (config && config['type'] === 'approval') {
+            const approval = config['approval'] as { prompt: string; showSource: string };
+            settings.prompt = approval.prompt;
+            settings.showSource = approval.showSource;
+          }
+
           restored.push({
             id: step.nodeId,
-            type: 'agent',
+            type: kind,
             position: { x: at?.x ?? 120, y: at?.y ?? 60 + index * 132 },
             data: {
+              kind,
               role,
               instruction: step.instruction,
+              settings,
               binding:
                 step.model === ''
                   ? null
@@ -235,6 +414,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             id: `edge-${from}-${to}`,
             source: from,
             target: to,
+            ...(falseBranch.has(`${from}->${to}`) ? { sourceHandle: 'false' } : {}),
             animated: true,
           })),
         );
@@ -279,20 +459,107 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
           [detail.nodeId]:
             detail.phase === 'started' ? 'running' : (detail.outcome?.status ?? 'done'),
         }));
+      } else if (event.type === 'approval:requested') {
+        setPending(event.data as PendingApproval);
+        setApprovalNote('');
       } else if (event.type === 'finished') {
         const detail = event.data as { status: string; summary: string | null; output: string };
         setRunNote(detail.summary ?? `Run ${detail.status}.`);
         setRunOutput(detail.output);
+        setPending(null);
         setRunId(null);
       } else if (event.type === 'failed') {
         setRunNote((event.data as { message: string }).message);
+        setPending(null);
         setRunId(null);
       }
     });
   }, [runId]);
 
-  const currentBrief = useCallback(
-    () => ({
+  const answer = useCallback(
+    async (approved: boolean) => {
+      if (pending === null || runId === null) return;
+      const asked = pending;
+      setPending(null);
+      try {
+        await bridge().invoke('run:approve', {
+          runId,
+          nodeId: asked.nodeId,
+          approved,
+          note: approvalNote,
+        });
+      } catch (err) {
+        setRunNote(describeError(err).message);
+      }
+    },
+    [pending, runId, approvalNote],
+  );
+
+  const currentBrief = useCallback(() => {
+    const steps: BriefStepWire[] = nodes.map((node) => {
+      const outgoing = edges.filter((edge) => edge.source === node.id);
+      const settings = node.data.settings;
+      const base: BriefStepWire = {
+        nodeId: node.id,
+        type: node.data.kind,
+        roleId: node.data.role?.id ?? '',
+        instruction: node.data.instruction,
+        connectionId: node.data.binding?.connectionId ?? '',
+        model: node.data.binding?.model ?? '',
+      };
+
+      switch (node.data.kind) {
+        case 'condition':
+          return {
+            ...base,
+            config: {
+              type: 'condition',
+              condition: {
+                source: settings.source,
+                test: settings.test,
+                value: settings.value,
+                // Which port a line leaves from is the whole answer here, so
+                // the user says "this happens if yes" by drawing rather than
+                // by naming node ids nobody wants to type.
+                whenTrue: outgoing
+                  .filter((edge) => edge.sourceHandle !== 'false')
+                  .map((edge) => edge.target),
+                whenFalse: outgoing
+                  .filter((edge) => edge.sourceHandle === 'false')
+                  .map((edge) => edge.target),
+              },
+            },
+          };
+        case 'loop':
+          return {
+            ...base,
+            config: {
+              type: 'loop',
+              loop: {
+                body: outgoing.map((edge) => edge.target),
+                maxIterations: settings.maxIterations,
+              },
+            },
+          };
+        case 'transform':
+          return {
+            ...base,
+            config: { type: 'transform', transform: { template: settings.template } },
+          };
+        case 'approval':
+          return {
+            ...base,
+            config: {
+              type: 'approval',
+              approval: { prompt: settings.prompt, showSource: settings.showSource },
+            },
+          };
+        default:
+          return { ...base, config: { type: 'agent' } };
+      }
+    });
+
+    return {
       name,
       instruction: brief,
       attachments: attachments.map((file) => ({
@@ -302,21 +569,14 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         content: file.content,
         note: file.note,
       })),
-      steps: nodes.map((node) => ({
-        nodeId: node.id,
-        roleId: node.data.role.id,
-        instruction: node.data.instruction,
-        connectionId: node.data.binding?.connectionId ?? '',
-        model: node.data.binding?.model ?? '',
-      })),
+      steps,
       edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
       // Positions are not part of the run, but they are part of the thing the
       // user arranged. Losing the layout on reload would make saving feel like
       // it half-worked.
       layout: nodes.map((node) => ({ nodeId: node.id, x: node.position.x, y: node.position.y })),
-    }),
-    [name, brief, attachments, nodes, edges],
-  );
+    };
+  }, [name, brief, attachments, nodes, edges]);
 
   const save = useCallback(async () => {
     try {
@@ -337,6 +597,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
     setRunNote('');
     setRunOutput('');
     setStepStatus({});
+    setPending(null);
     try {
       const started = await bridge().invoke<{ runId: string }>('run:start', {
         brief: currentBrief(),
@@ -350,24 +611,57 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
 
   // Why Run is unavailable, said rather than left to a greyed-out button. An
   // unexplained disabled control is the same dead end as no control at all.
+  const agentNodes = nodes.filter((node) => node.data.kind === 'agent');
+  const badShaping = nodes.find((node) => {
+    const settings = node.data.settings;
+    switch (node.data.kind) {
+      case 'loop':
+        return settings.maxIterations < 1 || !Number.isFinite(settings.maxIterations);
+      case 'approval':
+        return settings.prompt.trim() === '';
+      case 'transform':
+        return settings.template.trim() === '';
+      case 'condition':
+        return edges.every((edge) => edge.source !== node.id);
+      default:
+        return false;
+    }
+  });
+
   const blocked =
-    nodes.length === 0
+    agentNodes.length === 0
       ? 'Add an agent first.'
-      : nodes.some((node) => node.data.binding === null)
-        ? 'Every step needs a model.'
-        : brief.trim() === '' && nodes.every((node) => node.data.instruction.trim() === '')
-          ? 'Write a brief, or give a step its own instruction.'
-          : '';
+      : agentNodes.some((node) => node.data.binding === null)
+        ? 'Every agent needs a model.'
+        : badShaping
+          ? badShaping.data.kind === 'loop'
+            ? 'A loop needs a maximum number of passes.'
+            : badShaping.data.kind === 'approval'
+              ? 'An approval needs a question to ask.'
+              : badShaping.data.kind === 'transform'
+                ? 'A reshape needs a template.'
+                : 'A branch needs somewhere to go — join it to a step.'
+          : brief.trim() === '' && agentNodes.every((node) => node.data.instruction.trim() === '')
+            ? 'Write a brief, or give a step its own instruction.'
+            : '';
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
       event.preventDefault();
+      const position = screenToFlowPosition({ x: event.clientX, y: event.clientY });
+
+      const kind = event.dataTransfer.getData('application/chimera-node');
+      if (kind !== '') {
+        addStep(kind as StepKind, null, position);
+        return;
+      }
+
       const roleId = event.dataTransfer.getData('application/chimera-role');
       const role = roles.find((candidate) => candidate.id === roleId);
       if (!role) return;
-      addAgent(role, screenToFlowPosition({ x: event.clientX, y: event.clientY }));
+      addStep('agent', role, position);
     },
-    [roles, addAgent, screenToFlowPosition],
+    [roles, addStep, screenToFlowPosition],
   );
 
   const onConnect = useCallback(
@@ -389,6 +683,20 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       );
     },
     [choices, selectedId, setNodes],
+  );
+
+  /** Edits one field of the selected step's settings. */
+  const setSetting = useCallback(
+    <K extends keyof StepSettings>(key: K, value: StepSettings[K]) => {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === selectedId
+            ? { ...node, data: { ...node.data, settings: { ...node.data.settings, [key]: value } } }
+            : node,
+        ),
+      );
+    },
+    [selectedId, setNodes],
   );
 
   const grouped = useMemo(
@@ -425,7 +733,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                   // gesture and the only one some people can make comfortably;
                   // a canvas reachable by exactly one input is a canvas some
                   // users cannot use at all.
-                  addAgent(role, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
+                  addStep('agent', role, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
                 }}
               >
                 <span className="palette__name">{role.name}</span>
@@ -438,6 +746,27 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               </button>
             ))}
           </div>
+        ))}
+
+        <p className="canvas__section">Flow</p>
+        {(['condition', 'loop', 'transform', 'approval'] as const).map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            className="palette__agent palette__agent--flow"
+            data-testid={`palette-${kind}`}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData('application/chimera-node', kind);
+              event.dataTransfer.effectAllowed = 'move';
+            }}
+            onClick={() => {
+              addStep(kind, null, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
+            }}
+          >
+            <span className="palette__name">{KIND_LABEL[kind]}</span>
+            <span className="palette__meta">{KIND_BLURB[kind]}</span>
+          </button>
         ))}
       </aside>
 
@@ -482,6 +811,45 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 ? 'Drag an agent here to start. Join one to the next to say what runs after what.'
                 : `${goal} — drag the first agent here.`}
             </p>
+          )}
+
+          {pending !== null && (
+            <div className="approval" data-testid="approval" role="dialog" aria-label="Approval">
+              <p className="approval__prompt">{pending.prompt}</p>
+              {pending.context !== '' && (
+                <pre className="approval__context" data-testid="approval-context">
+                  {pending.context}
+                </pre>
+              )}
+              <input
+                className="control"
+                data-testid="approval-note"
+                value={approvalNote}
+                placeholder="Add a note (optional)"
+                aria-label="Note"
+                onChange={(event) => {
+                  setApprovalNote(event.target.value);
+                }}
+              />
+              <div className="approval__actions">
+                <button
+                  type="button"
+                  className="button"
+                  data-testid="approval-refuse"
+                  onClick={() => void answer(false)}
+                >
+                  Refuse
+                </button>
+                <button
+                  type="button"
+                  className="button button--primary"
+                  data-testid="approval-approve"
+                  onClick={() => void answer(true)}
+                >
+                  Approve
+                </button>
+              </div>
+            </div>
           )}
         </div>
 
@@ -605,74 +973,87 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
 
       <aside className="canvas__inspector scroll" aria-label="Step">
         {selected ? (
-          <>
-            <p className="canvas__section">{selected.data.role.name}</p>
-            <p className="canvas__prompt">{selected.data.role.systemPrompt}</p>
+          selected.data.kind === 'agent' ? (
+            <>
+              <p className="canvas__section">{selected.data.role?.name ?? 'Agent'}</p>
+              <p className="canvas__prompt">{selected.data.role?.systemPrompt}</p>
 
-            <p className="canvas__section">Instruction for this step</p>
-            <textarea
-              className="canvas__instruction"
-              data-testid="node-instruction"
-              value={selected.data.instruction}
-              placeholder="What should this agent do here? Leave empty to use the role as written."
-              onChange={(event) => {
-                const instruction = event.target.value;
-                setNodes((current) =>
-                  current.map((node) =>
-                    node.id === selectedId
-                      ? { ...node, data: { ...node.data, instruction } }
-                      : node,
-                  ),
-                );
-              }}
-            />
-
-            <p className="canvas__section">Model</p>
-            {loaded && choices.length === 0 ? (
-              <p className="canvas__prompt">
-                No models available. Connect a provider first, and its catalogue appears here.
-              </p>
-            ) : (
-              <select
-                className="control"
-                data-testid="node-model"
-                value={selected.data.binding?.key ?? ''}
+              <p className="canvas__section">Instruction for this step</p>
+              <textarea
+                className="canvas__instruction"
+                data-testid="node-instruction"
+                value={selected.data.instruction}
+                placeholder="What should this agent do here? Leave empty to use the role as written."
                 onChange={(event) => {
-                  bind(event.target.value);
+                  const instruction = event.target.value;
+                  setNodes((current) =>
+                    current.map((node) =>
+                      node.id === selectedId
+                        ? { ...node, data: { ...node.data, instruction } }
+                        : node,
+                    ),
+                  );
                 }}
-              >
-                <option value="">Choose a model</option>
-                {choices.map((choice) => (
-                  <option key={choice.key} value={choice.key}>
-                    {choice.connectionLabel} · {choice.model}
-                  </option>
-                ))}
-              </select>
-            )}
+              />
 
-            <p className="canvas__section">Allowed tools</p>
-            <div className="canvas__tags">
-              {selected.data.role.toolAllowlist.length === 0 ? (
-                <span className="tag">None</span>
+              <p className="canvas__section">Model</p>
+              {loaded && choices.length === 0 ? (
+                <p className="canvas__prompt">
+                  No models available. Connect a provider first, and its catalogue appears here.
+                </p>
               ) : (
-                selected.data.role.toolAllowlist.map((tool) => (
-                  <span key={tool} className="tag">
-                    {tool}
-                  </span>
-                ))
+                <select
+                  className="control"
+                  data-testid="node-model"
+                  value={selected.data.binding?.key ?? ''}
+                  onChange={(event) => {
+                    bind(event.target.value);
+                  }}
+                >
+                  <option value="">Choose a model</option>
+                  {choices.map((choice) => (
+                    <option key={choice.key} value={choice.key}>
+                      {choice.connectionLabel} · {choice.model}
+                    </option>
+                  ))}
+                </select>
               )}
-            </div>
 
-            <p className="canvas__section">Limits</p>
-            <div className="canvas__tags">
-              <span className="tag">{selected.data.role.maxIterations} iterations max</span>
-              <span className="tag">
-                {selected.data.role.maxCostUsd === null
-                  ? 'No cost cap'
-                  : `$${selected.data.role.maxCostUsd.toFixed(2)} cap`}
-              </span>
-            </div>
-          </>
+              <p className="canvas__section">Allowed tools</p>
+              <div className="canvas__tags">
+                {selected.data.role === null || selected.data.role.toolAllowlist.length === 0 ? (
+                  <span className="tag">None</span>
+                ) : (
+                  selected.data.role.toolAllowlist.map((tool) => (
+                    <span key={tool} className="tag">
+                      {tool}
+                    </span>
+                  ))
+                )}
+              </div>
+
+              <p className="canvas__section">Limits</p>
+              <div className="canvas__tags">
+                <span className="tag">{selected.data.role?.maxIterations} iterations max</span>
+                <span className="tag">
+                  {selected.data.role?.maxCostUsd === null ||
+                  selected.data.role?.maxCostUsd === undefined
+                    ? 'No cost cap'
+                    : `$${selected.data.role.maxCostUsd.toFixed(2)} cap`}
+                </span>
+              </div>
+            </>
+          ) : (
+            <ShapingInspector
+              data={selected.data}
+              steps={nodes.map((node) => ({
+                id: node.id,
+                label: node.data.role?.name ?? KIND_LABEL[node.data.kind],
+              }))}
+              selfId={selected.id}
+              onChange={setSetting}
+            />
+          )
         ) : (
           <p className="canvas__prompt">
             Select a step to choose its model and see what it may do.
@@ -680,6 +1061,162 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         )}
       </aside>
     </div>
+  );
+}
+
+interface ShapingInspectorProps {
+  data: StepNodeData;
+  /** Every step on the canvas, so a source is picked rather than typed. */
+  steps: { id: string; label: string }[];
+  selfId: string;
+  onChange: <K extends keyof StepSettings>(key: K, value: StepSettings[K]) => void;
+}
+
+/** The settings panel for the four shaping node types. */
+function ShapingInspector({ data, steps, selfId, onChange }: ShapingInspectorProps): JSX.Element {
+  const settings = data.settings;
+  const others = steps.filter((step) => step.id !== selfId);
+
+  return (
+    <>
+      <p className="canvas__section">{KIND_LABEL[data.kind]}</p>
+      <p className="canvas__prompt">
+        {data.kind === 'agent' ? '' : KIND_BLURB[data.kind as Exclude<StepKind, 'agent'>]}
+      </p>
+
+      {data.kind === 'condition' && (
+        <>
+          <p className="canvas__section">Look at</p>
+          <select
+            className="control"
+            data-testid="condition-source"
+            value={settings.source}
+            onChange={(event) => {
+              onChange('source', event.target.value);
+            }}
+          >
+            <option value="">The step before this one</option>
+            {others.map((step) => (
+              <option key={step.id} value={step.id}>
+                {step.label}
+              </option>
+            ))}
+          </select>
+
+          <p className="canvas__section">Test</p>
+          <select
+            className="control"
+            data-testid="condition-test"
+            value={settings.test}
+            onChange={(event) => {
+              onChange('test', event.target.value as StepSettings['test']);
+            }}
+          >
+            <option value="contains">contains</option>
+            <option value="equals">equals</option>
+            <option value="matches">matches (regular expression)</option>
+            <option value="isEmpty">is empty</option>
+            <option value="notEmpty">is not empty</option>
+          </select>
+
+          {settings.test !== 'isEmpty' && settings.test !== 'notEmpty' && (
+            <input
+              className="control"
+              data-testid="condition-value"
+              value={settings.value}
+              placeholder="What to look for"
+              aria-label="Value"
+              onChange={(event) => {
+                onChange('value', event.target.value);
+              }}
+            />
+          )}
+
+          <p className="canvas__prompt">
+            Join the yes port to what happens when the test passes, and the no port to what happens
+            when it does not.
+          </p>
+        </>
+      )}
+
+      {data.kind === 'loop' && (
+        <>
+          <p className="canvas__section">Maximum passes</p>
+          <input
+            className="control"
+            type="number"
+            min={1}
+            max={100}
+            data-testid="loop-max"
+            value={settings.maxIterations}
+            aria-label="Maximum passes"
+            onChange={(event) => {
+              onChange('maxIterations', Number(event.target.value));
+            }}
+          />
+          <p className="canvas__prompt">
+            Every step joined below this one runs again on each pass. A loop cannot run without a
+            maximum — that is what keeps a mistake from costing a month of credit.
+          </p>
+        </>
+      )}
+
+      {data.kind === 'transform' && (
+        <>
+          <p className="canvas__section">Template</p>
+          <textarea
+            className="canvas__instruction"
+            data-testid="transform-template"
+            value={settings.template}
+            placeholder="Findings: {{previous}}"
+            onChange={(event) => {
+              onChange('template', event.target.value);
+            }}
+          />
+          <p className="canvas__prompt">
+            Use {'{{previous}}'} for the step before this one, or {'{{step-id}}'} for any earlier
+            step. No model runs here, so this costs nothing.
+          </p>
+        </>
+      )}
+
+      {data.kind === 'approval' && (
+        <>
+          <p className="canvas__section">Question</p>
+          <input
+            className="control"
+            data-testid="approval-prompt"
+            value={settings.prompt}
+            placeholder="Send this email?"
+            aria-label="Question"
+            onChange={(event) => {
+              onChange('prompt', event.target.value);
+            }}
+          />
+
+          <p className="canvas__section">Show them</p>
+          <select
+            className="control"
+            data-testid="approval-source"
+            value={settings.showSource}
+            onChange={(event) => {
+              onChange('showSource', event.target.value);
+            }}
+          >
+            <option value="">The step before this one</option>
+            {others.map((step) => (
+              <option key={step.id} value={step.id}>
+                {step.label}
+              </option>
+            ))}
+          </select>
+
+          <p className="canvas__prompt">
+            The run stops here until somebody answers. Nothing after it runs on a refusal.
+          </p>
+        </>
+      )}
+    </>
   );
 }
 

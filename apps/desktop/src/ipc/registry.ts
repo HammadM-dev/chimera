@@ -47,6 +47,35 @@ import type { ChannelDefinition } from './types.ts';
 // one reaches native modules that cannot load there at all. Handlers live in
 // handlers.ts, which only the main process imports.
 
+// Mirrors NodeConfig in @chimera/core. Restated rather than imported because
+// preload.ts bundles this file and must not reach into a workspace package that
+// pulls native modules with it.
+const conditionSchema = z.object({
+  source: z.string(),
+  test: z.enum(['contains', 'equals', 'matches', 'isEmpty', 'notEmpty']),
+  value: z.string(),
+  whenTrue: z.array(z.string()),
+  whenFalse: z.array(z.string()),
+});
+
+const nodeConfigSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('agent') }),
+  z.object({ type: z.literal('condition'), condition: conditionSchema }),
+  z.object({
+    type: z.literal('loop'),
+    loop: z.object({
+      body: z.array(z.string()),
+      maxIterations: z.number(),
+      until: conditionSchema.optional(),
+    }),
+  }),
+  z.object({ type: z.literal('transform'), transform: z.object({ template: z.string() }) }),
+  z.object({
+    type: z.literal('approval'),
+    approval: z.object({ prompt: z.string(), showSource: z.string() }),
+  }),
+]);
+
 const briefSchema = z.object({
   name: z.string(),
   instruction: z.string(),
@@ -62,6 +91,10 @@ const briefSchema = z.object({
   steps: z.array(
     z.object({
       nodeId: z.string(),
+      // Absent means `agent`, which is every brief saved before the other node
+      // types existed. Adding an optional field is a v-compatible change.
+      type: z.enum(['agent', 'condition', 'loop', 'transform', 'approval']).optional(),
+      config: nodeConfigSchema.optional(),
       roleId: z.string(),
       instruction: z.string(),
       connectionId: z.string(),
@@ -69,6 +102,10 @@ const briefSchema = z.object({
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),
+  // Where each node sits on the canvas. Not part of the run, but part of what
+  // the user arranged — and a schema that silently dropped it made every reopen
+  // rearrange the graph into a column.
+  layout: z.array(z.object({ nodeId: z.string(), x: z.number(), y: z.number() })).optional(),
 });
 
 export const workflowSave = defineInvokeChannel({
@@ -141,6 +178,23 @@ export const runEvent = defineEventChannel({
   v: 1,
   sensitive: false,
   payloadSchema: z.object({ runId: z.string(), type: z.string(), data: z.unknown() }),
+});
+
+// The approval gate's renderer half. The run pauses in main until this
+// arrives; nothing about the answer is inferred from a closed window, because
+// CLAUDE.md's rule is that an irreversible action needs a person, and a person
+// who never answered has not approved.
+export const runApprove = defineInvokeChannel({
+  channel: 'run:approve',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    runId: z.string(),
+    nodeId: z.string(),
+    approved: z.boolean(),
+    note: z.string(),
+  }),
+  responseSchema: z.object({ accepted: z.boolean() }),
 });
 
 export const providerTestConnection = defineInvokeChannel({
@@ -569,6 +623,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runStart,
   runCancel,
   runSubscribe,
+  runApprove,
   runEvent,
   providerTestConnection,
   connectionCreate,

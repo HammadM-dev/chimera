@@ -23,6 +23,33 @@ import { localBackend } from '../memory/backend.ts';
 
 const cancellations = new Map<string, { cancelled: boolean }>();
 
+/** Runs paused at an approval node, keyed by run id, then node id. */
+const pendingApprovals = new Map<
+  string,
+  Map<string, (answer: { approved: boolean; note: string }) => void>
+>();
+
+/**
+ * Answers a waiting approval gate.
+ *
+ * Returns false for a gate that is not waiting — a stale click from a window
+ * that was reopened, or a second answer to a gate already answered. Silently
+ * accepting either would let a run past a gate twice.
+ */
+export function answerApproval(input: {
+  runId: string;
+  nodeId: string;
+  approved: boolean;
+  note: string;
+}): { accepted: boolean } {
+  const forRun = pendingApprovals.get(input.runId);
+  const resolve = forRun?.get(input.nodeId);
+  if (!forRun || !resolve) return { accepted: false };
+  forRun.delete(input.nodeId);
+  resolve({ approved: input.approved, note: input.note });
+  return { accepted: true };
+}
+
 export function cancelRun(runId: string): { accepted: boolean } {
   const flag = cancellations.get(runId);
   if (!flag) return { accepted: false };
@@ -90,6 +117,16 @@ export async function startRun(brief: RunBrief): Promise<{ runId: string }> {
         onStep: (event) => {
           emitRunEvent(run.id, `step:${event.phase}`, event);
         },
+        requestApproval: (input) =>
+          new Promise((resolve) => {
+            const forRun = pendingApprovals.get(run.id) ?? new Map();
+            pendingApprovals.set(run.id, forRun);
+            forRun.set(input.nodeId, resolve);
+            // The run now waits. No timeout: a gate that approves itself after
+            // an interval is a gate that approves itself, and the user can
+            // always cancel the run instead.
+            emitRunEvent(run.id, 'approval:requested', input);
+          }),
       });
       emitRunEvent(run.id, 'finished', outcome);
     } catch (err) {
@@ -101,6 +138,12 @@ export async function startRun(brief: RunBrief): Promise<{ runId: string }> {
       emitRunEvent(run.id, 'failed', { message });
     } finally {
       cancellations.delete(run.id);
+      // Anything still waiting is refused rather than left hanging: the run is
+      // over, so an approval for it can no longer mean anything.
+      for (const resolve of pendingApprovals.get(run.id)?.values() ?? []) {
+        resolve({ approved: false, note: 'The run ended before this was answered.' });
+      }
+      pendingApprovals.delete(run.id);
       await tools.close();
     }
   })();

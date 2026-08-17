@@ -23,7 +23,7 @@ import {
 } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
-import { cancelRun, startRun } from '../runs/service.ts';
+import { answerApproval, cancelRun, startRun } from '../runs/service.ts';
 import { listRoles } from '../roles/service.ts';
 import { pickAttachments } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
@@ -103,6 +103,7 @@ registerHandler(channels.runSubscribe, (payload, context) =>
 
 registerHandler(channels.runStart, (payload) => startRun(payload.brief));
 registerHandler(channels.runCancel, (payload) => cancelRun(payload.runId));
+registerHandler(channels.runApprove, (payload) => answerApproval(payload));
 
 registerHandler(channels.workflowSave, (payload) =>
   saveAutomation({
