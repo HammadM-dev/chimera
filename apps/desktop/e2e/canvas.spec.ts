@@ -52,6 +52,22 @@ test('agents are placed on the canvas, joined, and bound to a model', async () =
     await expect(page.getByTestId('palette-planner')).toBeVisible();
     await expect(page.getByTestId('palette-coder')).toBeVisible();
 
+    // Every node type the engine can run has a button. Twice now, a type has
+    // been added to the union, given a label, wired into the brief and left off
+    // the palette — placeable by nobody, and nothing failed.
+    for (const kind of [
+      'condition',
+      'loop',
+      'fanout',
+      'aggregate',
+      'swarm',
+      'transform',
+      'approval',
+      'subworkflow',
+    ]) {
+      await expect(page.getByTestId(`palette-${kind}`)).toBeVisible();
+    }
+
     // Place two agents.
     await page.getByTestId('palette-planner').click();
     await page.getByTestId('palette-coder').click();

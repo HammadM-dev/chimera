@@ -171,6 +171,28 @@ const STRATEGY_LABEL: Record<StepSettings['strategy'], string> = {
   template: 'Into a template',
 };
 
+/**
+ * Everything on the Flow section of the palette, in the order people reach for
+ * them.
+ *
+ * `satisfies` against the node-type union rather than a hand-written array of
+ * strings: a type added to the union and left out of the palette is a node type
+ * nobody can place, and that shipped twice before this line existed. It is
+ * still possible to *omit* one here — the compiler cannot demand completeness
+ * without demanding an order — so `canvas.spec.ts` asserts every kind has a
+ * button.
+ */
+const FLOW_KINDS = [
+  'condition',
+  'loop',
+  'fanout',
+  'aggregate',
+  'swarm',
+  'transform',
+  'approval',
+  'subworkflow',
+] as const satisfies readonly Exclude<StepKind, 'agent'>[];
+
 /** The one line a shaping node shows about what it will do. */
 function summarise(data: StepNodeData): string {
   const settings = data.settings;
@@ -1078,27 +1100,25 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         ))}
 
         <p className="canvas__section">Flow</p>
-        {(['condition', 'loop', 'fanout', 'transform', 'approval', 'subworkflow'] as const).map(
-          (kind) => (
-            <button
-              key={kind}
-              type="button"
-              className="palette__agent palette__agent--flow"
-              data-testid={`palette-${kind}`}
-              draggable
-              onDragStart={(event) => {
-                event.dataTransfer.setData('application/chimera-node', kind);
-                event.dataTransfer.effectAllowed = 'move';
-              }}
-              onClick={() => {
-                addStep(kind, null, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
-              }}
-            >
-              <span className="palette__name">{KIND_LABEL[kind]}</span>
-              <span className="palette__meta">{KIND_BLURB[kind]}</span>
-            </button>
-          ),
-        )}
+        {FLOW_KINDS.map((kind) => (
+          <button
+            key={kind}
+            type="button"
+            className="palette__agent palette__agent--flow"
+            data-testid={`palette-${kind}`}
+            draggable
+            onDragStart={(event) => {
+              event.dataTransfer.setData('application/chimera-node', kind);
+              event.dataTransfer.effectAllowed = 'move';
+            }}
+            onClick={() => {
+              addStep(kind, null, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
+            }}
+          >
+            <span className="palette__name">{KIND_LABEL[kind]}</span>
+            <span className="palette__meta">{KIND_BLURB[kind]}</span>
+          </button>
+        ))}
       </aside>
 
       <div className="canvas__main">
@@ -1328,36 +1348,16 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               />
 
               <p className="canvas__section">Model</p>
-              {loaded && choices.length === 0 ? (
-                <p className="canvas__prompt">
-                  No models available. Connect a provider first, and its catalogue appears here.
-                </p>
-              ) : (
-                <select
-                  className="control"
-                  data-testid="node-model"
-                  value={
-                    selected.data.tier === undefined
-                      ? (selected.data.binding?.key ?? '')
-                      : `tier:${selected.data.tier}`
-                  }
-                  onChange={(event) => {
-                    bind(event.target.value);
-                  }}
-                >
-                  <option value="">Choose a model</option>
-                  <option value="tier:cheap">
-                    Cheap tier — whatever this workspace calls cheap
-                  </option>
-                  <option value="tier:standard">Standard tier</option>
-                  <option value="tier:frontier">Frontier tier</option>
-                  {choices.map((choice) => (
-                    <option key={choice.key} value={choice.key}>
-                      {choice.connectionLabel} · {choice.model}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <ModelPicker
+                choices={choices}
+                loaded={loaded}
+                value={
+                  selected.data.tier === undefined
+                    ? (selected.data.binding?.key ?? '')
+                    : `tier:${selected.data.tier}`
+                }
+                onChange={bind}
+              />
 
               <p className="canvas__section">Allowed tools</p>
               <div className="canvas__tags">
@@ -1423,6 +1423,18 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               }))}
               automations={saved.filter((workflow) => workflow.id !== savedId)}
               roles={roles}
+              modelPicker={
+                <ModelPicker
+                  choices={choices}
+                  loaded={loaded}
+                  value={
+                    selected.data.tier === undefined
+                      ? (selected.data.binding?.key ?? '')
+                      : `tier:${selected.data.tier}`
+                  }
+                  onChange={bind}
+                />
+              }
               selfId={selected.id}
               onChange={setSetting}
             />
@@ -1437,6 +1449,56 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   );
 }
 
+/**
+ * The model control.
+ *
+ * Shared, because the agent step is no longer the only thing that makes a model
+ * call: a swarm's participants and an aggregate's reducing agent both spend
+ * money, and a node that can spend money and cannot be bound to a model is a
+ * node that cannot run. That was shipped, and the swarm's own E2E is what
+ * caught it.
+ */
+function ModelPicker({
+  choices,
+  loaded,
+  value,
+  onChange,
+}: {
+  choices: ModelChoice[];
+  loaded: boolean;
+  value: string;
+  onChange: (value: string) => void;
+}): JSX.Element {
+  if (loaded && choices.length === 0) {
+    return (
+      <p className="canvas__prompt">
+        No models available. Connect a provider first, and its catalogue appears here.
+      </p>
+    );
+  }
+
+  return (
+    <select
+      className="control"
+      data-testid="node-model"
+      value={value}
+      onChange={(event) => {
+        onChange(event.target.value);
+      }}
+    >
+      <option value="">Choose a model</option>
+      <option value="tier:cheap">Cheap tier — whatever this workspace calls cheap</option>
+      <option value="tier:standard">Standard tier</option>
+      <option value="tier:frontier">Frontier tier</option>
+      {choices.map((choice) => (
+        <option key={choice.key} value={choice.key}>
+          {choice.connectionLabel} · {choice.model}
+        </option>
+      ))}
+    </select>
+  );
+}
+
 interface ShapingInspectorProps {
   data: StepNodeData;
   /** Every step on the canvas, so a source is picked rather than typed. */
@@ -1445,6 +1507,8 @@ interface ShapingInspectorProps {
   automations: { id: string; name: string }[];
   /** The roster, for the steps that name agents without being one. */
   roles: AgentRole[];
+  /** Rendered for the shaping kinds that make model calls of their own. */
+  modelPicker: JSX.Element;
   selfId: string;
   onChange: <K extends keyof StepSettings>(key: K, value: StepSettings[K]) => void;
 }
@@ -1455,6 +1519,7 @@ function ShapingInspector({
   steps,
   automations,
   roles,
+  modelPicker,
   selfId,
   onChange,
 }: ShapingInspectorProps): JSX.Element {
@@ -1561,6 +1626,14 @@ function ShapingInspector({
             Use {'{{previous}}'} for the step before this one, or {'{{step-id}}'} for any earlier
             step. No model runs here, so this costs nothing.
           </p>
+        </>
+      )}
+
+      {(data.kind === 'swarm' ||
+        (data.kind === 'aggregate' && data.settings.strategy === 'reduce_with_agent')) && (
+        <>
+          <p className="canvas__section">Model</p>
+          {modelPicker}
         </>
       )}
 
