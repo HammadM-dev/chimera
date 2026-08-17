@@ -118,6 +118,11 @@ test('an API key entered during setup reaches the vault, not the database', asyn
     // Real logos, not the monogram fallback: the marks render as images, and
     // the one on the API-key card leans out of its badge rather than sitting
     // squarely inside it.
+    // Anthropic and OpenAI each have their own card now, with their own logo.
+    await expect(page.getByTestId('choose-anthropic')).toContainText('Anthropic');
+    await expect(page.getByTestId('choose-openai')).toContainText('OpenAI');
+    await expect(page.getByTestId('choose-ollama-cloud')).toContainText('Ollama Cloud');
+
     const marks = page.locator('.intro__choice .mark--logo img');
     await expect(marks.first()).toBeVisible();
     expect(await marks.count()).toBeGreaterThanOrEqual(3);
@@ -125,12 +130,6 @@ test('an API key entered during setup reaches the vault, not the database', asyn
     expect(transform).not.toBe('none');
 
     await page.getByTestId('choose-cloud').click();
-    // Ollama Cloud is offered alongside the other key-based providers, and is
-    // its own kind rather than local Ollama pointed elsewhere.
-    const offered = await page.getByTestId('intro-kind').locator('option').allTextContents();
-    expect(offered).toContain('Ollama Cloud');
-    expect(offered).toContain('Anthropic');
-
     await page.getByTestId('intro-kind').selectOption('anthropic');
     await page.getByTestId('intro-key').fill(canary);
     await page.getByTestId('intro-connect').click();
@@ -210,13 +209,18 @@ test('the intro replays even on a workspace that is already set up', async () =>
     // Real logos, not the monogram fallback: the marks render as images, and
     // the one on the API-key card leans out of its badge rather than sitting
     // squarely inside it.
+    // Anthropic and OpenAI each have their own card now, with their own logo.
+    await expect(page.getByTestId('choose-anthropic')).toContainText('Anthropic');
+    await expect(page.getByTestId('choose-openai')).toContainText('OpenAI');
+    await expect(page.getByTestId('choose-ollama-cloud')).toContainText('Ollama Cloud');
+
     const marks = page.locator('.intro__choice .mark--logo img');
     await expect(marks.first()).toBeVisible();
     expect(await marks.count()).toBeGreaterThanOrEqual(3);
     const transform = await marks.first().evaluate((node) => getComputedStyle(node).transform);
     expect(transform).not.toBe('none');
 
-    await page.getByTestId('choose-cloud').click();
+    await page.getByTestId('choose-anthropic').click();
     await page.getByTestId('intro-key').fill('sk-a-real-looking-key');
     await page.getByTestId('intro-connect').click();
     await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'done', {

@@ -4,6 +4,7 @@
 // sandboxed preload bundle. See the header comment on registry.ts.
 import { setSecret, getSecret, type AuthRef } from '@chimera/store';
 import {
+  importCatalogue as importConnectionCatalogue,
   createConnection,
   estimateCost,
   listConnections,
@@ -66,7 +67,19 @@ registerHandler(channels.vaultHasSecret, (payload) => ({
 // `sensitive` in the registry — its payload is redacted before it reaches a log
 // line, and the key is exchanged for a vault handle inside createConnection()
 // and never returned.
-registerHandler(channels.connectionCreate, (payload) => createConnection(payload));
+registerHandler(channels.connectionCreate, async (payload) => {
+  const created = createConnection(payload);
+  // The catalogue, immediately. A connection with no models reaches the picker
+  // as a text box and the canvas as a step that cannot be bound — it works and
+  // looks broken. Failure here is swallowed: the connection is real either way,
+  // and a provider with no catalogue endpoint is still usable by typing a name.
+  try {
+    await importConnectionCatalogue(created.id);
+  } catch {
+    // Left without a catalogue rather than left uncreated.
+  }
+  return created;
+});
 registerHandler(channels.connectionList, () => listConnections());
 registerHandler(channels.providerTestConnection, (payload) => testConnection(payload.connectionId));
 registerHandler(channels.chatSend, (payload, context) => startChat(context.webContents, payload));

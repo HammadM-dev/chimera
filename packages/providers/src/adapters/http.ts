@@ -278,12 +278,69 @@ function unreadableBody(provider: string, response: Response, text: string): Err
   );
 }
 
+/**
+ * The final object out of an SSE body.
+ *
+ * A gateway that streams a request which asked not to be streamed is
+ * misbehaving, and CHIMERA now says `stream: false` explicitly so it should not
+ * happen — but a stream is still readable, and failing on one when the answer
+ * is right there would be pedantry the user pays for. The last non-`[DONE]`
+ * frame carries the completed message for every OpenAI-shaped gateway.
+ */
+function fromEventStream(text: string): unknown {
+  const frames = text
+    .split('\n')
+    .filter((line) => line.startsWith('data:'))
+    .map((line) => line.slice(5).trim())
+    .filter((payload) => payload !== '' && payload !== '[DONE]');
+
+  let merged: Record<string, unknown> | null = null;
+  let content = '';
+
+  for (const frame of frames) {
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(frame) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    merged = parsed;
+    const choices = parsed['choices'];
+    if (Array.isArray(choices) && choices.length > 0) {
+      const first = choices[0] as {
+        delta?: { content?: unknown };
+        message?: { content?: unknown };
+      };
+      const piece = first.delta?.content ?? first.message?.content;
+      if (typeof piece === 'string') content += piece;
+    }
+  }
+
+  if (merged === null) return null;
+
+  // Reshaped into the non-streaming form the caller expects, with the
+  // accumulated text as the message — a delta is not a message.
+  const choices = merged['choices'];
+  if (Array.isArray(choices) && choices.length > 0) {
+    merged['choices'] = [
+      {
+        ...(choices[0] as Record<string, unknown>),
+        message: { role: 'assistant', content },
+        delta: undefined,
+      },
+    ];
+  }
+  return merged;
+}
+
 export async function postJson<T>(options: PostOptions): Promise<T> {
   const response = await send(options);
   const text = await response.text();
   try {
     return JSON.parse(text) as T;
   } catch {
+    const streamed = text.startsWith('data:') ? fromEventStream(text) : null;
+    if (streamed !== null) return streamed as T;
     throw unreadableBody(options.provider, response, text);
   }
 }

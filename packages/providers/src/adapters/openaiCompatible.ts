@@ -163,8 +163,13 @@ export function buildOpenAiBody(
   if (request.topP !== undefined) body['top_p'] = request.topP;
   if (request.stopSequences) body['stop'] = request.stopSequences;
 
+  // Stated either way, never omitted. A gateway that defaults to streaming —
+  // OmniRoute does — answers a non-streaming request with `text/event-stream`,
+  // and the adapter then reports a body it cannot read. Saying `false` costs
+  // one field and removes a whole class of "works against one provider" bug.
+  body['stream'] = stream;
+
   if (stream) {
-    body['stream'] = true;
     // Without this, a streamed response carries no usage at all and every
     // budget figure for a streaming run would be zero.
     body['stream_options'] = { include_usage: true };

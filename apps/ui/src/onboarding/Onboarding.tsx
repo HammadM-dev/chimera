@@ -187,6 +187,58 @@ export function Onboarding({ onDone }: Props): JSX.Element {
               <button
                 type="button"
                 className="intro__choice"
+                data-testid="choose-anthropic"
+                onClick={() => {
+                  setKind('anthropic');
+                  setLabel('Anthropic');
+                  setStep('cloud');
+                }}
+              >
+                <ProviderMark id="anthropic" />
+                <span className="intro__choice-title">Anthropic</span>
+                <span className="intro__choice-detail">
+                  Claude models, with an API key from console.anthropic.com. The only prices this
+                  build has verified, so cost figures are real rather than blank.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="intro__choice"
+                data-testid="choose-openai"
+                onClick={() => {
+                  setKind('openai');
+                  setLabel('OpenAI');
+                  setStep('cloud');
+                }}
+              >
+                <ProviderMark id="openai" />
+                <span className="intro__choice-title">OpenAI</span>
+                <span className="intro__choice-detail">
+                  GPT models, with an API key from platform.openai.com.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="intro__choice"
+                data-testid="choose-ollama-cloud"
+                onClick={() => {
+                  setKind('ollama-cloud');
+                  setLabel('Ollama Cloud');
+                  setStep('cloud');
+                }}
+              >
+                <ProviderMark id="ollama-cloud" />
+                <span className="intro__choice-title">Ollama Cloud</span>
+                <span className="intro__choice-detail">
+                  Ollama's hosted models, with a key from ollama.com. Nothing to install.
+                </span>
+              </button>
+
+              <button
+                type="button"
+                className="intro__choice"
                 data-testid="choose-omniroute"
                 onClick={() => {
                   setStep('omniroute');
@@ -199,27 +251,28 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                   A gateway you run and sign in to yourself. One connection, every model it serves.
                 </span>
               </button>
+
               <button
                 type="button"
                 className="intro__choice"
                 data-testid="choose-cloud"
                 onClick={() => {
+                  setKind('google');
+                  setLabel('Google');
                   setStep('cloud');
                 }}
               >
-                <ProviderMark id="anthropic" />
-                <span className="intro__choice-title">A provider API key</span>
+                <ProviderMark id="google" />
+                <span className="intro__choice-title">Another provider</span>
                 <span className="intro__choice-detail">
-                  Anthropic, OpenAI, Google, OpenRouter or Ollama Cloud. The key goes to your OS
+                  Google or OpenRouter, with an API key. Same handling — it goes to your OS
                   keychain, never the database.
                 </span>
                 <span className="intro__stack">
-                  <ProviderMark id="openai" />
-                  <ProviderMark id="google" />
                   <ProviderMark id="openrouter" />
-                  <ProviderMark id="ollama-cloud" />
                 </span>
               </button>
+
               <button
                 type="button"
                 className="intro__choice"
@@ -237,6 +290,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                 </span>
               </button>
             </div>
+
             <div className="intro__actions">
               <button
                 type="button"

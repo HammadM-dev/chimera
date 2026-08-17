@@ -68,6 +68,7 @@ export function createConnection(request: CreateConnectionRequest): {
     baseUrl: request.baseUrl ?? null,
   });
 
+  registry?.refresh();
   return { id: created.id, label: created.label, kind: created.kind };
 }
 
@@ -289,6 +290,38 @@ export async function sweepHealth(): Promise<{ connections: ConnectionSummary[] 
   // the sweep it just asked for.
   registryInstance.refresh();
   return { connections: listConnections().connections };
+}
+
+/**
+ * Reads a connection's model catalogue and caches it.
+ *
+ * Every provider, not just OmniRoute. Without this a connection added through
+ * the form had no models at all, so the chat panel fell back to a text box and
+ * the canvas had nothing to bind a step to — a connection that worked and
+ * looked broken. Failure is not fatal: a provider whose catalogue endpoint is
+ * unavailable is still usable by typing a model name.
+ */
+export async function importCatalogue(connectionId: string): Promise<{ models: number }> {
+  const connection = resolve(connectionId);
+  const adapter = adapterFor(connection.kind);
+
+  const models = await adapter.listModels({
+    authRef: connection.authRef,
+    ...(connection.baseUrl === null ? {} : { baseUrl: connection.baseUrl }),
+  });
+
+  connectionsRepository.updateCapabilities(
+    getStore(),
+    connectionId,
+    JSON.stringify({
+      capabilities: Object.fromEntries(
+        models.map((model) => [model.id, { displayName: model.displayName }]),
+      ),
+      limits: {},
+    }),
+  );
+  providerRegistry().refresh();
+  return { models: models.length };
 }
 
 export function setLocalOnlyMode(enabled: boolean): void {
