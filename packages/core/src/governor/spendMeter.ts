@@ -106,7 +106,10 @@ export function createSpendMeter(options: SpendMeterOptions): SpendMeter {
         if (frontier !== null) runsRepository.addFrontierCost(db, runId, frontier);
       }
 
-      nodeStatesRepository.addSpend(db, runId, nodeId, actualTokens, actualCost ?? 0);
+      nodeStatesRepository.addSpend(db, runId, nodeId, actualTokens, actualCost ?? 0, {
+        roleId,
+        model,
+      });
       runsRepository.addSpend(db, runId, actualTokens, actualCost ?? 0);
 
       const snapshot = read();

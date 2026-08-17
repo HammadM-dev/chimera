@@ -357,6 +357,32 @@ export const runFailures = defineInvokeChannel({
 // A screenshot the browser tool took, for the trace viewer. Returned as a data
 // URL rather than a path: the renderer cannot read the disk, and it should not
 // be able to.
+// M9-4's cost dashboard: what this workspace spent, sliced four ways.
+const costSliceSchema = z.object({
+  key: z.string(),
+  label: z.string(),
+  costUsd: z.number(),
+  tokens: z.number(),
+  runs: z.number(),
+});
+
+export const runCosts = defineInvokeChannel({
+  channel: 'run:costs',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ days: z.number().optional() }),
+  responseSchema: z.object({
+    sinceIso: z.string(),
+    totalCostUsd: z.number(),
+    totalTokens: z.number(),
+    runCount: z.number(),
+    byAutomation: z.array(costSliceSchema),
+    byAgent: z.array(costSliceSchema),
+    byModel: z.array(costSliceSchema),
+    byDay: z.array(costSliceSchema),
+  }),
+});
+
 export const traceScreenshot = defineInvokeChannel({
   channel: 'trace:screenshot',
   v: 1,
@@ -879,6 +905,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runList,
   traceList,
   runFailures,
+  runCosts,
   triggerList,
   filesPickDirectory,
   traceScreenshot,

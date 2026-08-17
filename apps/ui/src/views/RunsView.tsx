@@ -24,6 +24,24 @@ interface RunListItem {
   errorSummary: string | null;
 }
 
+interface CostSlice {
+  key: string;
+  label: string;
+  costUsd: number;
+  tokens: number;
+  runs: number;
+}
+
+interface CostSummary {
+  totalCostUsd: number;
+  totalTokens: number;
+  runCount: number;
+  byAutomation: CostSlice[];
+  byAgent: CostSlice[];
+  byModel: CostSlice[];
+  byDay: CostSlice[];
+}
+
 interface RunFailure {
   nodeId: string;
   itemIndex: number;
@@ -145,6 +163,11 @@ export function RunsView(): JSX.Element {
   const [failures, setFailures] = useState<RunFailure[]>([]);
   const [note, setNote] = useState('');
   const [filter, setFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [costs, setCosts] = useState<CostSummary | null>(null);
+  const [costsOpen, setCostsOpen] = useState(false);
+  const [costDays, setCostDays] = useState(30);
 
   const load = useCallback(async () => {
     try {
@@ -159,6 +182,21 @@ export function RunsView(): JSX.Element {
   useEffect(() => {
     void load();
   }, [load]);
+
+  // The bill. Asked for only when the panel is open — it is a scan over every
+  // node of every run in the window, which is cheap but not free, and most
+  // visits to this screen are about one run rather than the total.
+  useEffect(() => {
+    if (!costsOpen) return;
+    void (async () => {
+      try {
+        const result = await bridge().invoke<CostSummary>('run:costs', { days: costDays });
+        setCosts(result);
+      } catch (err) {
+        setNote(describeError(err).message);
+      }
+    })();
+  }, [costsOpen, costDays, runs.length]);
 
   // A run that is still going keeps writing. Polling rather than subscribing:
   // `run:event` carries step transitions, not trace rows, and a viewer that
@@ -230,6 +268,15 @@ export function RunsView(): JSX.Element {
 
   const run = runs.find((candidate) => candidate.id === selected) ?? null;
 
+  // The history, filtered. Name and status are what people actually look for —
+  // "the invoice one that failed" is the whole query.
+  const visibleRuns = runs.filter((candidate) => {
+    const matchesSearch =
+      search.trim() === '' || candidate.name.toLowerCase().includes(search.trim().toLowerCase());
+    const matchesStatus = statusFilter === 'all' || candidate.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+
   const kinds = useMemo(() => {
     const counts = new Map<string, number>();
     for (const event of events) {
@@ -242,22 +289,128 @@ export function RunsView(): JSX.Element {
 
   return (
     <div className="runs" data-testid="runs-view">
-      <aside className="runs__list scroll" aria-label="Runs">
+      <aside className="runs__list scroll" data-testid="runs-list" aria-label="Runs">
         <div className="runs__listHead">
           <p className="canvas__section">Runs</p>
-          <button
-            type="button"
-            className="button"
-            data-testid="runs-refresh"
-            onClick={() => void load()}
-          >
-            Refresh
-          </button>
+          <div className="runs__listActions">
+            <button
+              type="button"
+              className="button"
+              data-testid="runs-costs-toggle"
+              aria-expanded={costsOpen}
+              onClick={() => {
+                setCostsOpen((open) => !open);
+              }}
+            >
+              {costsOpen ? 'Hide costs' : 'Costs'}
+            </button>
+            <button
+              type="button"
+              className="button"
+              data-testid="runs-refresh"
+              onClick={() => void load()}
+            >
+              Refresh
+            </button>
+          </div>
         </div>
 
-        {runs.length === 0 && <p className="canvas__prompt">Nothing has run yet.</p>}
+        {costsOpen && (
+          <section className="costs" data-testid="run-costs">
+            <div className="costs__head">
+              <span className="costs__total" data-testid="costs-total">
+                {money(costs?.totalCostUsd ?? 0)}
+              </span>
+              <select
+                className="control"
+                data-testid="costs-window"
+                aria-label="Period"
+                value={String(costDays)}
+                onChange={(event) => {
+                  setCostDays(Number(event.target.value));
+                }}
+              >
+                <option value="7">Last 7 days</option>
+                <option value="30">Last 30 days</option>
+                <option value="90">Last 90 days</option>
+                <option value="365">Last year</option>
+              </select>
+            </div>
+            <p className="runs__meta">
+              {(costs?.totalTokens ?? 0).toLocaleString()} tokens across{' '}
+              {String(costs?.runCount ?? 0)} runs
+            </p>
 
-        {runs.map((candidate) => (
+            {(
+              [
+                ['By automation', costs?.byAutomation ?? [], 'automation'],
+                ['By agent', costs?.byAgent ?? [], 'agent'],
+                ['By model', costs?.byModel ?? [], 'model'],
+              ] as const
+            ).map(([label, slices, testid]) => (
+              <div key={testid} data-testid={`costs-by-${testid}`}>
+                <p className="canvas__section">{label}</p>
+                {slices.length === 0 && <p className="canvas__prompt">Nothing yet.</p>}
+                {slices.slice(0, 6).map((slice) => (
+                  <div key={slice.key} className="costs__row">
+                    <span className="costs__label">{slice.label}</span>
+                    {/* The bar is the comparison; the number is the fact. A
+                        list of numbers alone makes you do the arithmetic. */}
+                    <span
+                      className="costs__bar"
+                      style={{
+                        width: `${String(
+                          Math.max(
+                            2,
+                            Math.round(
+                              (slice.costUsd / Math.max(slices[0]?.costUsd ?? 1, 0.0001)) * 100,
+                            ),
+                          ),
+                        )}%`,
+                      }}
+                    />
+                    <span className="costs__value">{money(slice.costUsd)}</span>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </section>
+        )}
+
+        <input
+          className="control"
+          data-testid="runs-search"
+          aria-label="Search runs"
+          placeholder="Search by name"
+          value={search}
+          onChange={(event) => {
+            setSearch(event.target.value);
+          }}
+        />
+        <select
+          className="control"
+          data-testid="runs-status"
+          aria-label="Filter by status"
+          value={statusFilter}
+          onChange={(event) => {
+            setStatusFilter(event.target.value);
+          }}
+        >
+          <option value="all">Any outcome</option>
+          <option value="succeeded">Succeeded</option>
+          <option value="halted">Halted</option>
+          <option value="failed">Failed</option>
+          <option value="cancelled">Cancelled</option>
+          <option value="awaiting_approval">Waiting for approval</option>
+          <option value="running">Running</option>
+        </select>
+
+        {runs.length === 0 && <p className="canvas__prompt">Nothing has run yet.</p>}
+        {runs.length > 0 && visibleRuns.length === 0 && (
+          <p className="canvas__prompt">No run matches that.</p>
+        )}
+
+        {visibleRuns.map((candidate) => (
           <button
             key={candidate.id}
             type="button"
@@ -275,6 +428,7 @@ export function RunsView(): JSX.Element {
             </span>
             <span className="runs__meta">
               {when(candidate.startedAt)} · {money(candidate.costUsd)}
+              {candidate.triggerType !== 'manual' && ` · ${candidate.triggerType}`}
             </span>
           </button>
         ))}

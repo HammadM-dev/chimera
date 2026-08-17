@@ -133,3 +133,65 @@ test('a file landing in a watched folder starts the automation by itself', async
     await gateway.close();
   }
 });
+
+test('the run history can be searched, and the costs add up by automation, agent and model', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 15_000,
+    });
+
+    // Two runs with different names, so search has something to tell apart.
+    for (const name of ['Invoice sweep', 'Weekly digest']) {
+      await goTo(page, 'build');
+      await page.getByTestId('nav-new').click();
+      await page.getByTestId('palette-summariser').click();
+      await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+      await page.getByTestId('node-instruction').fill(`Do the ${name.toLowerCase()}.`);
+      await page.getByTestId('brief-input').fill(`Do the ${name.toLowerCase()}.`);
+      await page.getByTestId('brief-name').fill(name);
+      await page.getByTestId('brief-run').click();
+      await expect(page.getByTestId('run-note')).toContainText('succeeded', { timeout: 120_000 });
+    }
+
+    await goTo(page, 'runs');
+    await page.getByTestId('runs-refresh').click();
+
+    // Search narrows the history to the one you meant.
+    // Asserted against the list rather than the whole screen: the run that is
+    // already open stays open, which is what you want when you search for the
+    // next one to compare it with.
+    await page.getByTestId('runs-search').fill('invoice');
+    await expect(page.getByTestId('runs-list')).toContainText('Invoice sweep');
+    await expect(page.getByTestId('runs-list')).not.toContainText('Weekly digest');
+    await page.getByTestId('runs-search').fill('');
+
+    // A filter that matches nothing says so rather than showing everything.
+    await page.getByTestId('runs-status').selectOption('failed');
+    await expect(page.getByTestId('runs-list')).toContainText('No run matches that');
+    await page.getByTestId('runs-status').selectOption('all');
+
+    // And the bill, sliced the three ways a person asks about it.
+    await page.getByTestId('runs-costs-toggle').click();
+    const costs = page.getByTestId('run-costs');
+    await expect(costs).toBeVisible();
+    await expect(page.getByTestId('costs-total')).toContainText('$', { timeout: 20_000 });
+    await expect(page.getByTestId('costs-by-automation')).toContainText('Invoice sweep');
+    await expect(page.getByTestId('costs-by-agent')).toContainText('summariser');
+    await expect(page.getByTestId('costs-by-model')).toContainText('claude-haiku-4-5');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});

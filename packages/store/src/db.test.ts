@@ -132,6 +132,8 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'tokens_used',
     'cost_used',
     'checkpoint_json',
+    'role_id',
+    'model',
   ],
   cache: ['key_hash', 'kind', 'embedding', 'response_json', 'created_at', 'hits', 'workflow_id'],
   connections: [

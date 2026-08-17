@@ -111,14 +111,75 @@ export function addSpend(
   nodeId: string,
   tokens: number,
   costUsd: number,
+  attribution: { roleId?: string; model?: string } = {},
 ): void {
   db.prepare(
-    `INSERT INTO node_states (run_id, node_id, status, iteration_count, tokens_used, cost_used)
-     VALUES (?, ?, 'running', 0, ?, ?)
+    `INSERT INTO node_states
+       (run_id, node_id, status, iteration_count, tokens_used, cost_used, role_id, model)
+     VALUES (?, ?, 'running', 0, ?, ?, ?, ?)
      ON CONFLICT(run_id, node_id) DO UPDATE SET
        tokens_used = node_states.tokens_used + excluded.tokens_used,
-       cost_used = node_states.cost_used + excluded.cost_used`,
-  ).run(runId, nodeId, tokens, costUsd);
+       cost_used = node_states.cost_used + excluded.cost_used,
+       -- Written once and left alone: a node runs as one role, and a resumed
+       -- run re-reporting the same pair should not blank it if a later call
+       -- happens to arrive without one.
+       role_id = COALESCE(excluded.role_id, node_states.role_id),
+       model = COALESCE(excluded.model, node_states.model)`,
+  ).run(runId, nodeId, tokens, costUsd, attribution.roleId ?? null, attribution.model ?? null);
+}
+
+export interface SpendRow {
+  runId: string;
+  nodeId: string;
+  roleId: string | null;
+  model: string | null;
+  tokensUsed: number;
+  costUsed: number;
+  startedAt: string;
+  workflowId: string;
+  inputJson: string;
+}
+
+/**
+ * Every node's spend in a window, with enough of its run to group by.
+ *
+ * One query rather than a query per run: a workspace with a year of runs has
+ * tens of thousands of node rows, and a dashboard that made a round trip per
+ * run would be the slowest screen in the app.
+ */
+export function spendSince(db: Database.Database, sinceIso: string): SpendRow[] {
+  const rows = db
+    .prepare(
+      `SELECT n.run_id, n.node_id, n.role_id, n.model, n.tokens_used, n.cost_used,
+              r.started_at, r.workflow_id, r.input_json
+       FROM node_states n
+       JOIN runs r ON r.id = n.run_id
+       WHERE r.started_at >= ?
+       ORDER BY r.started_at DESC`,
+    )
+    .all(sinceIso) as {
+    run_id: string;
+    node_id: string;
+    role_id: string | null;
+    model: string | null;
+    tokens_used: number;
+    cost_used: number;
+    started_at: string;
+    workflow_id: string;
+    input_json: string;
+  }[];
+
+  return rows.map((row) => ({
+    runId: row.run_id,
+    nodeId: row.node_id,
+    roleId: row.role_id,
+    model: row.model,
+    tokensUsed: row.tokens_used,
+    costUsed: row.cost_used,
+    startedAt: row.started_at,
+    workflowId: row.workflow_id,
+    inputJson: row.input_json,
+  }));
 }
 
 export function clearRun(db: Database.Database, runId: string): void {

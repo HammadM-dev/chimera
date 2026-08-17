@@ -233,8 +233,14 @@ Appended by the agent runtime and the engine's node runners on every prompt sent
 | `tokens_used` | integer | |
 | `cost_used` | real | |
 | `checkpoint_json` | text | the resumable state for this node — F2.6's crash/resume mechanism reads this on restart |
+| `role_id` | text | which agent spent it (migration `0009`, M9-4). Null for rows written before that |
+| `model` | text | which model it spent it on (migration `0009`, M9-4) |
 
-Primary key `(run_id, node_id)`. Written after every step of every node's execution — this is the literal "journaled to SQLite after every step" requirement from F2.6; on app restart, `dagExecutor.ts` reconstructs in-flight runs by reading `node_states` for any run still in `running`/`paused` status and resuming from each node's last `checkpoint_json`.
+Primary key `(run_id, node_id)`. `role_id` and `model` are written by the spend
+meter alongside the figures, rather than derived at read time: the cost view
+would otherwise have to re-parse every run's definition and every trace event,
+which is the difference between a screen that opens instantly and one nobody
+waits for. Written after every step of every node's execution — this is the literal "journaled to SQLite after every step" requirement from F2.6; on app restart, `dagExecutor.ts` reconstructs in-flight runs by reading `node_states` for any run still in `running`/`paused` status and resuming from each node's last `checkpoint_json`.
 
 ### `cache`
 

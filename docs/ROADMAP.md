@@ -17,10 +17,10 @@ So the order has changed. Everything that makes the product usable — the canva
 | M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
-| M9 Triggers and observability | 1 / 6 | Automations run unattended and prove they worked |
+| M9 Triggers and observability | 2 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**60 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**61 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1496,6 +1496,14 @@ Acceptance criteria:
 Dependencies: M2-10.
 
 ### M9-4: Cost dashboard and full run history
+
+STATUS: **done.** Runs gained a search box, an outcome filter, and a costs panel sliced by automation, by agent and by model over a chosen window. Each run row says what started it when it was not a person.
+
+DECISION: **the spend meter records the role and the model alongside the figures** (migration `0009`). Deriving them at read time means re-parsing every run's definition and every trace event; a cost view that takes seconds to open is a cost view nobody opens.
+
+DECISION: **the dashboard lives in Runs, not in a section of its own.** "What did this cost" and "what happened" are the same question asked twice, and a separate screen is a place people forget exists.
+
+DECISION: **rows are counted once per slice.** An automation with twelve steps is one run, and a runs column reading twelve would make every figure beside it look wrong.
 
 Description: F9.2 (cost dashboard by workflow/role/provider/time period) and the completion of F9.1 (run history with filters/search/status — a minimal list already existed from M4's live run view needing to query `runs`; this ticket is the dedicated, filterable, searchable history screen).
 
