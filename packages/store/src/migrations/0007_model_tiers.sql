@@ -1,0 +1,11 @@
+-- Which connection and model back each tier, for this workspace.
+--
+-- The point is portability: a workflow that says "cheap" runs on whatever the
+-- workspace it is opened in calls cheap, so the same automation works for a
+-- buyer on Anthropic keys and a buyer running everything locally, with no edit
+-- to the workflow. A workflow that hardcoded a model id would be a workflow
+-- that only ran where it was written.
+--
+-- On the settings row rather than in its own table: there are exactly three
+-- tiers, they are fixed by the schema, and a table would invite a fourth.
+ALTER TABLE workspace_settings ADD COLUMN model_tiers_json TEXT NOT NULL DEFAULT '{}';

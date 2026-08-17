@@ -18,12 +18,26 @@ export interface SpendSnapshot {
   byNode: Record<string, { tokens: number; costUsd: number }>;
   /** True when any call in this run used a model with no verified price. */
   hasUnpricedCalls: boolean;
+  /**
+   * What the same tokens would have cost on the frontier tier.
+   *
+   * The multi-provider argument, made in numbers rather than asserted: a run
+   * that used a cheap model for a thousand fan-out workers and a frontier model
+   * for the verification is dramatically cheaper than one that used the good
+   * model throughout, and nobody believes that until they see both figures.
+   *
+   * Null when no frontier model is configured, or when its price is unknown —
+   * an invented comparison is worse than no comparison.
+   */
+  frontierCostUsd: number | null;
 }
 
 export interface SpendMeterOptions {
   db: Database.Database;
   runId: string;
   governor: Governor;
+  /** The model the workspace calls `frontier`, for the comparison figure. */
+  frontierModel?: string;
   /** Called after every cost-incurring call, with the new totals. */
   onUpdate?: (snapshot: SpendSnapshot) => void;
 }
@@ -51,7 +65,14 @@ export function createSpendMeter(options: SpendMeterOptions): SpendMeter {
     for (const state of nodeStatesRepository.listForRun(db, runId)) {
       byNode[state.nodeId] = { tokens: state.tokensUsed, costUsd: state.costUsed };
     }
-    return { runId, tokens: run.tokens, costUsd: run.costUsd, byNode, hasUnpricedCalls };
+    return {
+      runId,
+      tokens: run.tokens,
+      costUsd: run.costUsd,
+      byNode,
+      hasUnpricedCalls,
+      frontierCostUsd: run.frontierCostUsd,
+    };
   };
 
   return {
@@ -72,6 +93,19 @@ export function createSpendMeter(options: SpendMeterOptions): SpendMeter {
       // Persisted additively: the checkpoint journal and this meter write
       // different columns of the same row, and an absolute write from either
       // would clobber the other.
+      // The comparison, accumulated per call rather than at the end: only here
+      // is the input/output split known, and the two rates differ. Persisted
+      // rather than held in memory, because a fan-out's items are nested runs
+      // sharing this run's id, each with a meter of its own.
+      if (options.frontierModel !== undefined && options.frontierModel !== '') {
+        const frontier = costOf(
+          governor.capabilitiesOf(options.frontierModel),
+          usage.inputTokens,
+          usage.outputTokens,
+        );
+        if (frontier !== null) runsRepository.addFrontierCost(db, runId, frontier);
+      }
+
       nodeStatesRepository.addSpend(db, runId, nodeId, actualTokens, actualCost ?? 0);
       runsRepository.addSpend(db, runId, actualTokens, actualCost ?? 0);
 

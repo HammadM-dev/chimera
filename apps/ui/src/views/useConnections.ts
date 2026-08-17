@@ -13,7 +13,14 @@ export interface ModelChoice {
   model: string;
 }
 
-export function useConnections(): { choices: ModelChoice[]; loaded: boolean } {
+/**
+ * @param refreshToken Bumped by the shell when a connection is added or a
+ * catalogue imported. Without it this hook reads once on mount, and a panel
+ * that opened before the import would offer an empty list forever — the exact
+ * shape of the defect that made a working OmniRoute import look like it had
+ * done nothing.
+ */
+export function useConnections(refreshToken = 0): { choices: ModelChoice[]; loaded: boolean } {
   const [choices, setChoices] = useState<ModelChoice[]>([]);
   const [loaded, setLoaded] = useState(false);
 
@@ -41,7 +48,7 @@ export function useConnections(): { choices: ModelChoice[]; loaded: boolean } {
         setLoaded(true);
       }
     })();
-  }, []);
+  }, [refreshToken]);
 
   return { choices, loaded };
 }

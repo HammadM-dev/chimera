@@ -110,6 +110,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'budget_tokens_used',
     'budget_cost_usd_used',
     'error_summary',
+    'frontier_cost_usd',
   ],
   traces: [
     'id',
@@ -160,7 +161,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   // Added by 0002 for M1-9's local-only mode. Not part of the original kernel
   // twelve — a workspace-scoped policy row rather than application data, and
   // documented as such in docs/ARCHITECTURE.md section 5.
-  workspace_settings: ['id', 'local_only_mode'],
+  workspace_settings: ['id', 'local_only_mode', 'model_tiers_json'],
   // Added by 0003 for M2-5's role registry. Workspace-level configuration:
   // roles are shared by every workflow in a workspace, so tightening one
   // holds everywhere rather than in the workflow that happened to be edited.

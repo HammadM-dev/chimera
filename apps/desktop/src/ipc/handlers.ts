@@ -11,6 +11,8 @@ import {
   startChat,
   sweepHealth,
   testConnection,
+  getTiers,
+  setTiers,
 } from '../providers/service.ts';
 import { detect, importCatalogue } from '../providers/omniroute.ts';
 import {
@@ -114,6 +116,8 @@ registerHandler(channels.runAwaiting, () => awaitingApprovals());
 registerHandler(channels.runList, (payload) => listRuns(payload.limit));
 registerHandler(channels.traceList, (payload) => listTrace(payload.runId));
 registerHandler(channels.runFailures, (payload) => listFailures(payload.runId));
+registerHandler(channels.tiersGet, () => getTiers());
+registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));
 registerHandler(channels.traceExport, (payload) => exportTrace(payload.runId));
 
 registerHandler(channels.workflowSave, (payload) =>

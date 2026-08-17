@@ -607,3 +607,85 @@ test('a fan-out runs its body over every item the step before produced', async (
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('an aggregate folds many answers into one, a chunk per model call', async () => {
+  const { db, dir } = open('run-11');
+  const tools = await toolsFor(dir, 'run-11');
+
+  const brief: RunBrief = {
+    name: 'folded',
+    instruction: 'handle each, then combine',
+    attachments: [],
+    steps: [
+      shaping('items', {
+        type: 'transform',
+        transform: { template: '["a","b","c","d","e"]' },
+      }),
+      shaping('each', {
+        type: 'fanout',
+        fanout: {
+          source: 'items',
+          parse: 'json',
+          body: ['handle'],
+          concurrency: 5,
+          maxItems: 50,
+          onItemError: 'continue',
+          deadLetterLimit: 5,
+        },
+      }),
+      agent('handle', 'summariser', 'Handle it.'),
+      {
+        nodeId: 'combine',
+        type: 'aggregate',
+        config: {
+          type: 'aggregate',
+          aggregate: {
+            source: 'each',
+            strategy: 'reduce_with_agent',
+            separator: '',
+            template: '',
+            roleId: 'summariser',
+            chunkSize: 2,
+            instruction: 'Combine these into one answer.',
+          },
+        },
+        roleId: '',
+        instruction: '',
+        // The aggregate node binds a model of its own, because this is the one
+        // strategy that spends money.
+        connectionId: 'conn-1',
+        model: 'mock-frontier',
+      },
+    ],
+    edges: [
+      ['items', 'each'],
+      ['each', 'handle'],
+      ['each', 'combine'],
+    ],
+  };
+
+  try {
+    const outcome = await runAutomation(deps(db, 'run-11', brief, tools));
+
+    const combined = outcome.steps.find((step) => step.nodeId === 'combine');
+    assert.ok(combined);
+    assert.equal(combined.status, 'succeeded');
+
+    // Five answers at two per chunk is three calls, then those three fold to
+    // two, then one: the point of folding is that a thousand answers never have
+    // to fit in one context window.
+    const foldNodes = new Set(
+      tracesRepository
+        .listForRun(db, 'run-11')
+        .map((event) => event.nodeId)
+        .filter((nodeId) => nodeId.startsWith('combine/round-')),
+    );
+    assert.equal([...foldNodes].filter((nodeId) => nodeId.includes('round-0')).length, 3);
+    assert.ok(foldNodes.size > 3, 'it folded once and stopped with three answers');
+    assert.ok(combined.iterations >= 2, 'it should have taken more than one round');
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

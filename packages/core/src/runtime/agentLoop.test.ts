@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { GovernorLimitError, ValidationError } from '@chimera/errors';
+import { GovernorLimitError, ProviderError, ValidationError } from '@chimera/errors';
 import { MockProvider, type MockResponse } from '@chimera/providers';
 import type { AdapterCallOptions, NormalisedRequest, ProviderAdapter } from '@chimera/providers';
 import {
@@ -532,6 +532,55 @@ test('a contract the model cannot satisfy fails the run with a ValidationError',
       (err: unknown) =>
         err instanceof ValidationError && err.code === 'OUTPUT_CONTRACT_UNSATISFIED',
     );
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a dropped connection is retried; the work is not thrown away', async () => {
+  // Under a fan-out's load a reset socket is an ordinary event, and failing an
+  // item over one throws away work the next attempt would have completed. An
+  // auth failure is the opposite — asking again cannot fix it — which is why
+  // this retries on PROVIDER_UNREACHABLE and not on everything.
+  const h = await harness();
+  let attempts = 0;
+
+  const flaky: ProviderAdapter = {
+    kind: 'openai-compatible',
+    chat(): Promise<never> {
+      attempts += 1;
+      if (attempts === 1) {
+        return Promise.reject(
+          new ProviderError('PROVIDER_UNREACHABLE', 'Could not reach OmniRoute: fetch failed', {
+            provider: 'omniroute',
+          }),
+        );
+      }
+      return Promise.resolve({
+        content: [{ type: 'text', text: 'Done: it worked on the second attempt.' }],
+        toolCalls: [],
+        usage: { inputTokens: 10, outputTokens: 5, totalTokens: 15 },
+        finishReason: 'stop',
+        model: 'mock-frontier',
+      }) as never;
+    },
+  } as unknown as ProviderAdapter;
+
+  try {
+    const result = await runAgentLoop(taskFor(STARTER_ROLES[7] as Role), {
+      governor: new Governor('permissive'),
+      provider: flaky,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.ok(attempts >= 2, 'the transport failure was not retried');
+    // What matters here is that the dropped connection did not end the step.
+    // Where the loop goes afterwards is the rest of this file's business — this
+    // fake never answers the verification question, so it runs out of
+    // iterations rather than finishing, and that is fine.
+    assert.notEqual(result.status, 'failed');
+    assert.match(result.output, /second attempt/);
   } finally {
     await h.cleanup();
   }

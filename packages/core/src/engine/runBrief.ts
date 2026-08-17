@@ -25,6 +25,16 @@ export interface BriefStep {
   instruction: string;
   connectionId: string;
   model: string;
+  /**
+   * Run this step on whatever the workspace calls this tier.
+   *
+   * Set instead of `connectionId`/`model`, not alongside. The point is
+   * portability: an automation that says "cheap" runs on whatever the workspace
+   * it is opened in calls cheap, so the same file works for a buyer on hosted
+   * keys and a buyer running everything locally. A hardcoded model id is a
+   * workflow that only runs where it was written.
+   */
+  tier?: 'cheap' | 'standard' | 'frontier';
 }
 
 export interface RunBrief {
@@ -78,7 +88,7 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   // A subworkflow does the work too — by running agents of its own. The rule is
   // that something in the graph must act, not that it must act directly.
   const workSteps = brief.steps.filter((step) =>
-    ['agent', 'subworkflow', 'fanout'].includes(step.type ?? 'agent'),
+    ['agent', 'subworkflow', 'fanout', 'swarm'].includes(step.type ?? 'agent'),
   );
 
   if (brief.steps.length === 0) {
@@ -114,7 +124,9 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
       if (!knownRoles.includes(step.roleId)) {
         problems.push({ nodeId: step.nodeId, message: `No agent called "${step.roleId}".` });
       }
-      if (step.model === '' || step.connectionId === '') {
+      // A tier is a model too — just one this workspace resolves rather than
+      // one the file names.
+      if (step.tier === undefined && (step.model === '' || step.connectionId === '')) {
         problems.push({ nodeId: step.nodeId, message: 'Choose a model for this step.' });
       }
     }
@@ -154,6 +166,65 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
           nodeId: step.nodeId,
           message: 'An approval step needs a question for the person approving it.',
         });
+      }
+    }
+
+    if (type === 'swarm') {
+      const swarm = step.config?.type === 'swarm' ? step.config.swarm : undefined;
+      if (!swarm) {
+        problems.push({ nodeId: step.nodeId, message: 'This swarm has no goal or agents.' });
+      } else {
+        // The same rule as a loop, for the same reason: this repeats.
+        if (!Number.isFinite(swarm.maxRounds) || swarm.maxRounds < 1) {
+          problems.push({
+            nodeId: step.nodeId,
+            message: 'This swarm needs a maximum number of rounds.',
+            stops: 'save',
+          });
+        }
+        if (swarm.goal.trim() === '') {
+          problems.push({ nodeId: step.nodeId, message: 'Give this swarm a goal to work on.' });
+        }
+        if (swarm.agents.length === 0) {
+          problems.push({ nodeId: step.nodeId, message: 'Add at least one specialist.' });
+        }
+        if (!knownRoles.includes(swarm.orchestratorRoleId)) {
+          problems.push({ nodeId: step.nodeId, message: 'Choose an agent to orchestrate.' });
+        }
+        for (const agent of swarm.agents) {
+          if (!knownRoles.includes(agent.roleId)) {
+            problems.push({ nodeId: step.nodeId, message: `No agent called "${agent.roleId}".` });
+          }
+        }
+        if (step.model === '' || step.connectionId === '') {
+          problems.push({ nodeId: step.nodeId, message: 'Choose a model for this step.' });
+        }
+      }
+    }
+
+    if (type === 'aggregate') {
+      const aggregate = step.config?.type === 'aggregate' ? step.config.aggregate : undefined;
+      if (!aggregate) {
+        problems.push({ nodeId: step.nodeId, message: 'This step has nothing to combine.' });
+      } else if (aggregate.strategy === 'reduce_with_agent') {
+        if (!knownRoles.includes(aggregate.roleId)) {
+          problems.push({
+            nodeId: step.nodeId,
+            message: 'Choose an agent to do the combining.',
+          });
+        }
+        if (step.model === '' || step.connectionId === '') {
+          problems.push({ nodeId: step.nodeId, message: 'Choose a model for this step.' });
+        }
+        if (!Number.isFinite(aggregate.chunkSize) || aggregate.chunkSize < 1) {
+          problems.push({
+            nodeId: step.nodeId,
+            message: 'Say how many answers to combine at a time.',
+            stops: 'save',
+          });
+        }
+      } else if (aggregate.strategy === 'template' && aggregate.template.trim() === '') {
+        problems.push({ nodeId: step.nodeId, message: 'This step has no template.' });
       }
     }
 

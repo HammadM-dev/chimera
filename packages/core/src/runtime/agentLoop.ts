@@ -1,4 +1,4 @@
-import { GovernorLimitError, ProviderRateLimitError } from '@chimera/errors';
+import { GovernorLimitError, ProviderError, ProviderRateLimitError } from '@chimera/errors';
 import type {
   AdapterCallOptions,
   Message,
@@ -334,10 +334,16 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   /**
    * Sends the approved request, retrying only what retrying can fix.
    *
-   * A 429 is transient: the provider is telling us to slow down, and a bounded,
-   * jittered wait is the correct response. An auth failure is not — a revoked
-   * key does not become valid because we asked again — so it is surfaced
-   * immediately rather than burning the retry budget discovering that.
+   * Two things are worth retrying. A 429 is transient: the provider is telling
+   * us to slow down, and a bounded, jittered wait is the correct response. A
+   * connection that never opened or was dropped mid-flight is transient in the
+   * same way — under a fan-out's load, a reset socket is an ordinary event, and
+   * failing an item over one throws away work that would have succeeded on the
+   * next attempt.
+   *
+   * An auth failure is neither: a revoked key does not become valid because we
+   * asked again, so it is surfaced immediately rather than burning the retry
+   * budget discovering that. Nor is a 4xx about the request itself.
    *
    * The backoff schedule comes from the Governor, not from a timer here: a
    * runtime with its own retry policy would be a second answer to a governed
@@ -358,7 +364,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       try {
         return await provider.chat(request, callOptions);
       } catch (err) {
-        if (!(err instanceof ProviderRateLimitError) || attempt >= governor.maxRetries) {
+        const retryable =
+          err instanceof ProviderRateLimitError ||
+          (err instanceof ProviderError && err.code === 'PROVIDER_UNREACHABLE');
+
+        if (!retryable || attempt >= governor.maxRetries) {
           // Out of retries, or an error retrying cannot fix. The checkpoint
           // written after the last completed step is the run's last-good state,
           // so this is resumable once the cause is fixed.
@@ -366,11 +376,16 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
           throw err;
         }
 
-        const retryAfterMs = Number(err.details.retryAfterMs);
-        governor.recordRateLimit(
-          approved.connectionId,
-          Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
-        );
+        // Only a real 429 tells the Governor to throttle this connection. A
+        // dropped socket is not the provider asking us to slow down, and
+        // recording it as one would cool a connection that is fine.
+        if (err instanceof ProviderRateLimitError) {
+          const retryAfterMs = Number(err.details.retryAfterMs);
+          governor.recordRateLimit(
+            approved.connectionId,
+            Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
+          );
+        }
 
         const delayMs = governor.backoffFor(attempt);
         trace.append({

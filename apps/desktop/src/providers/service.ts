@@ -1,7 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron';
 import { ProviderError } from '@chimera/errors';
-import { connectionsRepository, setSecret, settingsRepository, type AuthRef } from '@chimera/store';
+import {
+  connectionsRepository,
+  setSecret,
+  settingsRepository,
+  type AuthRef,
+  type ModelTiers,
+} from '@chimera/store';
 import {
   HealthMonitor,
   adapterFor,
@@ -326,4 +332,20 @@ export async function importCatalogue(connectionId: string): Promise<{ models: n
 
 export function setLocalOnlyMode(enabled: boolean): void {
   settingsRepository.setLocalOnlyMode(getStore(), enabled);
+}
+
+/**
+ * Which connection and model this workspace calls cheap, standard and frontier.
+ *
+ * Read and written here rather than in a settings service of its own, because
+ * every value in it is a provider connection and a model id — the two things
+ * this module already owns.
+ */
+export function getTiers(): { tiers: ModelTiers } {
+  return { tiers: settingsRepository.read(getStore()).modelTiers };
+}
+
+export function setTiers(tiers: ModelTiers): { tiers: ModelTiers } {
+  settingsRepository.setModelTiers(getStore(), tiers);
+  return getTiers();
 }

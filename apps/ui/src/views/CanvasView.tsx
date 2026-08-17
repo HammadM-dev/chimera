@@ -31,7 +31,15 @@ import './canvas.css';
 // than hidden behind a mode.
 
 export type StepKind =
-  'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow' | 'fanout';
+  | 'agent'
+  | 'condition'
+  | 'loop'
+  | 'transform'
+  | 'approval'
+  | 'subworkflow'
+  | 'fanout'
+  | 'aggregate'
+  | 'swarm';
 
 /**
  * Everything the shaping node types need, in one flat shape.
@@ -61,6 +69,19 @@ export interface StepSettings {
   parse: 'json' | 'lines';
   onItemError: 'continue' | 'halt';
   deadLetterLimit: number;
+  /** Aggregate: how many answers become one, and how. */
+  strategy: 'concat' | 'json_merge' | 'reduce_with_agent' | 'vote' | 'template';
+  separator: string;
+  chunkSize: number;
+  /** Swarm: the goal, who leads, who works, and the three ways it stops. */
+  goal: string;
+  orchestratorRoleId: string;
+  agents: { roleId: string; instruction: string }[];
+  maxRounds: number;
+  maxConcurrentAgents: number;
+  stallRounds: number;
+  /** Empty means no goal test — the rounds and the stall rule still bound it. */
+  goalContains: string;
 }
 
 const DEFAULT_SETTINGS: StepSettings = {
@@ -77,6 +98,16 @@ const DEFAULT_SETTINGS: StepSettings = {
   parse: 'json',
   onItemError: 'continue',
   deadLetterLimit: 10,
+  strategy: 'concat',
+  separator: '',
+  chunkSize: 10,
+  goal: '',
+  orchestratorRoleId: 'planner',
+  agents: [],
+  maxRounds: 3,
+  maxConcurrentAgents: 5,
+  stallRounds: 2,
+  goalContains: '',
 };
 
 export interface StepNodeData extends Record<string, unknown> {
@@ -85,6 +116,14 @@ export interface StepNodeData extends Record<string, unknown> {
   role: AgentRole | null;
   /** `connectionId::model`, or null while the step is still unbound. */
   binding: ModelChoice | null;
+  /**
+   * Run on whatever this workspace calls this tier, instead of a named model.
+   *
+   * An automation built on tiers is one that runs on somebody else's machine
+   * without an edit — which is the difference between a template you can ship
+   * and a template that only works here.
+   */
+  tier?: 'cheap' | 'standard' | 'frontier';
   /** Live run state: running, succeeded, denied… Empty when idle. */
   status?: string;
   /**
@@ -109,6 +148,8 @@ const KIND_LABEL: Record<StepKind, string> = {
   approval: 'Approval',
   subworkflow: 'Automation',
   fanout: 'Fan out',
+  aggregate: 'Combine',
+  swarm: 'Swarm',
 };
 
 const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
@@ -118,6 +159,16 @@ const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
   approval: 'Pauses until a person says yes',
   subworkflow: 'Runs another saved automation here',
   fanout: 'Runs the steps below it once per item, several at a time',
+  aggregate: 'Turns many answers into one',
+  swarm: 'A team of agents on one goal, through a shared board',
+};
+
+const STRATEGY_LABEL: Record<StepSettings['strategy'], string> = {
+  concat: 'One after another',
+  json_merge: 'Merged as JSON',
+  reduce_with_agent: 'Folded by an agent',
+  vote: 'The most common answer',
+  template: 'Into a template',
 };
 
 /** The one line a shaping node shows about what it will do. */
@@ -138,6 +189,12 @@ function summarise(data: StepNodeData): string {
       return settings.workflowId === '' ? 'No automation chosen' : settings.workflowId;
     case 'fanout':
       return `${String(settings.concurrency)} at a time, up to ${String(settings.maxItems)}`;
+    case 'aggregate':
+      return STRATEGY_LABEL[settings.strategy];
+    case 'swarm':
+      return settings.agents.length === 0
+        ? 'No specialists yet'
+        : `${String(settings.agents.length)} specialists, up to ${String(settings.maxRounds)} rounds`;
     default:
       return '';
   }
@@ -154,8 +211,14 @@ function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
     >
       <Handle type="target" position={Position.Top} className="node__port" />
       <p className="node__name">{role?.name ?? 'Agent'}</p>
-      <p className={`node__model ${binding === null ? 'node__model--unset' : ''}`}>
-        {binding === null ? 'No model chosen' : binding.model}
+      <p
+        className={`node__model ${binding === null && data.tier === undefined ? 'node__model--unset' : ''}`}
+      >
+        {data.tier !== undefined
+          ? `${data.tier} tier`
+          : binding === null
+            ? 'No model chosen'
+            : binding.model}
       </p>
       {typeof status === 'string' && status !== '' && (
         <p className={`node__status node__status--${status}`}>{status}</p>
@@ -225,6 +288,8 @@ const NODE_TYPES = {
   approval: ShapingNodeBody,
   subworkflow: ShapingNodeBody,
   fanout: ShapingNodeBody,
+  aggregate: ShapingNodeBody,
+  swarm: ShapingNodeBody,
 };
 
 let nodeSeq = 0;
@@ -249,6 +314,7 @@ interface BriefStepWire {
   nodeId: string;
   type?: StepKind;
   config?: Record<string, unknown>;
+  tier?: 'cheap' | 'standard' | 'frontier';
   roleId: string;
   instruction: string;
   connectionId: string;
@@ -412,6 +478,36 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             settings.maxIterations = (config['loop'] as { maxIterations: number }).maxIterations;
           } else if (config && config['type'] === 'transform') {
             settings.template = (config['transform'] as { template: string }).template;
+          } else if (config && config['type'] === 'swarm') {
+            const swarm = config['swarm'] as {
+              goal: string;
+              orchestratorRoleId: string;
+              agents: { roleId: string; instruction: string }[];
+              maxRounds: number;
+              maxConcurrentAgents: number;
+              stallRounds: number;
+              goalPredicate?: { value: string };
+            };
+            settings.goal = swarm.goal;
+            settings.orchestratorRoleId = swarm.orchestratorRoleId;
+            settings.agents = swarm.agents;
+            settings.maxRounds = swarm.maxRounds;
+            settings.maxConcurrentAgents = swarm.maxConcurrentAgents;
+            settings.stallRounds = swarm.stallRounds;
+            settings.goalContains = swarm.goalPredicate?.value ?? '';
+          } else if (config && config['type'] === 'aggregate') {
+            const aggregate = config['aggregate'] as {
+              source: string;
+              strategy: StepSettings['strategy'];
+              separator: string;
+              template: string;
+              chunkSize: number;
+            };
+            settings.source = aggregate.source;
+            settings.strategy = aggregate.strategy;
+            settings.separator = aggregate.separator;
+            settings.template = aggregate.template;
+            settings.chunkSize = aggregate.chunkSize;
           } else if (config && config['type'] === 'fanout') {
             const fanout = config['fanout'] as {
               source: string;
@@ -444,6 +540,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               role,
               instruction: step.instruction,
               settings,
+              ...(step.tier === undefined ? {} : { tier: step.tier }),
               binding:
                 step.model === ''
                   ? null
@@ -590,6 +687,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         instruction: node.data.instruction,
         connectionId: node.data.binding?.connectionId ?? '',
         model: node.data.binding?.model ?? '',
+        ...(node.data.tier === undefined ? {} : { tier: node.data.tier }),
       };
 
       switch (node.data.kind) {
@@ -636,6 +734,48 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             config: {
               type: 'approval',
               approval: { prompt: settings.prompt, showSource: settings.showSource },
+            },
+          };
+        case 'swarm':
+          return {
+            ...base,
+            config: {
+              type: 'swarm',
+              swarm: {
+                goal: settings.goal,
+                orchestratorRoleId: settings.orchestratorRoleId,
+                agents: settings.agents,
+                maxRounds: settings.maxRounds,
+                maxConcurrentAgents: settings.maxConcurrentAgents,
+                stallRounds: settings.stallRounds,
+                ...(settings.goalContains === ''
+                  ? {}
+                  : {
+                      goalPredicate: {
+                        source: '',
+                        test: 'contains' as const,
+                        value: settings.goalContains,
+                        whenTrue: [],
+                        whenFalse: [],
+                      },
+                    }),
+              },
+            },
+          };
+        case 'aggregate':
+          return {
+            ...base,
+            config: {
+              type: 'aggregate',
+              aggregate: {
+                source: settings.source,
+                strategy: settings.strategy,
+                separator: settings.separator,
+                template: settings.template,
+                roleId: node.data.role?.id ?? 'summariser',
+                chunkSize: settings.chunkSize,
+                instruction: node.data.instruction,
+              },
             },
           };
         case 'fanout':
@@ -753,7 +893,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const agentNodes = nodes.filter((node) => node.data.kind === 'agent');
   // A subworkflow and a fan-out act too, by running agents of their own.
   const workNodes = nodes.filter((node) =>
-    ['agent', 'subworkflow', 'fanout'].includes(node.data.kind),
+    ['agent', 'subworkflow', 'fanout', 'swarm'].includes(node.data.kind),
   );
   const badShaping = nodes.find((node) => {
     const settings = node.data.settings;
@@ -768,6 +908,19 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         return edges.every((edge) => edge.source !== node.id);
       case 'subworkflow':
         return settings.workflowId === '';
+      case 'swarm':
+        return (
+          settings.goal.trim() === '' ||
+          settings.agents.length === 0 ||
+          settings.maxRounds < 1 ||
+          node.data.binding === null
+        );
+      case 'aggregate':
+        return (
+          (settings.strategy === 'reduce_with_agent' &&
+            (node.data.binding === null || settings.chunkSize < 1)) ||
+          (settings.strategy === 'template' && settings.template.trim() === '')
+        );
       case 'fanout':
         return (
           settings.maxItems < 1 ||
@@ -782,7 +935,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const blocked =
     workNodes.length === 0
       ? 'Add an agent first.'
-      : agentNodes.some((node) => node.data.binding === null)
+      : agentNodes.some((node) => node.data.binding === null && node.data.tier === undefined)
         ? 'Every agent needs a model.'
         : badShaping
           ? badShaping.data.kind === 'loop'
@@ -791,11 +944,15 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               ? 'An approval needs a question to ask.'
               : badShaping.data.kind === 'transform'
                 ? 'A reshape needs a template.'
-                : badShaping.data.kind === 'fanout'
-                  ? 'A fan-out needs a maximum, a concurrency of at least one, and steps to run.'
-                  : badShaping.data.kind === 'subworkflow'
-                    ? 'Choose which automation that step runs.'
-                    : 'A branch needs somewhere to go — join it to a step.'
+                : badShaping.data.kind === 'swarm'
+                  ? 'A swarm needs a goal, at least one specialist, a round limit and a model.'
+                  : badShaping.data.kind === 'aggregate'
+                    ? 'That combine step needs a model and a chunk size, or a template.'
+                    : badShaping.data.kind === 'fanout'
+                      ? 'A fan-out needs a maximum, a concurrency of at least one, and steps to run.'
+                      : badShaping.data.kind === 'subworkflow'
+                        ? 'Choose which automation that step runs.'
+                        : 'A branch needs somewhere to go — join it to a step.'
           : agentNodes.length > 0 &&
               brief.trim() === '' &&
               agentNodes.every((node) => node.data.instruction.trim() === '')
@@ -832,10 +989,25 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
 
   const bind = useCallback(
     (value: string) => {
-      const choice = choices.find((candidate) => candidate.key === value) ?? null;
+      // A tier and a model are the same choice made two ways, so they are one
+      // control: picking either clears the other.
+      const tier = value.startsWith('tier:')
+        ? (value.slice(5) as 'cheap' | 'standard' | 'frontier')
+        : undefined;
+      const choice = tier === undefined ? (choices.find((c) => c.key === value) ?? null) : null;
+
       setNodes((current) =>
         current.map((node) =>
-          node.id === selectedId ? { ...node, data: { ...node.data, binding: choice } } : node,
+          node.id === selectedId
+            ? {
+                ...node,
+                data: {
+                  ...node.data,
+                  binding: choice,
+                  ...(tier === undefined ? { tier: undefined } : { tier }),
+                },
+              }
+            : node,
         ),
       );
     },
@@ -1164,12 +1336,21 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 <select
                   className="control"
                   data-testid="node-model"
-                  value={selected.data.binding?.key ?? ''}
+                  value={
+                    selected.data.tier === undefined
+                      ? (selected.data.binding?.key ?? '')
+                      : `tier:${selected.data.tier}`
+                  }
                   onChange={(event) => {
                     bind(event.target.value);
                   }}
                 >
                   <option value="">Choose a model</option>
+                  <option value="tier:cheap">
+                    Cheap tier — whatever this workspace calls cheap
+                  </option>
+                  <option value="tier:standard">Standard tier</option>
+                  <option value="tier:frontier">Frontier tier</option>
                   {choices.map((choice) => (
                     <option key={choice.key} value={choice.key}>
                       {choice.connectionLabel} · {choice.model}
@@ -1241,6 +1422,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 label: node.data.role?.name ?? KIND_LABEL[node.data.kind],
               }))}
               automations={saved.filter((workflow) => workflow.id !== savedId)}
+              roles={roles}
               selfId={selected.id}
               onChange={setSetting}
             />
@@ -1261,6 +1443,8 @@ interface ShapingInspectorProps {
   steps: { id: string; label: string }[];
   /** Saved automations a subworkflow step can run, minus this one. */
   automations: { id: string; name: string }[];
+  /** The roster, for the steps that name agents without being one. */
+  roles: AgentRole[];
   selfId: string;
   onChange: <K extends keyof StepSettings>(key: K, value: StepSettings[K]) => void;
 }
@@ -1270,6 +1454,7 @@ function ShapingInspector({
   data,
   steps,
   automations,
+  roles,
   selfId,
   onChange,
 }: ShapingInspectorProps): JSX.Element {
@@ -1376,6 +1561,243 @@ function ShapingInspector({
             Use {'{{previous}}'} for the step before this one, or {'{{step-id}}'} for any earlier
             step. No model runs here, so this costs nothing.
           </p>
+        </>
+      )}
+
+      {data.kind === 'swarm' && (
+        <>
+          <p className="canvas__section">Goal</p>
+          <textarea
+            className="canvas__instruction"
+            data-testid="swarm-goal"
+            value={settings.goal}
+            placeholder="What are they all working on?"
+            onChange={(event) => {
+              onChange('goal', event.target.value);
+            }}
+          />
+
+          <p className="canvas__section">Led by</p>
+          <select
+            className="control"
+            data-testid="swarm-orchestrator"
+            value={settings.orchestratorRoleId}
+            onChange={(event) => {
+              onChange('orchestratorRoleId', event.target.value);
+            }}
+          >
+            {roles.map((role) => (
+              <option key={role.id} value={role.id}>
+                {role.name}
+              </option>
+            ))}
+          </select>
+
+          <p className="canvas__section">Specialists</p>
+          {settings.agents.map((agent, index) => (
+            <div key={`${agent.roleId}-${String(index)}`} className="swarm__agent">
+              <select
+                className="control"
+                data-testid={`swarm-agent-${String(index)}`}
+                value={agent.roleId}
+                aria-label="Specialist"
+                onChange={(event) => {
+                  const next = [...settings.agents];
+                  next[index] = { ...agent, roleId: event.target.value };
+                  onChange('agents', next);
+                }}
+              >
+                {roles.map((role) => (
+                  <option key={role.id} value={role.id}>
+                    {role.name}
+                  </option>
+                ))}
+              </select>
+              <input
+                className="control"
+                data-testid={`swarm-agent-instruction-${String(index)}`}
+                value={agent.instruction}
+                aria-label="What they do"
+                placeholder="What this one does"
+                onChange={(event) => {
+                  const next = [...settings.agents];
+                  next[index] = { ...agent, instruction: event.target.value };
+                  onChange('agents', next);
+                }}
+              />
+              <button
+                type="button"
+                className="button"
+                data-testid={`swarm-remove-${String(index)}`}
+                onClick={() => {
+                  onChange(
+                    'agents',
+                    settings.agents.filter((_, at) => at !== index),
+                  );
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          ))}
+          <button
+            type="button"
+            className="button"
+            data-testid="swarm-add-agent"
+            onClick={() => {
+              onChange('agents', [
+                ...settings.agents,
+                { roleId: roles[0]?.id ?? 'researcher', instruction: '' },
+              ]);
+            }}
+          >
+            Add a specialist
+          </button>
+
+          <p className="canvas__section">Rounds at most</p>
+          <input
+            className="control"
+            type="number"
+            min={1}
+            max={20}
+            data-testid="swarm-rounds"
+            aria-label="Rounds at most"
+            value={settings.maxRounds}
+            onChange={(event) => {
+              onChange('maxRounds', Number(event.target.value));
+            }}
+          />
+
+          <p className="canvas__section">Working at once</p>
+          <input
+            className="control"
+            type="number"
+            min={1}
+            max={20}
+            data-testid="swarm-concurrency"
+            aria-label="Working at once"
+            value={settings.maxConcurrentAgents}
+            onChange={(event) => {
+              onChange('maxConcurrentAgents', Number(event.target.value));
+            }}
+          />
+          <p className="canvas__prompt">
+            Twenty at once is the ceiling, whatever you type here. Past that, the agents spend more
+            on coordinating than they produce.
+          </p>
+
+          <p className="canvas__section">Stop early when the lead says</p>
+          <input
+            className="control"
+            data-testid="swarm-goal-contains"
+            aria-label="Stop when the lead says"
+            placeholder="DONE"
+            value={settings.goalContains}
+            onChange={(event) => {
+              onChange('goalContains', event.target.value);
+            }}
+          />
+
+          <p className="canvas__section">Or after this many rounds that change nothing</p>
+          <input
+            className="control"
+            type="number"
+            min={0}
+            data-testid="swarm-stall"
+            aria-label="Rounds without change"
+            value={settings.stallRounds}
+            onChange={(event) => {
+              onChange('stallRounds', Number(event.target.value));
+            }}
+          />
+        </>
+      )}
+
+      {data.kind === 'aggregate' && (
+        <>
+          <p className="canvas__section">Answers come from</p>
+          <select
+            className="control"
+            data-testid="aggregate-source"
+            value={settings.source}
+            onChange={(event) => {
+              onChange('source', event.target.value);
+            }}
+          >
+            <option value="">The step before this one</option>
+            {others.map((step) => (
+              <option key={step.id} value={step.id}>
+                {step.label}
+              </option>
+            ))}
+          </select>
+
+          <p className="canvas__section">Combine them</p>
+          <select
+            className="control"
+            data-testid="aggregate-strategy"
+            value={settings.strategy}
+            onChange={(event) => {
+              onChange('strategy', event.target.value as StepSettings['strategy']);
+            }}
+          >
+            <option value="concat">One after another</option>
+            <option value="json_merge">Merged as JSON</option>
+            <option value="vote">Take the most common answer</option>
+            <option value="template">Into a template</option>
+            <option value="reduce_with_agent">Folded by an agent</option>
+          </select>
+
+          {settings.strategy === 'concat' && (
+            <input
+              className="control"
+              data-testid="aggregate-separator"
+              aria-label="Separator"
+              placeholder="Blank line between answers"
+              value={settings.separator}
+              onChange={(event) => {
+                onChange('separator', event.target.value);
+              }}
+            />
+          )}
+
+          {settings.strategy === 'template' && (
+            <textarea
+              className="canvas__instruction"
+              data-testid="aggregate-template"
+              placeholder="{{count}} answers:\n{{items}}"
+              value={settings.template}
+              onChange={(event) => {
+                onChange('template', event.target.value);
+              }}
+            />
+          )}
+
+          {settings.strategy === 'reduce_with_agent' && (
+            <>
+              <p className="canvas__section">A chunk at a time</p>
+              <input
+                className="control"
+                type="number"
+                min={1}
+                data-testid="aggregate-chunk"
+                aria-label="Answers per call"
+                value={settings.chunkSize}
+                onChange={(event) => {
+                  onChange('chunkSize', Number(event.target.value));
+                }}
+              />
+              <p className="canvas__prompt">
+                This is the only way of combining that costs anything. The answers are folded a
+                chunk at a time, and the results folded again, so a thousand of them never have to
+                fit in one context window. Give this step an instruction and a model like any agent.
+              </p>
+            </>
+          )}
+
+          {settings.strategy !== 'reduce_with_agent' && (
+            <p className="canvas__prompt">No model runs here, so this costs nothing.</p>
+          )}
         </>
       )}
 

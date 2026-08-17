@@ -1,9 +1,10 @@
 # Workflow schema
 
-**Schema version** 2
+**Schema version** 3
 **Status** contract. The canvas, engine, and swarm all bind to this. Changing it is expensive — get it right before writing engine code.
 
-**Version 2** (M4-3, M4-6) added, to the run brief below: `steps[].type` and
+**Version 3** (M5) added the `fanout`, `aggregate` and `swarm` node types and
+`steps[].tier`. **Version 2** (M4-3, M4-6) added, to the run brief below: `steps[].type` and
 `steps[].config` for the five non-agent node types, `preauthorised`, and
 `layout`.
 Every one is optional, so a version 1 definition loads unchanged.
@@ -302,11 +303,12 @@ implemented feature reads yet.
   "steps": [
     {
       "nodeId": "researcher-1",
-      "type": "agent",            // agent | condition | loop | transform | approval | subworkflow
+      "type": "agent",            // agent | condition | loop | transform | approval
+                              // | subworkflow | fanout | aggregate | swarm
       "config": { "type": "agent" },
       "roleId": "researcher",
       "instruction": "",          // empty falls back to the brief's
-      "connectionId": "conn_…",
+      "connectionId": "conn_…",       // or "tier": "cheap" — see below
       "model": "claude-haiku-4-5"
     }
   ],
@@ -326,6 +328,22 @@ implemented feature reads yet.
 | `transform` | `{ "type": "transform", "transform": { "template": "…{{step-id}}…" } }` | Fills `{{step-id}}` from earlier outputs; `{{previous}}` is the step before. No model call. |
 | `approval` | `{ "type": "approval", "approval": { "prompt": "Send this?", "showSource": "" } }` | The run stops, persists as `awaiting_approval`, and survives a restart in that state. |
 | `subworkflow` | `{ "type": "subworkflow", "subworkflow": { "workflowId": "wf_…", "version": "" } }` | Runs another saved automation here. `version` empty means the latest at run time. The child's node ids are prefixed with the calling node's, and automations nest at most five deep. |
+| `fanout` | `{ "type": "fanout", "fanout": { "source", "parse": "json\|lines", "body": [], "concurrency": 25, "maxItems": 1000, "onItemError": "continue\|halt", "deadLetterLimit": 50 } }` | Runs the body once per item, `concurrency` at a time — in flight, not in total. `maxItems` is required. Failed items go to `dead_letter` with the item itself; past `deadLetterLimit` the node stops. |
+| `aggregate` | `{ "type": "aggregate", "aggregate": { "source", "strategy", "separator", "template", "roleId", "chunkSize", "instruction" } }` | `concat`, `json_merge`, `vote`, `template`, `reduce_with_agent`. Only the last makes a model call; it folds a chunk at a time and folds the results again. |
+| `swarm` | `{ "type": "swarm", "swarm": { "goal", "orchestratorRoleId", "agents": [], "maxRounds", "maxConcurrentAgents", "stallRounds", "goalPredicate" } }` | An orchestrator and specialists on one goal, through the blackboard. Concurrency is hard-capped at 20 by the engine. Three ways to stop: the goal predicate, the round limit, and rounds that change nothing. |
+
+### Tiers instead of model ids
+
+A step may carry `"tier": "cheap" | "standard" | "frontier"` **instead of**
+`connectionId` and `model`. The workspace says which connection and model each
+tier means (Providers → Model tiers, stored on the settings row). The same
+automation then runs for somebody on hosted keys and somebody running
+everything locally, with no edit — which is the difference between a template
+you can ship and one that only works where it was written.
+
+A step bound to a tier the workspace has not configured fails, naming the tier.
+It does not fall back to another model: running on a model nobody chose is the
+failure the indirection exists to prevent.
 
 ### What the editor refuses, and when
 

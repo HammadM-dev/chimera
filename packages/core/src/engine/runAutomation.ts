@@ -14,6 +14,8 @@ import type { ToolObservation } from '../runtime/promptAssembly.ts';
 import { executionOrder, validateBrief, type BriefStep, type RunBrief } from './runBrief.ts';
 import { applyTransform, evaluateCondition } from './nodeTypes.ts';
 import { itemsFrom, runFanout } from './nodeRunners/fanout.ts';
+import { aggregateWithoutModel, chunk, itemsOf } from './nodeRunners/aggregate.ts';
+import { MAX_CONCURRENT_AGENTS, runSwarm } from './nodeRunners/swarm.ts';
 
 // The executor. Runs a brief's steps in order, each as an agent, each through
 // the Governor, each journaled and traced.
@@ -109,6 +111,20 @@ export interface RunAutomationDeps {
    * data, so it enters where data enters.
    */
   seedCarried?: string;
+  /**
+   * Resolves a tier to a connection and model, for this workspace.
+   *
+   * Absent means tiers are not configured, which a step bound to one reports
+   * as its own failure rather than falling back to some other model — running
+   * on a model nobody chose is how a run ends up on the wrong provider, and it
+   * is the failure this whole indirection exists to prevent.
+   */
+  resolveTier?: (tier: 'cheap' | 'standard' | 'frontier') => {
+    connectionId: string;
+    model: string;
+  };
+  /** The workspace's frontier model, for the meter's comparison figure. */
+  frontierModel?: string;
 }
 
 /**
@@ -193,6 +209,7 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
     db,
     runId,
     governor,
+    ...(deps.frontierModel === undefined ? {} : { frontierModel: deps.frontierModel }),
     ...(deps.onSpend ? { onUpdate: deps.onSpend } : {}),
   });
 
@@ -474,6 +491,153 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
       };
     }
 
+    if (type === 'swarm' && step.config?.type === 'swarm') {
+      const config = step.config.swarm;
+
+      const swarmed = await runSwarm({
+        db,
+        runId,
+        nodeId: step.nodeId,
+        config,
+        ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
+        runAgent: async (input) => {
+          // Each participant is its own nested run: its own node id, its own
+          // carried context, its own journal rows. Workers run at the same
+          // time, and sharing any of that would have them racing each other.
+          const participant: RunBrief = {
+            name: `${brief.name} — ${input.roleId}`,
+            instruction: input.instruction,
+            attachments: [],
+            steps: [
+              {
+                nodeId: input.nodeId,
+                type: 'agent',
+                roleId: input.roleId,
+                instruction: input.instruction,
+                connectionId: step.connectionId,
+                model: step.model,
+              },
+            ],
+            edges: [],
+            preauthorised: [input.nodeId],
+          };
+
+          const result = await runAutomation({
+            ...deps,
+            brief: participant,
+            seedCarried: input.context,
+            finalize: false,
+            depth: (deps.depth ?? 0) + 1,
+          });
+
+          const only = result.steps[0];
+          return {
+            ok: only?.status === 'succeeded',
+            output: only?.output ?? 'The agent produced nothing.',
+          };
+        },
+      });
+
+      trace.append({
+        nodeId: step.nodeId,
+        eventType: 'decision',
+        payload: {
+          decision: `swarm:${swarmed.stopped}`,
+          reason: swarmed.reason,
+          rounds: swarmed.rounds.length,
+          peakConcurrentAgents: swarmed.peakConcurrentAgents,
+          // Stated rather than hidden: the workflow may ask for more, and the
+          // engine will not give it more.
+          engineCap: MAX_CONCURRENT_AGENTS,
+        },
+      });
+
+      outputs.set(step.nodeId, swarmed.output);
+      carried = swarmed.output;
+
+      return {
+        ...base,
+        iterations: swarmed.rounds.length,
+        status: swarmed.stopped === 'failed' ? 'denied' : 'succeeded',
+        haltCause: swarmed.stopped === 'failed' ? 'limit' : 'completed',
+        output: swarmed.stopped === 'failed' ? swarmed.reason : swarmed.output,
+      };
+    }
+
+    if (type === 'aggregate' && step.config?.type === 'aggregate') {
+      const config = step.config.aggregate;
+      const source = config.source === '' ? carried : (outputs.get(config.source) ?? '');
+      const items = itemsOf(source);
+
+      const withoutModel = aggregateWithoutModel(config, items);
+      if (withoutModel !== null) {
+        outputs.set(step.nodeId, withoutModel);
+        carried = withoutModel;
+        trace.append({
+          nodeId: step.nodeId,
+          eventType: 'decision',
+          payload: { decision: `aggregate:${config.strategy}`, items: items.length },
+        });
+        return { ...base, status: 'succeeded', haltCause: 'completed', output: withoutModel };
+      }
+
+      // reduce_with_agent: a fold, one model call per chunk, each through the
+      // Governor like any other. Repeated until one answer is left, so a
+      // thousand items do not have to fit in one context window.
+      let round = 0;
+      let folding = items;
+      while (folding.length > 1 || round === 0) {
+        const chunks = chunk(folding, config.chunkSize);
+        const answers: string[] = [];
+
+        for (const [index, group] of chunks.entries()) {
+          carried = group.join('\n\n');
+          const foldStep: BriefStep = {
+            nodeId: `${step.nodeId}/round-${String(round)}/${String(index)}`,
+            type: 'agent',
+            roleId: config.roleId,
+            instruction: config.instruction,
+            connectionId: step.connectionId,
+            model: step.model,
+          };
+          const folded = await runAgentStep(foldStep, false);
+          if (folded.status !== 'succeeded') {
+            return {
+              ...base,
+              status: folded.status,
+              haltCause: folded.haltCause,
+              output: `Aggregating stopped: ${folded.output}`,
+            };
+          }
+          answers.push(folded.output);
+        }
+
+        folding = answers;
+        round += 1;
+        if (chunks.length <= 1) break;
+      }
+
+      const reduced = folding[0] ?? '';
+      outputs.set(step.nodeId, reduced);
+      carried = reduced;
+      trace.append({
+        nodeId: step.nodeId,
+        eventType: 'decision',
+        payload: {
+          decision: 'aggregate:reduce_with_agent',
+          items: items.length,
+          rounds: round,
+        },
+      });
+      return {
+        ...base,
+        iterations: round,
+        status: 'succeeded',
+        haltCause: 'completed',
+        output: reduced,
+      };
+    }
+
     if (type === 'fanout' && step.config?.type === 'fanout') {
       const config = step.config.fanout;
       const source = config.source === '' ? carried : (outputs.get(config.source) ?? '');
@@ -674,7 +838,26 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
       }
     }
 
-    const { adapter, options } = deps.providerFor(step.connectionId);
+    // Where this step actually runs: what it names, or what this workspace
+    // calls the tier it asked for.
+    let binding = { connectionId: step.connectionId, model: step.model };
+    if (step.tier !== undefined) {
+      const resolved = deps.resolveTier?.(step.tier);
+      if (!resolved || resolved.model === '' || resolved.connectionId === '') {
+        return {
+          nodeId: step.nodeId,
+          type: 'agent',
+          roleId: step.roleId,
+          status: 'denied',
+          haltCause: 'limit',
+          output: `This step runs on the "${step.tier}" tier, and this workspace has not said which model that is. Set it in Providers.`,
+          iterations: 0,
+        };
+      }
+      binding = resolved;
+    }
+
+    const { adapter, options } = deps.providerFor(binding.connectionId);
 
     // What this step is told: its own instruction, or the brief's when it has
     // none. The previous step's answer is carried as context rather than as an
@@ -692,8 +875,8 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         nodeId: step.nodeId,
         role,
         task,
-        connectionId: step.connectionId,
-        model: step.model,
+        connectionId: binding.connectionId,
+        model: binding.model,
         depth: deps.depth ?? 0,
         // A person agreed to this node's actions if an approval node upstream
         // of it was granted — the run only reaches here if it was — or if the
@@ -763,11 +946,18 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
     if (outcome.status !== 'succeeded') break;
   }
 
+  // What the run as a whole did. `last` is the final *agent* step's result, and
+  // there may not have been one: a graph whose last step is a fan-out, a
+  // transform or a branch has no agent loop to report, and reading a missing
+  // one as "cancelled" told the user a finished run had been abandoned.
   const finalResult: LoopResult = last ?? {
-    status: 'cancelled',
-    haltCause: 'cancelled',
-    output: '',
-    iterations: 0,
+    status:
+      steps.length > 0 && steps.every((step) => step.status === 'succeeded')
+        ? 'succeeded'
+        : (steps.at(-1)?.status ?? 'cancelled'),
+    haltCause: steps.at(-1)?.haltCause ?? 'cancelled',
+    output: carried,
+    iterations: steps.length,
     steps: [],
     observations: [],
     verification: null,

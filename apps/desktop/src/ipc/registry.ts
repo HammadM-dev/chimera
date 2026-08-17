@@ -79,6 +79,30 @@ const nodeConfigSchema = z.discriminatedUnion('type', [
     subworkflow: z.object({ workflowId: z.string(), version: z.string() }),
   }),
   z.object({
+    type: z.literal('swarm'),
+    swarm: z.object({
+      goal: z.string(),
+      orchestratorRoleId: z.string(),
+      agents: z.array(z.object({ roleId: z.string(), instruction: z.string() })),
+      maxRounds: z.number(),
+      maxConcurrentAgents: z.number(),
+      stallRounds: z.number(),
+      goalPredicate: conditionSchema.optional(),
+    }),
+  }),
+  z.object({
+    type: z.literal('aggregate'),
+    aggregate: z.object({
+      source: z.string(),
+      strategy: z.enum(['concat', 'json_merge', 'reduce_with_agent', 'vote', 'template']),
+      separator: z.string(),
+      template: z.string(),
+      roleId: z.string(),
+      chunkSize: z.number(),
+      instruction: z.string(),
+    }),
+  }),
+  z.object({
     type: z.literal('fanout'),
     fanout: z.object({
       source: z.string(),
@@ -110,9 +134,21 @@ const briefSchema = z.object({
       // Absent means `agent`, which is every brief saved before the other node
       // types existed. Adding an optional field is a v-compatible change.
       type: z
-        .enum(['agent', 'condition', 'loop', 'transform', 'approval', 'subworkflow', 'fanout'])
+        .enum([
+          'agent',
+          'condition',
+          'loop',
+          'transform',
+          'approval',
+          'subworkflow',
+          'fanout',
+          'aggregate',
+          'swarm',
+        ])
         .optional(),
       config: nodeConfigSchema.optional(),
+      // Set instead of connectionId/model, not alongside.
+      tier: z.enum(['cheap', 'standard', 'frontier']).optional(),
       roleId: z.string(),
       instruction: z.string(),
       connectionId: z.string(),
@@ -255,6 +291,7 @@ export const runList = defineInvokeChannel({
         endedAt: z.string().nullable(),
         tokensUsed: z.number(),
         costUsd: z.number(),
+        frontierCostUsd: z.number().nullable(),
         errorSummary: z.string().nullable(),
       }),
     ),
@@ -327,6 +364,32 @@ export const automationCheck = defineInvokeChannel({
       }),
     ),
   }),
+});
+
+// M5-4's tier map: which connection and model this workspace calls cheap,
+// standard and frontier. A workflow names a tier, so the same file runs for a
+// buyer on hosted keys and a buyer running everything locally.
+const tierBindingSchema = z.object({ connectionId: z.string(), model: z.string() });
+const tierMapSchema = z.object({
+  cheap: tierBindingSchema,
+  standard: tierBindingSchema,
+  frontier: tierBindingSchema,
+});
+
+export const tiersGet = defineInvokeChannel({
+  channel: 'tiers:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ tiers: tierMapSchema }),
+});
+
+export const tiersSet = defineInvokeChannel({
+  channel: 'tiers:set',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ tiers: tierMapSchema }),
+  responseSchema: z.object({ tiers: tierMapSchema }),
 });
 
 export const providerTestConnection = defineInvokeChannel({
@@ -760,6 +823,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runList,
   traceList,
   runFailures,
+  tiersGet,
+  tiersSet,
   traceExport,
   runEvent,
   providerTestConnection,

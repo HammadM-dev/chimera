@@ -19,6 +19,8 @@ export interface RunListItem {
   endedAt: string | null;
   tokensUsed: number;
   costUsd: number;
+  /** What the same tokens would have cost on the frontier tier, if known. */
+  frontierCostUsd: number | null;
   errorSummary: string | null;
 }
 
@@ -47,6 +49,7 @@ export function listRuns(limit = 50): { runs: RunListItem[] } {
       endedAt: run.endedAt,
       tokensUsed: run.tokensUsed,
       costUsd: run.costUsd,
+      frontierCostUsd: run.frontierCostUsd,
       errorSummary: run.errorSummary,
     };
   });

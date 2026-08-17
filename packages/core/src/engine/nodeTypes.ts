@@ -7,7 +7,15 @@
 // rule about the loop node alone, it is a rule about anything that can repeat.
 
 export type NodeType =
-  'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow' | 'fanout';
+  | 'agent'
+  | 'condition'
+  | 'loop'
+  | 'transform'
+  | 'approval'
+  | 'subworkflow'
+  | 'fanout'
+  | 'aggregate'
+  | 'swarm';
 
 /**
  * Branches on what a previous step produced.
@@ -82,6 +90,47 @@ export interface FanoutConfig {
 }
 
 /**
+ * An orchestrator and a set of specialists on one goal.
+ *
+ * Every field that can make it repeat declares a bound. A swarm is the most
+ * expensive way there is to repeat something, so it gets three ways to stop:
+ * the goal being met, the rounds running out, and nothing changing.
+ */
+export interface SwarmConfig {
+  goal: string;
+  orchestratorRoleId: string;
+  agents: { roleId: string; instruction: string }[];
+  maxRounds: number;
+  /** Hard-capped at 20 by the engine — past that, coordination costs more than it produces. */
+  maxConcurrentAgents: number;
+  /** Stop after this many rounds that changed nothing. 0 disables it. */
+  stallRounds: number;
+  /** Tested against the orchestrator's answer each round. */
+  goalPredicate?: ConditionConfig;
+}
+
+/**
+ * Turns many answers into one.
+ *
+ * The counterpart to a fan-out. Four of its five strategies need no model at
+ * all, which is the point: paying a frontier model to concatenate a thousand
+ * answers is the commonest way an agent system becomes expensive for nothing.
+ */
+export interface AggregateConfig {
+  /** Which step's output holds the items. Empty means the step before. */
+  source: string;
+  strategy: 'concat' | 'json_merge' | 'reduce_with_agent' | 'vote' | 'template';
+  /** `concat` only. Empty means a blank line between items. */
+  separator: string;
+  /** `template` only. `{{items}}`, `{{count}}`, `{{item.0}}`. */
+  template: string;
+  /** `reduce_with_agent` only: who folds, how many at a time, and told what. */
+  roleId: string;
+  chunkSize: number;
+  instruction: string;
+}
+
+/**
  * Runs another saved automation inside this one.
  *
  * Pinned to a version, not to "whatever that automation is now". A child that
@@ -108,7 +157,9 @@ export type NodeConfig =
   | { type: 'transform'; transform: TransformConfig }
   | { type: 'approval'; approval: ApprovalConfig }
   | { type: 'subworkflow'; subworkflow: SubworkflowConfig }
-  | { type: 'fanout'; fanout: FanoutConfig };
+  | { type: 'fanout'; fanout: FanoutConfig }
+  | { type: 'aggregate'; aggregate: AggregateConfig }
+  | { type: 'swarm'; swarm: SwarmConfig };
 
 /** Runs a declared comparison against a value. No evaluation, no code. */
 export function evaluateCondition(config: ConditionConfig, actual: string): boolean {

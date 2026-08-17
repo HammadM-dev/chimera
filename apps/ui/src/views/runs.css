@@ -262,3 +262,12 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* The blended-cost comparison. Shown only when it is favourable and known:
+ * a saving of nothing is not worth a line, and an invented comparison is
+ * worse than none. */
+.runs__saved {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-meta);
+  color: var(--semantic-success);
+}

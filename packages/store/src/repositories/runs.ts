@@ -29,6 +29,7 @@ interface RunRow {
   input_json: string;
   budget_tokens_used: number;
   budget_cost_usd_used: number;
+  frontier_cost_usd: number | null;
   error_summary: string | null;
 }
 
@@ -144,13 +145,23 @@ export function addSpend(
   ).run(tokens, costUsd, runId);
 }
 
-export function spendOf(db: Database.Database, runId: string): { tokens: number; costUsd: number } {
+export function spendOf(
+  db: Database.Database,
+  runId: string,
+): { tokens: number; costUsd: number; frontierCostUsd: number | null } {
   const row = db
     .prepare(
-      'SELECT budget_tokens_used AS tokens, budget_cost_usd_used AS cost FROM runs WHERE id = ?',
+      `SELECT budget_tokens_used AS tokens,
+              budget_cost_usd_used AS cost,
+              frontier_cost_usd AS frontier
+       FROM runs WHERE id = ?`,
     )
-    .get(runId) as { tokens: number; cost: number } | undefined;
-  return { tokens: row?.tokens ?? 0, costUsd: row?.cost ?? 0 };
+    .get(runId) as { tokens: number; cost: number; frontier: number | null } | undefined;
+  return {
+    tokens: row?.tokens ?? 0,
+    costUsd: row?.cost ?? 0,
+    frontierCostUsd: row?.frontier ?? null,
+  };
 }
 
 /**
@@ -167,6 +178,8 @@ export function setStatus(db: Database.Database, id: string, status: string): vo
 export interface RunSummary extends RunRecord {
   tokensUsed: number;
   costUsd: number;
+  /** What the same tokens would have cost on the frontier tier, if known. */
+  frontierCostUsd: number | null;
 }
 
 /** The most recent runs, newest first, with what each one spent. */
@@ -178,6 +191,7 @@ export function listRecent(db: Database.Database, limit = 50): RunSummary[] {
     ...toRecord(row),
     tokensUsed: row.budget_tokens_used,
     costUsd: row.budget_cost_usd_used,
+    frontierCostUsd: row.frontier_cost_usd,
   }));
 }
 
@@ -186,6 +200,23 @@ export function listByStatus(db: Database.Database, status: string): RunRecord[]
     .prepare('SELECT * FROM runs WHERE status = ? ORDER BY started_at DESC')
     .all(status) as RunRow[];
   return rows.map(toRecord);
+}
+
+/**
+ * Adds to what this run would have cost on the frontier tier.
+ *
+ * Additive, and for the same reason the other spend columns are: a fan-out runs
+ * its items as nested runs sharing this run's id, each with its own meter in
+ * its own memory. An absolute write from any of them would report one item's
+ * comparison as the whole run's.
+ *
+ * Only called when a frontier price is actually known, so the column stays null
+ * — an honest "no comparison" — rather than becoming a misleading zero.
+ */
+export function addFrontierCost(db: Database.Database, id: string, costUsd: number): void {
+  db.prepare(
+    'UPDATE runs SET frontier_cost_usd = COALESCE(frontier_cost_usd, 0) + ? WHERE id = ?',
+  ).run(costUsd, id);
 }
 
 export function finish(

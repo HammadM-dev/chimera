@@ -10,6 +10,11 @@ import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 //
 // The only stand-in is the provider endpoint.
 
+// Each of these drives a provider import, a graph built node by node, and a
+// full run. That is minutes of real work on a loaded machine, not the seconds
+// the suite's 60s default assumes.
+test.setTimeout(180_000);
+
 async function startGateway(): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server: Server = createServer((req, res) => {
     if (req.url?.startsWith('/v1/models') === true) {

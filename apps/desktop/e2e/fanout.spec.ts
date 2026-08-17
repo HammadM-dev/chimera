@@ -25,7 +25,7 @@ async function startGateway(): Promise<{
 
   const server: Server = createServer((req, res) => {
     if (req.url?.startsWith('/v1/models') === true) {
-      res.writeHead(200, { 'content-type': 'application/json' });
+      res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
       res.end(JSON.stringify({ data: [{ id: 'claude-haiku-4-5' }] }));
       return;
     }
@@ -60,7 +60,7 @@ async function startGateway(): Promise<{
       // nothing.
       setTimeout(() => {
         live -= 1;
-        res.writeHead(200, { 'content-type': 'application/json' });
+        res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
         res.end(
           JSON.stringify({
             id: 'fan-1',

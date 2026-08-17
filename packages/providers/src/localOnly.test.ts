@@ -78,7 +78,15 @@ function seed(db: Database.Database): void {
 
 test('the migration creates workspace settings with local-only mode off', () => {
   withDb((db) => {
-    assert.deepEqual(settingsRepository.read(db), { localOnlyMode: false });
+    const settings = settingsRepository.read(db);
+    assert.equal(settings.localOnlyMode, false);
+    // M5-4 put the tier map on the same row. A fresh workspace has all three
+    // unset, which is what a step bound to a tier reports rather than guessing.
+    assert.deepEqual(settings.modelTiers, {
+      cheap: { connectionId: '', model: '' },
+      standard: { connectionId: '', model: '' },
+      frontier: { connectionId: '', model: '' },
+    });
   });
 });
 

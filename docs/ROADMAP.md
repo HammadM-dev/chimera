@@ -13,14 +13,14 @@ So the order has changed. Everything that makes the product usable — the canva
 | M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
 | **M4 Automations** | **14 / 16** | **Describe an automation, watch it built, run it, see it work** |
-| M5 Swarm | 1 / 6 | Point a team of agents at a batch |
+| M5 Swarm | 6 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 0 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
 | M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**49 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**54 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1066,6 +1066,12 @@ Dependencies: M4-10.
 
 ### M5-2: Blackboard
 
+STATUS: **done.** `packages/store/src/repositories/blackboard.ts` over the existing `blackboard_entries` table: append-only writes, attributed to the writing role, scoped on the way in and on the way out.
+
+DECISION: **"current value" is the latest write by insertion order, not by timestamp.** Ten writes inside one millisecond is ordinary at swarm speeds and an ISO string cannot separate them. `rowid` can, and it is the order they actually happened in.
+
+DECISION: **reading is scoped as well as writing.** A worker sees the worker scope and whatever it is given; it does not see the orchestrator's private working notes unless the swarm says so. A board that is write-scoped and read-open is a board where the scopes are decoration.
+
 Description: `packages/store/src/repositories/blackboard.ts` backing the `blackboard_entries` table (`run_id`, `id`, `role_id`, `key`, `value_json`, `written_at`, `scope`), per F5.3: shared append-only structured state, per-agent write scopes, conflict resolution (append-only sidesteps most conflicts by design — later writes to the same key don't overwrite, they append, with readers resolving "current value" as "latest write in scope" unless a node explicitly needs history), every write attributed and timestamped.
 
 Acceptance criteria:
@@ -1076,6 +1082,14 @@ Acceptance criteria:
 Dependencies: M4-10.
 
 ### M5-3: Swarm node runner — collaborative orchestrator
+
+STATUS: **done.** `packages/core/src/engine/nodeRunners/swarm.ts`, on the palette with its own inspector — a goal, a lead, a list of specialists, and the three ways it stops.
+
+DECISION: **the agents do not talk to each other; they share a board.** Message-passing between models multiplies context — every agent pays for every other agent's output on every turn — and it leaves nothing to read afterwards. A shared, append-only, attributed board costs one read each and *is* the record.
+
+DECISION: **the cap is 20, enforced in the engine and stated in the UI.** A workflow asking for a hundred gets twenty at once and is told so. The test asks for a hundred and asserts twenty.
+
+DECISION: **a stall is a round that added nothing to the board.** Cheap and explainable, rather than a similarity measure nobody can predict. This is also why a worker's entry is keyed by the agent rather than by agent-and-round: a key per round would make the board grow every pass, so "nothing changed" could never be true. Found by the test for it.
 
 Description: `packages/core/src/engine/nodeRunners/swarm.ts` (F5.2): orchestrator plus specialised agents on a shared goal via the blackboard, `maxConcurrentAgents` hard-capped at 20 by the engine (not just documented — enforced, with the UI stating the cap rather than hiding it, per the master plan's explicit call-out that coordination overhead exceeds useful output beyond ~20). `termination(maxRounds, goalPredicate, stallRounds)`.
 
@@ -1088,6 +1102,12 @@ Dependencies: M5-2.
 
 ### M5-4: Model tiering and blended cost reporting
 
+STATUS: **done.** Migration `0007` puts a tier map on the workspace settings row; Providers has a panel to set which connection and model each of cheap, standard and frontier means; a step's model picker offers the three tiers alongside the real models. Migration `0008` adds `runs.frontier_cost_usd`, and Runs shows "$0.07 instead of $0.22 — the same work on the frontier tier throughout" when the comparison is both known and favourable.
+
+DECISION: **a step bound to an unconfigured tier fails rather than falling back.** Running on a model nobody chose is the exact failure this indirection exists to prevent, so the step says which tier is unset and where to set it.
+
+DECISION: **the comparison is accumulated per call and persisted, not computed at the end.** Only at the moment of a call is the input/output token split known, and the two rates differ. It is additive on the run row for the same reason the other spend columns are: a fan-out's items are nested runs sharing the run id, each with a meter of its own.
+
 Description: F5.5: `modelTier: cheap|standard|frontier` on fan-out/swarm nodes resolves against a workspace-level tiering configuration (mapping each tier to an actual connection+model, so a workflow stays portable across workspaces with different provider setups) rather than hardcoding a specific model. Surface the blended cost saved in the UI (frontier model for orchestration/verification, cheap/free models for fan-out workers) — this is the master plan's stated economic argument for multi-provider support, and it should be visible, not just true.
 
 Acceptance criteria:
@@ -1099,6 +1119,14 @@ Dependencies: M5-1, M1-3.
 
 ### M5-5: Aggregate node runner
 
+STATUS: **done.** `packages/core/src/engine/nodeRunners/aggregate.ts`: concat, json_merge, vote, template, and reduce_with_agent.
+
+DECISION: **`custom_expression` shipped as `template`.** The schema named an expression; this fills `{{items}}`, `{{count}}` and `{{item.0}}` instead. Same reasoning as a condition's test — an expression evaluated from a saved file is a code-execution surface, and the saved file is the thing users send each other.
+
+DECISION: **four of the five strategies never call a model, and `reduce_with_agent` runs through the agent loop rather than inside the helper.** Paying a frontier model to concatenate a thousand answers is the commonest way an agent system becomes expensive for nothing; and a helper that quietly made its own model call would be the bypass path CLAUDE.md forbids.
+
+Ties in `vote` break to whichever value was seen first, on trimmed case-folded text.
+
 Description: `packages/core/src/engine/nodeRunners/aggregate.ts` (map-reduce aggregation, F5.1's final step): `strategy: concat | json_merge | reduce_with_agent | vote | custom_expression`, `roleId`, `chunkSize`, `instruction`.
 
 Acceptance criteria:
@@ -1109,6 +1137,13 @@ Acceptance criteria:
 Dependencies: M5-1.
 
 ### M5-6: M5 demo — Swarm exit criteria
+
+STATUS: **done.** `apps/desktop/e2e/m5-demo.spec.ts`: set the workspace's tiers, build a fan-out whose worker asks for the cheap tier by name, run 24 items six at a time with one scripted to fail, and afterwards read the failure report and the saving. The 1000-item / 25-concurrency figure is asserted in `fanout.test.ts` against a counter on the work itself — a stronger check than an E2E can make, in a second rather than ten minutes.
+
+It found three real defects:
+- **a run of only non-agent steps reported "cancelled".** `last` is the final *agent* step's result, and a graph whose last step is a fan-out has none — the missing one was read as an abandoned run.
+- **a dropped connection failed the item outright.** Under a fan-out's load a reset socket is an ordinary event; the loop now retries `PROVIDER_UNREACHABLE` on the same bounded backoff as a 429, and only a real 429 tells the Governor to throttle the connection.
+- **the blended-cost line was never rendered.** Written, wired, schema'd — and the JSX edit had silently not applied. The test is the only reason anybody would have known.
 
 Description: Milestone demo ticket. Exit criterion per master plan: **"process 1000 items through fan-out at 25 concurrency, on budget, with a failure report."**
 

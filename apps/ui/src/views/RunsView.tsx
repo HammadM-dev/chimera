@@ -19,6 +19,7 @@ interface RunListItem {
   endedAt: string | null;
   tokensUsed: number;
   costUsd: number;
+  frontierCostUsd: number | null;
   errorSummary: string | null;
 }
 
@@ -247,6 +248,15 @@ export function RunsView(): JSX.Element {
                   {STATUS_WORD[run.status] ?? run.status} · {run.tokensUsed.toLocaleString()} tokens
                   · {money(run.costUsd)} · {String(events.length)} events
                 </p>
+                {/* Shown only when it is both known and favourable: a saving of
+                    nothing is not worth a line, and an invented comparison is
+                    worse than none. */}
+                {run.frontierCostUsd !== null && run.frontierCostUsd > run.costUsd && (
+                  <p className="runs__saved" data-testid="run-blended">
+                    {money(run.costUsd)} instead of {money(run.frontierCostUsd)} — the same work on
+                    the frontier tier throughout.
+                  </p>
+                )}
               </div>
               <button
                 type="button"

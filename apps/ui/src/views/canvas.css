@@ -490,3 +490,13 @@
   line-height: var(--line-height-prose);
   color: var(--text-secondary);
 }
+
+/* One specialist in a swarm: who, what they do, and a way to remove them. */
+.swarm__agent {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--space-1);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}

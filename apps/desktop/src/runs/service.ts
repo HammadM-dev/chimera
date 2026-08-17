@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import os from 'node:os';
 import path from 'node:path';
 import { Governor, createRoleRegistry, runAutomation, type RunBrief } from '@chimera/core';
-import { runsRepository, tracesRepository } from '@chimera/store';
+import { runsRepository, settingsRepository, tracesRepository } from '@chimera/store';
 import { adapterFor } from '@chimera/providers';
 import {
   connectInProcess,
@@ -198,6 +198,11 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
     },
   });
 
+  // Which model each tier means, here. Read once at the start of the run: a
+  // tier that changed halfway through a run would make the trace a record of
+  // two different automations.
+  const tiers = settingsRepository.read(db).modelTiers;
+
   emitRunEvent(runId, resume ? 'resumed' : 'started', {
     steps: brief.steps.map((step) => step.nodeId),
   });
@@ -222,6 +227,8 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       tools,
       governor,
       cancellation,
+      resolveTier: (tier) => tiers[tier],
+      frontierModel: tiers.frontier.model,
       onStep: (event) => {
         emitRunEvent(runId, `step:${event.phase}`, event);
       },
