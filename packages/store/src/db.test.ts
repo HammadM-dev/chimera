@@ -168,6 +168,22 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   // a run, kept apart from `cache` because a user's own note must never be
   // evicted to make room for derived data.
   workspace_facts: ['key', 'value', 'source', 'updated_at'],
+  // Added by 0005. Separate from workspace_facts because that is a small
+  // curated store a person maintains and this is a growing record agents
+  // write during runs — merging them would give a user's note and an agent's
+  // guess the same shape and the same trust.
+  memories: [
+    'id',
+    'kind',
+    'subject',
+    'body',
+    'source',
+    'run_id',
+    'confidence',
+    'tags_json',
+    'created_at',
+    'updated_at',
+  ],
   roles: [
     'id',
     'name',

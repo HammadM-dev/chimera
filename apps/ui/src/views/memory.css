@@ -1,0 +1,236 @@
+/* Everything remembered.
+ *
+ * Grouped by kind, not by date. "What does it know about my goals" is a
+ * question people have; "what did it learn on Tuesday" is not. Within a group,
+ * cards rather than rows: a memory is a sentence or two of prose, and prose in
+ * a table row is unreadable at any width. */
+
+.memory {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.memory__bar {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-4) var(--space-6) var(--space-3);
+}
+
+.memory__search {
+  flex: 1;
+  max-width: var(--measure);
+}
+
+.memory__composer {
+  display: grid;
+  grid-template-columns: 140px 1fr 2fr auto;
+  gap: var(--space-2);
+  padding: 0 var(--space-6) var(--space-3);
+}
+
+.memory__kind {
+  width: 100%;
+}
+
+/* ---- the filter rail ----------------------------------------------------- */
+
+.memory__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  padding: 0 var(--space-6) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+}
+
+.memory__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font: inherit;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  background: transparent;
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.memory__filter:hover {
+  color: var(--text-primary);
+  border-color: var(--border-stronger);
+}
+
+.memory__filter--on {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.memory__count {
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+/* ---- groups -------------------------------------------------------------- */
+
+.memory__body {
+  flex: 1;
+  min-height: 0;
+  padding: var(--space-5) var(--space-6);
+}
+
+.memory__group {
+  margin-bottom: var(--space-6);
+}
+
+.memory__group-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.memory__group-title {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.memory__group-blurb {
+  margin: 0;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+/* A fixed minimum rather than a fixed count: the window is resizable and a
+ * grid that reflows is the difference between a wall and a page. */
+.memory__cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-3);
+}
+
+.memory-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  padding: var(--space-3) var(--space-4);
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.memory-card:hover {
+  border-color: var(--border-strong);
+}
+
+.memory-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.memory-card__subject {
+  margin: 0;
+  font-size: var(--type-meta);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* Visible only on hover: a delete on every card at all times invites the
+ * accident it enables. */
+.memory-card__forget {
+  font: inherit;
+  font-size: var(--type-body);
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  padding: 0 var(--space-1);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.memory-card:hover .memory-card__forget,
+.memory-card__forget:focus-visible {
+  opacity: 1;
+}
+
+.memory-card__forget:hover {
+  color: var(--semantic-danger);
+}
+
+.memory-card__body {
+  margin: 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.memory-card__meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: auto;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}
+
+/* Who said it, marked. A store that renders an agent's inference identically
+ * to a user's statement teaches the next agent to trust a guess. */
+.memory-card__source {
+  border-radius: var(--radius-control);
+  border: var(--border-width) solid var(--border-hairline);
+  padding: 0 var(--space-2);
+}
+
+.memory-card__source--user {
+  color: var(--text-primary);
+  border-color: var(--border-stronger);
+}
+
+.memory-card__source--agent {
+  color: var(--text-muted);
+}
+
+.memory-card__confidence {
+  font-style: italic;
+}
+
+.memory__empty {
+  margin: 0;
+  max-width: 52ch;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-muted);
+}
+
+.memory__error {
+  margin: 0 var(--space-6) var(--space-3);
+  font-size: var(--type-meta);
+  color: var(--semantic-danger);
+}
+
+/* ---- backend ------------------------------------------------------------- */
+
+.memory__backend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-6);
+  border-top: var(--border-width) solid var(--border-hairline);
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+}
+
+.memory__backend-detail {
+  color: var(--text-muted);
+}

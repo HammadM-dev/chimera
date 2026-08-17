@@ -12,7 +12,7 @@ So the order has changed. Everything that makes the product usable — the canva
 | M1 Provider layer | 11 / 11 | Connect providers, chat through them, watch health and cost live |
 | M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
-| **M4 Automations** | **8 / 14** | **Describe an automation, watch it built, run it, see it work** |
+| **M4 Automations** | **10 / 16** | **Describe an automation, watch it built, run it, see it work** |
 | M5 Swarm | 0 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 0 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
@@ -976,6 +976,30 @@ DECISION: **the planner may only name agents that exist.** The roster is in its 
 DECISION: **the planner is a governed model call like any other**, through `Governor.authorizeModelCall` and M2-8's output contract with one repair attempt.
 
 What remains: the planner does not yet consider attachments or the existing graph, and cannot revise a plan conversationally — it answers once. Both are M5-scale once the executor exists.
+
+### M4-14: Agent memory and the Memory section
+
+STATUS: **delivered.** A `memories` table (migration 0005) with a fixed kind vocabulary — fact, project, goal, habit, preference, decision, person, tool — a `memory` MCP server giving agents `remember` and `recall`, IPC for the view, and a Memory section grouping everything by kind with search, per-kind filters, and inline add and forget.
+
+DECISION: **a separate table from `workspace_facts`, not a widening of it.** `workspace_facts` is a small curated key-value store a person maintains by hand; this is a growing record agents write during runs. Merging them would give a user's own note and an agent's inference the same shape, the same lifecycle and the same delete button — and the curated tier is trustworthy precisely because it is small and human.
+
+DECISION: **every memory carries its source and a confidence.** `user` at confidence 1 for something a person stated; the role id and a lower figure for something an agent worked out. A store that renders an inference identically to a statement teaches the next agent to trust a guess, and the UI marks the difference rather than flattening it.
+
+DECISION: **remembering is a tool the agent chooses to use, not something the runtime does automatically.** A runtime that stored everything would fill the store with the transcript and bury the four things that mattered. What the agent does *not* choose is where memory goes — the backend is injected.
+
+DECISION: **writes are deduplicated on (kind, subject, body).** An agent that learns the same fact on every run would otherwise turn one true thing into forty rows, and a memory list nobody can read is a memory nobody uses.
+
+DECISION: **only the roles that do work may write memory.** `coder`, `researcher`, `qa` and `data-extractor` get `memory.*`; `planner`, `reviewer` and `summariser` get `memory.recall` only. A reviewer that could write memory would be recording its opinions as the workspace's facts.
+
+### M4-15: TencentDB Agent Memory as a memory backend
+
+STATUS: **adapter and detection built; not verified against a running instance.**
+
+Tencent's open-source (MIT, Node 22+) memory hub for agents — a four-tier pyramid, conversation → atom → scenario → persona, over local SQLite with sqlite-vec, reached through an MCP-shaped HTTP API at `/v3/tools/list` and `/v3/tools/call` on port 8125. `apps/desktop/src/memory/tencentdb.ts` detects it and calls it; the Memory section names whichever backend is actually serving.
+
+DECISION: **detected, never required — the same shape as OmniRoute.** CHIMERA does not install it, does not start it, and works without it. Memory is the tier every agent writes to, and a memory system that stops working when a service is down is worse than a simpler one that does not. Local SQLite is therefore the floor rather than a fallback nobody tested.
+
+Stated limit: it is not running on the founder's machine, so only the not-available path has been exercised. The call path is written against its documented API and is unverified against the real service. Wiring it as the *active* backend for writes stays open until it can be tested against a running instance — shipping an untested path as the default store for everything the agents know would be the wrong risk to take.
 
 ### M4-13: M4 demo — build it, run it, watch it
 

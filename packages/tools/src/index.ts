@@ -13,3 +13,5 @@ export { createShellServer, runInSandbox } from './servers/shell.ts';
 export type { ShellResult } from './servers/shell.ts';
 export { createHttpServer, assertEgressAllowed, isHostAllowed } from './servers/http.ts';
 export type { HttpServerOptions, HttpTransport } from './servers/http.ts';
+export { createMemoryServer } from './servers/memory.ts';
+export type { MemoryBackend } from './servers/memory.ts';

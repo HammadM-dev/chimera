@@ -4,6 +4,7 @@ import { ChatPanel } from '../chat/ChatPanel.tsx';
 import { AgentsView } from '../views/AgentsView.tsx';
 import { CanvasView, type AutomationTemplate } from '../views/CanvasView.tsx';
 import { HomeView } from '../views/HomeView.tsx';
+import { MemoryView } from '../views/MemoryView.tsx';
 import { ProvidersView } from '../views/ProvidersView.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { bridge } from '../chat/useChimera.ts';
@@ -13,7 +14,7 @@ import './shell.css';
 // and one surface that changes — not a chat window with settings around it.
 // M4's canvas replaces the builder's middle column; the frame does not move.
 
-type View = 'home' | 'build' | 'agents' | 'providers' | 'chat';
+type View = 'home' | 'build' | 'agents' | 'memory' | 'providers' | 'chat';
 
 const NAV: { view: View; label: string; icon: JSX.Element }[] = [
   {
@@ -43,6 +44,16 @@ const NAV: { view: View; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    view: 'memory',
+    label: 'Memory',
+    icon: (
+      <>
+        <path d="M8 2.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3z" />
+        <path d="M5 6.5H3.5M11 6.5h1.5M5 9.5H3.5M11 9.5h1.5" />
+      </>
+    ),
+  },
+  {
     view: 'providers',
     label: 'Providers',
     icon: (
@@ -66,6 +77,11 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
     title: 'Automation',
     subtitle:
       'Drag agents onto the canvas, join them to say what runs after what, and click one to choose its model.',
+  },
+  memory: {
+    title: 'Memory',
+    subtitle:
+      'Everything the agents and you have recorded. Each entry says who wrote it and how sure they were.',
   },
   agents: {
     title: 'Agents',
@@ -238,6 +254,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
               />
             )}
             {view === 'chat' && <ChatPanel />}
+            {view === 'memory' && <MemoryView />}
             {view === 'agents' && (
               <div className="view__body scroll">
                 <AgentsView />

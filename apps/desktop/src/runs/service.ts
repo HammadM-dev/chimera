@@ -8,12 +8,14 @@ import {
   connectInProcess,
   createFilesystemServer,
   createSandbox,
+  createMemoryServer,
   createShellServer,
   createToolRegistry,
 } from '@chimera/tools';
 import { getStore } from '../store/lifecycle.ts';
 import { connectionFor } from '../providers/service.ts';
 import { emitRunEvent } from './subscriptions.ts';
+import { localBackend } from '../memory/backend.ts';
 
 // Starting a run: the main-process half. Assembles the real pieces — the role
 // registry, a per-run sandbox, the tool servers, an enforcing Governor — and
@@ -39,6 +41,12 @@ export async function startRun(brief: RunBrief): Promise<{ runId: string }> {
   const tools = createToolRegistry();
   await tools.registerServer('filesystem', await connectInProcess(createFilesystemServer(sandbox)));
   await tools.registerServer('shell', await connectInProcess(createShellServer(sandbox)));
+  // Memory is per-run only in its attribution: what is written is workspace-wide
+  // and outlives the run, which is the entire point of it.
+  await tools.registerServer(
+    'memory',
+    await connectInProcess(createMemoryServer(localBackend(run.id, 'agent'))),
+  );
 
   // Enforcing, with each role's own declared budget as its cap. A run started
   // from the canvas is a real run and gets real limits — the permissive mode

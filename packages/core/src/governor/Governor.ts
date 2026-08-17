@@ -281,14 +281,17 @@ export class Governor {
       );
     }
 
-    const missing = this.unsupportedCapabilities(capabilities, request.requiredCapabilities);
-    if (missing.length > 0) {
+    const { refused, unverified } = this.capabilityVerdict(
+      capabilities,
+      request.requiredCapabilities,
+    );
+    if (refused.length > 0) {
       // Checked at call time as well as at save time (schema rule 4), because a
       // connection's available models change between the two.
       return deny(
         'GOVERNOR_CAPABILITY_MISMATCH',
-        `"${request.model}" does not support ${missing.join(', ')}, which this node needs.`,
-        { model: request.model, missing, runId: request.runId },
+        `"${request.model}" does not support ${refused.join(', ')}, which this node needs.`,
+        { model: request.model, missing: refused, runId: request.runId },
       );
     }
 
@@ -306,6 +309,11 @@ export class Governor {
       : request;
 
     const notes = [
+      ...(unverified.length > 0
+        ? [
+            `capability: nobody has verified that "${request.model}" supports ${unverified.join(', ')} — trying anyway, and the provider's answer decides`,
+          ]
+        : []),
       ...(rate.spilledOver
         ? [`rate: spilled over from "${request.connectionId}" to "${rate.connectionId}"`]
         : []),
@@ -318,18 +326,34 @@ export class Governor {
   }
 
   /**
-   * Capabilities the model does not certainly have.
+   * Splits a node's required capabilities into refusals and unknowns.
    *
-   * `unknown` counts as missing. The tri-state exists precisely so that an
-   * absent fact cannot be read as a yes, and a Governor that authorised a
-   * tool-calling node against a model nobody has verified supports tools would
-   * be doing exactly that.
+   * REVERSAL of M3-1's "unknown fails closed". That rule was written against a
+   * curated matrix holding a handful of models whose facts this repository had
+   * verified, and there it was right: an absent fact must not be read as a yes.
+   *
+   * It is wrong against a live catalogue. A user connecting Ollama Cloud or
+   * OmniRoute imports two hundred models, and this build has verified the
+   * capabilities of four of them — so `unknown` is not the exceptional case, it
+   * is every case, and failing closed means nothing the user picks will ever
+   * run. The founder hit exactly this: a working model, chosen from a working
+   * catalogue, refused before a single call was made.
+   *
+   * So `unsupported` — a fact we hold, saying no — still denies. `unknown`
+   * proceeds and is disclosed in the authorization's notes, because the honest
+   * answer to "can this model call tools?" is "we are about to find out", and
+   * the provider's own error is a better answer than our guess. What is not
+   * acceptable is silence: a run that quietly degraded would leave the user
+   * wondering why their agent never used a tool.
    */
-  private unsupportedCapabilities(
+  private capabilityVerdict(
     capabilities: ModelCapabilities,
     required: readonly RequiredCapability[],
-  ): RequiredCapability[] {
-    return required.filter((capability) => capabilities[capability] !== 'supported');
+  ): { refused: RequiredCapability[]; unverified: RequiredCapability[] } {
+    return {
+      refused: required.filter((capability) => capabilities[capability] === 'unsupported'),
+      unverified: required.filter((capability) => capabilities[capability] === 'unknown'),
+    };
   }
 
   /**

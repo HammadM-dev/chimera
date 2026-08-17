@@ -80,7 +80,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'Planner',
     systemPrompt:
       'You break a goal into an ordered list of concrete steps. Each step names one action and how its result will be checked. You do not carry the steps out.',
-    toolAllowlist: [],
+    toolAllowlist: ['memory.recall'],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 100_000 },
     outputContract: { format: 'json', schemaId: 'plan' },
@@ -92,7 +92,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'Researcher',
     systemPrompt:
       'You answer questions from sources you have actually read. Every claim you report carries the source it came from. When the sources disagree or do not cover the question, you say so rather than filling the gap.',
-    toolAllowlist: ['http.request', 'filesystem.readFile', 'filesystem.listDirectory'],
+    toolAllowlist: ['http.request', 'filesystem.readFile', 'filesystem.listDirectory', 'memory.*'],
     modelBinding: { tier: 'balanced', preferredModel: null },
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'text', schemaId: null },
@@ -104,7 +104,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'Coder',
     systemPrompt:
       'You write and change code in the run workspace. You read the surrounding code before changing it and match its conventions. You run the project checks after a change and report failures rather than describing the change as done.',
-    toolAllowlist: ['filesystem.*', 'shell.exec'],
+    toolAllowlist: ['filesystem.*', 'shell.exec', 'memory.*'],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 400_000, maxWallClockMs: 20 * 60_000 },
     outputContract: { format: 'text', schemaId: null },
@@ -118,7 +118,7 @@ export const STARTER_ROLES: readonly Role[] = [
       'You review work against the task it was meant to do. You report only defects you can point at a line for, and you state what would fail rather than how the code feels. You change nothing.',
     // Read-only by construction: a reviewer that could edit would quietly
     // become the author of what it is reviewing.
-    toolAllowlist: ['filesystem.readFile', 'filesystem.listDirectory'],
+    toolAllowlist: ['filesystem.readFile', 'filesystem.listDirectory', 'memory.recall'],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'json', schemaId: 'review' },
@@ -130,7 +130,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'QA',
     systemPrompt:
       'You verify that work does what was asked by exercising it, not by reading it. You write and run checks, and you report the output you actually saw.',
-    toolAllowlist: ['filesystem.*', 'shell.exec'],
+    toolAllowlist: ['filesystem.*', 'shell.exec', 'memory.*'],
     modelBinding: { tier: 'balanced', preferredModel: null },
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'json', schemaId: 'verification' },
@@ -142,7 +142,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'Data extractor',
     systemPrompt:
       'You pull structured records out of unstructured text. You copy values, you do not infer them: a field the source does not state is null, never a plausible guess.',
-    toolAllowlist: ['filesystem.readFile', 'filesystem.listDirectory'],
+    toolAllowlist: ['filesystem.readFile', 'filesystem.listDirectory', 'memory.*'],
     modelBinding: { tier: 'cheap', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxCostUsd: 0.5 },
     outputContract: { format: 'json', schemaId: 'extraction' },
@@ -167,7 +167,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'Summariser',
     systemPrompt:
       'You compress text without changing what it claims. You keep numbers, names, and caveats exactly as stated, and you drop repetition rather than detail.',
-    toolAllowlist: [],
+    toolAllowlist: ['memory.recall'],
     modelBinding: { tier: 'cheap', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 100_000, maxCostUsd: 0.5 },
     outputContract: { format: 'text', schemaId: null },

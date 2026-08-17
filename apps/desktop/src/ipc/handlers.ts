@@ -13,7 +13,14 @@ import {
   testConnection,
 } from '../providers/service.ts';
 import { detect, importCatalogue } from '../providers/omniroute.ts';
-import { deleteFact, listFacts, setFact } from '../memory/service.ts';
+import {
+  deleteFact,
+  forgetMemory,
+  listFacts,
+  listMemories,
+  setFact,
+  writeMemory,
+} from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
 import { cancelRun, startRun } from '../runs/service.ts';
@@ -110,6 +117,10 @@ registerHandler(channels.workflowGet, (payload) => getAutomation(payload.id));
 registerHandler(channels.roleList, () => listRoles());
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
 registerHandler(channels.automationPlan, (payload) => planAutomation(payload));
+
+registerHandler(channels.memoryList, (payload) => listMemories(payload.query));
+registerHandler(channels.memoryWrite, (payload) => writeMemory(payload));
+registerHandler(channels.memoryForget, (payload) => forgetMemory(payload.id));
 
 registerHandler(channels.memoryListFacts, () => listFacts());
 registerHandler(channels.memorySetFact, (payload) => setFact(payload.key, payload.value));

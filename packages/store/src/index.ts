@@ -28,3 +28,6 @@ export * as tracesRepository from './repositories/traces.ts';
 export type { TraceRecord, AppendTraceInput, TraceEventType } from './repositories/traces.ts';
 export * as workflowsRepository from './repositories/workflows.ts';
 export type { WorkflowSummary, WorkflowVersion } from './repositories/workflows.ts';
+export * as memoriesRepository from './repositories/memories.ts';
+export { MEMORY_KINDS } from './repositories/memories.ts';
+export type { MemoryRecord, MemoryKind, WriteMemoryInput } from './repositories/memories.ts';

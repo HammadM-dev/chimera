@@ -36,7 +36,9 @@ test('a real provider is connected, catalogued, and runs an automation', async (
     expect(row).not.toContain('no catalogue');
 
     await goTo(page, 'build');
-    await page.getByTestId('palette-summariser').click();
+    // The researcher, deliberately: it has tools, so the run exercises the
+    // capability check that refused every model from a live catalogue.
+    await page.getByTestId('palette-researcher').click();
 
     const models = page.getByTestId('node-model');
     await expect(models).toBeVisible();
@@ -57,7 +59,10 @@ test('a real provider is connected, catalogued, and runs an automation', async (
     await expect(page.getByTestId('run-note')).toBeVisible({ timeout: 150_000 });
     const note = (await page.getByTestId('run-note').textContent()) ?? '';
     expect(note, `the run reported: ${note}`).not.toMatch(/could not read|not valid JSON|502/i);
-    await expect(page.getByTestId('node-summariser')).toContainText(/succeeded|denied|exhausted/);
+    // The specific refusal Hammad hit: a model from a live catalogue turned
+    // away before a single call, because nobody had verified its capabilities.
+    expect(note, `the run reported: ${note}`).not.toMatch(/does not support/i);
+    await expect(page.getByTestId('node-researcher')).toContainText(/succeeded|exhausted/);
   } finally {
     await app.close();
     removeProfile(profile);

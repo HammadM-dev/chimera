@@ -246,7 +246,7 @@ test('max total steps is enforced across model and tool calls together', () => {
   assert.equal(governor.steps, 3);
 });
 
-test('a capability the model lacks — or nobody has verified — is refused', () => {
+test('a capability the model is known to lack is refused', () => {
   const unsupported = new Governor('enforcing', { capabilitiesFor: () => NO_TOOLS });
   const denied = unsupported.authorizeModelCall(
     modelRequest({ requiredCapabilities: ['toolCalling'] }),
@@ -254,18 +254,35 @@ test('a capability the model lacks — or nobody has verified — is refused', (
   assert.equal(denied.decision, 'deny');
   if (denied.decision !== 'deny') return;
   assert.equal(denied.code, 'GOVERNOR_CAPABILITY_MISMATCH');
+});
 
-  // `unknown` fails closed. The tri-state exists so an absent fact cannot be
-  // read as a yes, and authorising a tool-calling node against a model nobody
-  // has checked would be doing exactly that.
+test('an unverified capability proceeds, and the authorization says it is unverified', () => {
+  // M3-1 failed closed on `unknown`. Against a live catalogue that is every
+  // model — this build has verified four — so failing closed meant nothing a
+  // user picked could ever run. `unsupported` still denies; `unknown` proceeds
+  // and is disclosed, because the provider's own answer beats our guess and
+  // silence would leave the user wondering why the agent never used a tool.
   const unknown = new Governor('enforcing', { capabilitiesFor: () => UNKNOWN_TOOLS });
-  assert.equal(
-    unknown.authorizeModelCall(modelRequest({ requiredCapabilities: ['toolCalling'] })).decision,
-    'deny',
+  const result = unknown.authorizeModelCall(
+    modelRequest({ requiredCapabilities: ['toolCalling'] }),
   );
 
-  // And a capability the node does not need is not checked at all.
-  assert.equal(unknown.authorizeModelCall(modelRequest()).decision, 'allow');
+  assert.equal(result.decision, 'allow');
+  if (result.decision !== 'allow') return;
+  assert.ok(
+    result.notes.some((note) => note.includes('nobody has verified')),
+    `the unverified capability was not disclosed: ${JSON.stringify(result.notes)}`,
+  );
+
+  // A capability the node does not need is not checked at all, so it is not
+  // disclosed either — a note about every unknown fact would be noise.
+  const quiet = unknown.authorizeModelCall(modelRequest());
+  assert.equal(quiet.decision, 'allow');
+  if (quiet.decision !== 'allow') return;
+  assert.equal(
+    quiet.notes.some((note) => note.includes('nobody has verified')),
+    false,
+  );
 });
 
 test('the ledger reports the most specific breach when several caps are tight', () => {

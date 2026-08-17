@@ -364,6 +364,56 @@ export const automationPlan = defineInvokeChannel({
   }),
 });
 
+const memoryRecord = z.object({
+  id: z.string(),
+  kind: z.string(),
+  subject: z.string(),
+  body: z.string(),
+  source: z.string(),
+  runId: z.string().nullable(),
+  confidence: z.number(),
+  tags: z.array(z.string()),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const memoryList = defineInvokeChannel({
+  channel: 'memory:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ query: z.string().optional() }),
+  responseSchema: z.object({
+    memories: z.array(memoryRecord),
+    counts: z.record(z.string(), z.number()),
+    backend: z.object({
+      name: z.string(),
+      available: z.boolean(),
+      detail: z.string(),
+    }),
+  }),
+});
+
+export const memoryWrite = defineInvokeChannel({
+  channel: 'memory:write',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    kind: z.string(),
+    subject: z.string(),
+    body: z.string(),
+    tags: z.array(z.string()).optional(),
+  }),
+  responseSchema: z.object({ memory: memoryRecord }),
+});
+
+export const memoryForget = defineInvokeChannel({
+  channel: 'memory:forget',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ removed: z.boolean() }),
+});
+
 export const vaultSetSecret = defineInvokeChannel({
   channel: 'vault:setSecret',
   // v2: `scope` narrowed from an open string to the vault's actual scope
@@ -529,6 +579,9 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   automationPlan,
   runCostPreview,
   memoryListFacts,
+  memoryList,
+  memoryWrite,
+  memoryForget,
   memorySetFact,
   memoryDeleteFact,
   vaultSetSecret,

@@ -56,11 +56,20 @@ test('all eight starter roles load, each with a prompt, an allowlist decision an
       assert.ok(role.isBuiltin, role.id);
     }
 
-    // An empty allowlist is a decision, not an omission: planner and summariser
-    // genuinely need no tools, and giving them some "just in case" is the exact
-    // habit capability limits exist to prevent.
-    const withTools = roles.filter((role) => role.toolAllowlist.length > 0);
-    assert.equal(withTools.length, 6);
+    // Every role can reach memory now, and the two that used to have nothing
+    // get `memory.recall` only — reading what is known is not a capability that
+    // needs guarding the way a shell is. What each role may do beyond that is
+    // still the narrowest set that works.
+    assert.equal(
+      roles.every((role) => role.toolAllowlist.length > 0),
+      true,
+    );
+    const canWriteMemory = roles.filter((role) => role.toolAllowlist.includes('memory.*'));
+    assert.deepEqual(
+      canWriteMemory.map((role) => role.id).sort(),
+      ['coder', 'data-extractor', 'qa', 'researcher'],
+      'only roles that do the work should be able to write memory',
+    );
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -121,14 +130,22 @@ test('a role with an empty allowlist can invoke nothing', async () => {
 
   try {
     const registry = createRoleRegistry(db);
-    const summariser = registry.get('summariser');
-    assert.ok(summariser);
-    assert.deepEqual(summariser.toolAllowlist, []);
 
-    // The concrete role fixture, against the real registry — not a hand-made
-    // object that happens to have an empty array.
+    // Saved through the real registry rather than hand-made, so this is a role
+    // the runtime would actually load. No starter role has an empty allowlist
+    // any more — every one can at least recall memory — so the case is made
+    // explicitly rather than borrowed from whichever role happened to have none.
+    const base = registry.get('summariser');
+    assert.ok(base);
+    const mute = registry.save({ ...base, id: 'mute', name: 'Mute', toolAllowlist: [] });
+    assert.deepEqual(mute.toolAllowlist, []);
+
     await assert.rejects(
-      () => tools.invoke('filesystem.readFile', { path: 'anything' }, { role: summariser }),
+      () => tools.invoke('filesystem.readFile', { path: 'anything' }, { role: mute }),
+      (err: unknown) => err instanceof ToolAllowlistError,
+    );
+    await assert.rejects(
+      () => tools.invoke('memory.recall', { query: 'anything' }, { role: mute }),
       (err: unknown) => err instanceof ToolAllowlistError,
     );
   } finally {

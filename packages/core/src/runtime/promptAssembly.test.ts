@@ -92,12 +92,17 @@ test('the system message names the tools the role actually has, and no others', 
   for (const tool of researcher.toolAllowlist) assert.ok(system.includes(tool), tool);
   assert.equal(system.includes('shell.exec'), false);
 
+  // Every starter role can at least recall memory now, so the no-tools branch
+  // is exercised with a role built for it rather than borrowed from whichever
+  // one happened to have an empty allowlist.
   const summariser = STARTER_ROLES.find((role) => role.id === 'summariser');
   assert.ok(summariser);
+  assert.ok(assembleSystemMessage(instructions).includes('memory'), 'memory was not advertised');
+
   const none = assembleSystemMessage({
-    role: summariser,
+    role: { ...summariser, toolAllowlist: [] },
     task: 'Compress this.',
-    availableTools: summariser.toolAllowlist,
+    availableTools: [],
   });
   assert.ok(none.includes('You have no tools'));
 });
