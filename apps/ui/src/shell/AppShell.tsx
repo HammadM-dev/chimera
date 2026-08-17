@@ -6,6 +6,7 @@ import { CanvasView, type AutomationTemplate } from '../views/CanvasView.tsx';
 import { HomeView } from '../views/HomeView.tsx';
 import { MemoryView } from '../views/MemoryView.tsx';
 import { ProvidersView } from '../views/ProvidersView.tsx';
+import { RunsView } from '../views/RunsView.tsx';
 import { StatusBar } from './StatusBar.tsx';
 import { bridge } from '../chat/useChimera.ts';
 import './shell.css';
@@ -14,7 +15,7 @@ import './shell.css';
 // and one surface that changes — not a chat window with settings around it.
 // M4's canvas replaces the builder's middle column; the frame does not move.
 
-type View = 'home' | 'build' | 'agents' | 'memory' | 'providers' | 'chat';
+type View = 'home' | 'build' | 'runs' | 'agents' | 'memory' | 'providers' | 'chat';
 
 const NAV: { view: View; label: string; icon: JSX.Element }[] = [
   {
@@ -30,6 +31,16 @@ const NAV: { view: View; label: string; icon: JSX.Element }[] = [
         <rect x="2.5" y="2.5" width="4" height="4" rx="1" />
         <rect x="9.5" y="9.5" width="4" height="4" rx="1" />
         <path d="M4.5 6.5v3a2 2 0 0 0 2 2h3" />
+      </>
+    ),
+  },
+  {
+    view: 'runs',
+    label: 'Runs',
+    icon: (
+      <>
+        <circle cx="8" cy="8" r="5.5" />
+        <path d="M8 5v3.2l2 1.3" />
       </>
     ),
   },
@@ -77,6 +88,11 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
     title: 'Automation',
     subtitle:
       'Drag agents onto the canvas, join them to say what runs after what, and click one to choose its model.',
+  },
+  runs: {
+    title: 'Runs',
+    subtitle:
+      'Every run this workspace has made, what it cost, and the trace of what happened inside it.',
   },
   memory: {
     title: 'Memory',
@@ -254,6 +270,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
               />
             )}
             {view === 'chat' && <ChatPanel />}
+            {view === 'runs' && <RunsView />}
             {view === 'memory' && <MemoryView />}
             {view === 'agents' && (
               <div className="view__body scroll">

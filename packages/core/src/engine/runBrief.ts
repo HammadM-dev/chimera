@@ -35,11 +35,34 @@ export interface RunBrief {
   steps: BriefStep[];
   /** `[from, to]` node id pairs. Absent edges mean the steps run in the order given. */
   edges: [string, string][];
+  /**
+   * Steps the author has agreed may take irreversible actions without a gate.
+   *
+   * CLAUDE.md allows "a human-approval node or explicit workflow
+   * pre-authorisation"; this is the second one. Per node and stored in the
+   * saved file, so whoever opens the automation next can see it.
+   */
+  preauthorised?: string[];
+  /** Where each node sits on the canvas. Not part of the run. */
+  layout?: { nodeId: string; x: number; y: number }[];
 }
 
 export interface BriefProblem {
   nodeId: string | null;
   message: string;
+  /**
+   * When this problem stops the automation.
+   *
+   * `run` — the default — is a graph that is not finished yet: a step with no
+   * model, an empty brief. Saving a draft in that state is the normal way to
+   * work, and an editor that refused would be an editor people stopped using.
+   *
+   * `save` is a graph that must not exist as a file at all: an unbounded loop,
+   * or a step that could act irreversibly with nothing gating it. The saved
+   * file is the thing users send each other, so it is the thing that has to be
+   * safe on its own.
+   */
+  stops?: 'save' | 'run';
 }
 
 /**
@@ -98,6 +121,8 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
         problems.push({
           nodeId: step.nodeId,
           message: 'This loop needs a maximum number of iterations.',
+          // CLAUDE.md: "The editor must refuse to save without one."
+          stops: 'save',
         });
       } else if (loop.body.length === 0) {
         problems.push({ nodeId: step.nodeId, message: 'This loop has no steps to repeat.' });

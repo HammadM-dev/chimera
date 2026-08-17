@@ -1,7 +1,11 @@
 # Workflow schema
 
-**Schema version** 1
+**Schema version** 2
 **Status** contract. The canvas, engine, and swarm all bind to this. Changing it is expensive — get it right before writing engine code.
+
+**Version 2** (M4-3, M4-6) added, to the run brief below: `steps[].type` and
+`steps[].config` for the non-agent node types, `preauthorised`, and `layout`.
+Every one is optional, so a version 1 definition loads unchanged.
 
 ---
 
@@ -276,6 +280,68 @@ Evals run against the mock provider by default so CI costs nothing. A workflow w
 8. `fanout.concurrency` does not exceed the rate-limit headroom of its bound connection.
 
 Failing 1, 2, 4, or 7 blocks the save. The rest warn.
+
+---
+
+## The run brief — what is saved today
+
+The document above is the target. What the canvas writes and the engine reads
+today is a smaller shape, `RunBrief` in `packages/core/src/engine/runBrief.ts`,
+which is a subset rather than a divergence: every field here has a home in the
+document above, and the fields above that are missing here are ones no
+implemented feature reads yet.
+
+```jsonc
+{
+  "name": "Invoice triage",
+  "instruction": "Summarise every invoice in the folder.",   // reaches the first step
+  "attachments": [
+    { "name": "invoices", "path": "/…", "kind": "text", "content": "…", "note": "" }
+  ],
+  "steps": [
+    {
+      "nodeId": "researcher-1",
+      "type": "agent",            // agent | condition | loop | transform | approval
+      "config": { "type": "agent" },
+      "roleId": "researcher",
+      "instruction": "",          // empty falls back to the brief's
+      "connectionId": "conn_…",
+      "model": "claude-haiku-4-5"
+    }
+  ],
+  "edges": [["researcher-1", "summariser-2"]],
+  "preauthorised": ["coder-3"],   // steps allowed to act irreversibly without a gate
+  "layout": [{ "nodeId": "researcher-1", "x": 120, "y": 60 }]
+}
+```
+
+`config` by node type:
+
+| `type` | `config` | Notes |
+| --- | --- | --- |
+| `agent` | `{ "type": "agent" }` | The step makes a model call. `roleId` and `model` are required. |
+| `condition` | `{ "type": "condition", "condition": { "source", "test", "value", "whenTrue": [], "whenFalse": [] } }` | `test` is one of `contains`, `equals`, `matches`, `isEmpty`, `notEmpty`. A **declared comparison, never an expression** — a saved file must not be a code-execution surface. `source` empty means the previous step. The branch not taken is skipped, and so is everything reachable only through it. |
+| `loop` | `{ "type": "loop", "loop": { "body": [], "maxIterations": 3, "until": { …condition } } }` | `maxIterations` is required and has no default; the editor refuses to save without it. `body` is the node ids the loop runs itself. |
+| `transform` | `{ "type": "transform", "transform": { "template": "…{{step-id}}…" } }` | Fills `{{step-id}}` from earlier outputs; `{{previous}}` is the step before. No model call. |
+| `approval` | `{ "type": "approval", "approval": { "prompt": "Send this?", "showSource": "" } }` | The run stops, persists as `awaiting_approval`, and survives a restart in that state. |
+
+### What the editor refuses, and when
+
+Two bars, not one:
+
+- **Refuses to save** — a loop with no bound, and a step that may use a tool
+  that is irreversible however it is called (`shell.exec`, or any tool from a
+  server this build does not ship) with no approval node upstream and no entry
+  in `preauthorised`. The saved file is what one person sends another, so it
+  has to be safe in their hands.
+- **Refuses to run** — the above, plus everything a draft is allowed to be
+  missing: a step with no model, a brief with no instruction, a branch that
+  goes nowhere, a model whose capability entry says `unsupported` for something
+  the step needs. `unknown` is not a refusal.
+
+Argument-dependent calls — an HTTP POST from a step whose GETs are fine — are
+not a save-time question at all. They are refused at call time by the Governor,
+which is the only place the arguments exist.
 
 ---
 

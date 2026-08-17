@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import { ValidationError } from '@chimera/errors';
+import { tracesRepository } from '@chimera/store';
 import type { AdapterCallOptions, ProviderAdapter } from '@chimera/providers';
 import type { ToolRegistry } from '@chimera/tools';
 import { Governor } from '../governor/Governor.ts';
@@ -67,6 +68,35 @@ export interface RunAutomationDeps {
     prompt: string;
     context: string;
   }) => Promise<{ approved: boolean; note: string }>;
+  /**
+   * Picks up a run that was interrupted rather than starting a fresh one.
+   *
+   * A resumed run replays every step that already succeeded from its journal —
+   * no model call, no spend — and every approval that was already answered from
+   * the trace. Re-running a five-step automation to get past a gate somebody
+   * answered yesterday would charge for it twice.
+   */
+  resume?: boolean;
+}
+
+/** The last decision recorded for a node, so a resume does not ask twice. */
+function priorApproval(
+  db: Database.Database,
+  runId: string,
+  nodeId: string,
+): { approved: boolean; note: string } | null {
+  const decisions = tracesRepository
+    .listForRun(db, runId)
+    .filter((event) => event.nodeId === nodeId && event.eventType === 'decision')
+    .map((event) => JSON.parse(event.payloadJson) as { decision?: string; note?: string })
+    .filter(
+      (payload) =>
+        payload.decision === 'approval:granted' || payload.decision === 'approval:refused',
+    );
+
+  const last = decisions.at(-1);
+  if (!last) return null;
+  return { approved: last.decision === 'approval:granted', note: last.note ?? '' };
 }
 
 /**
@@ -142,6 +172,26 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
   // must not be treated as cut off.
   const ownedByLoop = new Set<string>();
 
+  // Which steps a person has already agreed to. Computed once, from the graph:
+  // every step downstream of an approval node, plus anything the automation
+  // pre-authorises by name.
+  const gatedNodes = new Set<string>(brief.preauthorised ?? []);
+  {
+    const targets = new Map<string, string[]>();
+    for (const [from, to] of brief.edges) {
+      targets.set(from, [...(targets.get(from) ?? []), to]);
+    }
+    const queue = brief.steps
+      .filter((step) => (step.type ?? 'agent') === 'approval')
+      .flatMap((step) => targets.get(step.nodeId) ?? []);
+    while (queue.length > 0) {
+      const nodeId = queue.shift();
+      if (nodeId === undefined || gatedNodes.has(nodeId)) continue;
+      gatedNodes.add(nodeId);
+      queue.push(...(targets.get(nodeId) ?? []));
+    }
+  }
+
   /**
    * Runs one non-agent step.
    *
@@ -189,6 +239,20 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
 
     if (type === 'approval' && step.config?.type === 'approval') {
       const approval = step.config.approval;
+
+      const already = deps.resume === true ? priorApproval(db, runId, step.nodeId) : null;
+      if (already) {
+        outputs.set(step.nodeId, already.approved ? 'approved' : 'refused');
+        return already.approved
+          ? { ...base, status: 'succeeded', haltCause: 'completed', output: 'approved' }
+          : {
+              ...base,
+              status: 'cancelled',
+              haltCause: 'cancelled',
+              output: already.note === '' ? 'Refused.' : `Refused: ${already.note}`,
+            };
+      }
+
       if (!deps.requestApproval) {
         // A gate nobody can answer must not be treated as passed. CLAUDE.md:
         // irreversible actions require a gate, and an unanswerable gate is a
@@ -206,7 +270,14 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
       trace.append({
         nodeId: step.nodeId,
         eventType: 'decision',
-        payload: { decision: 'approval:requested', prompt: approval.prompt },
+        payload: {
+          decision: 'approval:requested',
+          prompt: approval.prompt,
+          // Trimmed, and recorded: a run that stops for a person may be
+          // answered after a restart, and the question is useless without
+          // what it is asking about.
+          context: context.slice(0, 4000),
+        },
       });
 
       const answer = await deps.requestApproval({
@@ -314,6 +385,31 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         iterations: 0,
       };
     }
+    // A step this run already finished is replayed from its journal. The
+    // checkpoint holds the output it produced, so there is nothing to ask a
+    // model for and nothing to pay for.
+    if (deps.resume === true && checkpoints.statusOf(runId, step.nodeId) === 'succeeded') {
+      const journaled = checkpoints.load(runId, step.nodeId);
+      if (journaled) {
+        carried = journaled.output;
+        outputs.set(step.nodeId, journaled.output);
+        trace.append({
+          nodeId: step.nodeId,
+          eventType: 'decision',
+          payload: { decision: 'resume:replayed' },
+        });
+        return {
+          nodeId: step.nodeId,
+          type: 'agent',
+          roleId: step.roleId,
+          status: 'succeeded',
+          haltCause: 'completed',
+          output: journaled.output,
+          iterations: journaled.iteration,
+        };
+      }
+    }
+
     const { adapter, options } = deps.providerFor(step.connectionId);
 
     // What this step is told: its own instruction, or the brief's when it has
@@ -334,6 +430,10 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         task,
         connectionId: step.connectionId,
         model: step.model,
+        // A person agreed to this node's actions if an approval node upstream
+        // of it was granted — the run only reaches here if it was — or if the
+        // automation pre-authorises the node by name.
+        gated: gatedNodes.has(step.nodeId),
       },
       {
         governor,

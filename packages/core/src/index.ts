@@ -134,6 +134,8 @@ export type { BucketPolicy, RateLimitPolicy, RateVerdict } from './governor/rate
 export { runAutomation } from './engine/runAutomation.ts';
 export type { RunAutomationDeps, RunOutcomeSummary, StepOutcome } from './engine/runAutomation.ts';
 export { validateBrief, executionOrder } from './engine/runBrief.ts';
+export { validateForSave } from './engine/validator.ts';
+export type { SaveContext, StepCapabilities } from './engine/validator.ts';
 export type { RunBrief, BriefStep, BriefAttachment, BriefProblem } from './engine/runBrief.ts';
 
 export { evaluateCondition, applyTransform } from './engine/nodeTypes.ts';

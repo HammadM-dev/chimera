@@ -5,6 +5,7 @@ export type { McpToolClient, McpToolResult, ToolDescriptor } from './mcpClient.t
 export { createToolRegistry } from './toolRegistry.ts';
 export type { InvocationContext, RegisteredTool, ToolRegistry } from './toolRegistry.ts';
 export { assertToolAllowed, isToolAllowed } from './allowlist.ts';
+export { isIrreversible, alwaysIrreversibleTools } from './reversibility.ts';
 export type { AllowlistedRole } from './allowlist.ts';
 export { createSandbox, destroySandbox } from './sandbox.ts';
 export type { Sandbox } from './sandbox.ts';

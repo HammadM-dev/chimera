@@ -87,10 +87,13 @@ export function save(
     .get(workflowId) as { n: number };
   const versionNumber = previous.n + 1;
 
+  // Schema 2: the brief gained node types, pre-authorisation and layout (M4-3,
+  // M4-6). Every added field is optional, so a version 1 definition still
+  // loads — the number records what wrote it, not what can read it.
   db.prepare(
     `INSERT INTO workflow_versions
        (id, workflow_id, version_number, schema_version, definition_json, created_at, created_by)
-     VALUES (?, ?, ?, 1, ?, ?, 'user')`,
+     VALUES (?, ?, ?, 2, ?, ?, 'user')`,
   ).run(versionId, workflowId, versionNumber, input.definitionJson, now);
 
   db.prepare(

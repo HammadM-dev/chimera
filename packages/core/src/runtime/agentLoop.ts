@@ -7,6 +7,7 @@ import type {
   ToolDefinition,
 } from '@chimera/providers';
 import { textOf } from '@chimera/providers';
+import { isIrreversible } from '@chimera/tools';
 import type { RegisteredTool, ToolRegistry } from '@chimera/tools';
 import type { Governor } from '../governor/Governor.ts';
 import { toolSignature } from '../governor/stallDetector.ts';
@@ -104,6 +105,15 @@ export interface AgentTask {
   model: string;
   /** Nesting depth, for the Governor's recursion limit. */
   depth?: number;
+  /**
+   * Whether a person has already agreed to what this node may do — an approval
+   * node upstream of it was granted, or the automation pre-authorises it.
+   *
+   * Absent means no, which is the only safe reading. A step that reaches an
+   * irreversible tool with this unset is refused rather than allowed on the
+   * assumption that somebody meant to set it.
+   */
+  gated?: boolean;
   /**
    * Which memory tiers this node wants (M2-10). `vectorStore` is refused until
    * M9 — loudly, at invocation, rather than by silently doing nothing.
@@ -645,10 +655,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         depth: task.depth ?? 0,
         toolId,
         egressTargets: egressTargetsOf(call.arguments),
-        // Until tool servers declare this (M4-3 wires the approval gate), the
-        // conservative answer is the safe one: a call the Governor is told is
-        // reversible when it is not would slip past an approval requirement.
-        irreversible: true,
+        // Declared per call rather than per tool: an HTTP GET reads and an
+        // HTTP POST does something, and treating them alike would either gate
+        // every lookup or let every submission through.
+        irreversible: isIrreversible(toolId, call.arguments),
+        gated: task.gated === true,
       });
 
       if (authorization.decision === 'deny') return denialResult(authorization);

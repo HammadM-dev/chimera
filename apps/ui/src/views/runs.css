@@ -1,0 +1,221 @@
+/* The runs list and the trace timeline.
+ *
+ * Two columns rather than a drill-down: comparing a run that worked with the
+ * one after it that did not is the commonest reason to open this at all, and a
+ * page that forgets which run you were on when you go back makes that painful.
+ */
+
+.runs {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+}
+
+.runs__list {
+  min-height: 0;
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  border-right: var(--border-width) solid var(--border-hairline);
+}
+
+.runs__listHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.runs__item {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+  font: inherit;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.runs__item:hover {
+  background: var(--surface-raised);
+}
+
+.runs__item--selected {
+  border-color: var(--accent-primary);
+  color: var(--text-primary);
+}
+
+.runs__name {
+  font-size: var(--type-body);
+  color: var(--text-primary);
+}
+
+.runs__status {
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.runs__status--succeeded {
+  color: var(--semantic-success);
+}
+
+.runs__status--failed,
+.runs__status--halted,
+.runs__status--cancelled {
+  color: var(--semantic-danger);
+}
+
+.runs__status--awaiting_approval,
+.runs__status--running {
+  color: var(--semantic-warning);
+}
+
+.runs__meta {
+  font-size: var(--type-meta);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.runs__trace {
+  min-height: 0;
+  padding: var(--space-4) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.runs__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.runs__title {
+  margin: 0;
+  font-size: var(--type-title);
+  color: var(--text-primary);
+}
+
+.runs__error {
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 2px solid var(--semantic-danger);
+  background: var(--surface-raised);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.runs__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.runs__filter {
+  font: inherit;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  background: transparent;
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  padding: var(--space-1) var(--space-3);
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.runs__filter:hover {
+  color: var(--text-primary);
+  border-color: var(--border-stronger);
+}
+
+.runs__filter--on {
+  color: var(--text-primary);
+  border-color: var(--accent-primary);
+}
+
+.runs__events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.event__row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 40px 128px 88px minmax(0, 1fr) 72px;
+  gap: var(--space-2);
+  align-items: baseline;
+  text-align: left;
+  font: inherit;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  background: transparent;
+  border: 0;
+  border-bottom: var(--border-width) solid var(--border-hairline);
+  padding: var(--space-2) 0;
+}
+
+.event__row:hover {
+  color: var(--text-primary);
+}
+
+.event__seq,
+.event__cost {
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  text-align: right;
+}
+
+.event__node {
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event__type {
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.event__headline {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.event--error .event__type,
+.event--error .event__headline {
+  color: var(--semantic-danger);
+}
+
+.event__payload {
+  margin: 0;
+  padding: var(--space-3);
+  max-height: 320px;
+  overflow: auto;
+  background: var(--surface-raised);
+  border-radius: var(--radius-control);
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}

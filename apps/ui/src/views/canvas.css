@@ -477,3 +477,16 @@
   justify-content: flex-end;
   gap: var(--space-2);
 }
+
+/* The pre-authorisation control. Deliberately plain and deliberately wordy: a
+ * checkbox that removes a safety gate should read like a sentence somebody
+ * agreed to, not like a setting. */
+.canvas__check {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: var(--space-2);
+  align-items: start;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}

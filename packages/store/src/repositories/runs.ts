@@ -153,6 +153,41 @@ export function spendOf(db: Database.Database, runId: string): { tokens: number;
   return { tokens: row?.tokens ?? 0, costUsd: row?.cost ?? 0 };
 }
 
+/**
+ * Moves a run between non-terminal states.
+ *
+ * Separate from `finish` because it must not stamp `ended_at`: a run waiting
+ * for an approval has not ended, and a row that claims it has is a row nothing
+ * will pick back up.
+ */
+export function setStatus(db: Database.Database, id: string, status: string): void {
+  db.prepare('UPDATE runs SET status = ? WHERE id = ?').run(status, id);
+}
+
+export interface RunSummary extends RunRecord {
+  tokensUsed: number;
+  costUsd: number;
+}
+
+/** The most recent runs, newest first, with what each one spent. */
+export function listRecent(db: Database.Database, limit = 50): RunSummary[] {
+  const rows = db
+    .prepare('SELECT * FROM runs ORDER BY started_at DESC LIMIT ?')
+    .all(limit) as RunRow[];
+  return rows.map((row) => ({
+    ...toRecord(row),
+    tokensUsed: row.budget_tokens_used,
+    costUsd: row.budget_cost_usd_used,
+  }));
+}
+
+export function listByStatus(db: Database.Database, status: string): RunRecord[] {
+  const rows = db
+    .prepare('SELECT * FROM runs WHERE status = ? ORDER BY started_at DESC')
+    .all(status) as RunRow[];
+  return rows.map(toRecord);
+}
+
 export function finish(
   db: Database.Database,
   id: string,

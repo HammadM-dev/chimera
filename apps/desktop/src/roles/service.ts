@@ -17,6 +17,11 @@ export function closeRoles(): void {
   registry = undefined;
 }
 
+/** The roster as the runtime knows it, not as the renderer shows it. */
+export function allRoles() {
+  return roles().list();
+}
+
 export function listRoles() {
   return {
     roles: roles()

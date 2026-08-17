@@ -236,6 +236,10 @@ interface PendingApproval {
   context: string;
 }
 
+interface AwaitingApproval extends PendingApproval {
+  runId: string;
+}
+
 function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): JSX.Element {
   const roles = useRoles();
   const { choices, loaded } = useConnections();
@@ -253,6 +257,8 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const [runOutput, setRunOutput] = useState('');
   const [pending, setPending] = useState<PendingApproval | null>(null);
   const [approvalNote, setApprovalNote] = useState('');
+  const [problems, setProblems] = useState<{ nodeId: string | null; message: string }[]>([]);
+  const [preauthorised, setPreauthorised] = useState<string[]>([]);
   const [savedId, setSavedId] = useState<string | null>(null);
   const [name, setName] = useState('Untitled automation');
   const wrapper = useRef<HTMLDivElement | null>(null);
@@ -476,6 +482,25 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
     });
   }, [runId]);
 
+  // A gate left open by a previous session. Asked for once, on mount: a run
+  // that stopped for a person and then disappeared from the screen when the app
+  // restarted would be the one failure an approval gate cannot afford.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ waiting: AwaitingApproval[] }>('run:awaiting', {});
+        const first = result.waiting[0];
+        if (!first) return;
+        setRunId(first.runId);
+        setPending({ nodeId: first.nodeId, prompt: first.prompt, context: first.context });
+        await bridge().invoke('run:subscribe', { runId: first.runId });
+      } catch {
+        // A workspace with no runs answers this fine; anything else here is not
+        // worth an error banner over a canvas the user has not used yet.
+      }
+    })();
+  }, []);
+
   const answer = useCallback(
     async (approved: boolean) => {
       if (pending === null || runId === null) return;
@@ -571,12 +596,39 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       })),
       steps,
       edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
+      preauthorised,
       // Positions are not part of the run, but they are part of the thing the
       // user arranged. Losing the layout on reload would make saving feel like
       // it half-worked.
       layout: nodes.map((node) => ({ nodeId: node.id, x: node.position.x, y: node.position.y })),
     };
-  }, [name, brief, attachments, nodes, edges]);
+  }, [name, brief, attachments, nodes, edges, preauthorised]);
+
+  // The rules that decide whether this can run, asked of the one place that
+  // implements them. Duplicating them in the renderer would mean two rule sets
+  // that agree until the day they do not.
+  useEffect(() => {
+    if (nodes.length === 0) {
+      setProblems([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      void (async () => {
+        try {
+          const result = await bridge().invoke<{
+            problems: { nodeId: string | null; message: string }[];
+          }>('automation:check', { definition: currentBrief() });
+          setProblems(result.problems);
+        } catch {
+          // A check that could not run is not a reason to block the canvas; the
+          // save and run paths enforce the same rules and will say so.
+        }
+      })();
+    }, 250);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [nodes, edges, preauthorised, currentBrief]);
 
   const save = useCallback(async () => {
     try {
@@ -643,7 +695,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 : 'A branch needs somewhere to go — join it to a step.'
           : brief.trim() === '' && agentNodes.every((node) => node.data.instruction.trim() === '')
             ? 'Write a brief, or give a step its own instruction.'
-            : '';
+            : (problems[0]?.message ?? '');
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -1031,6 +1083,37 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                   ))
                 )}
               </div>
+
+              {problems.some(
+                (problem) =>
+                  problem.nodeId === selected.id && problem.message.includes('pre-authorise'),
+              ) && (
+                <>
+                  <p className="canvas__section">Needs a decision</p>
+                  <p className="canvas__prompt" data-testid="node-problem">
+                    {problems.find((problem) => problem.nodeId === selected.id)?.message}
+                  </p>
+                  <label className="canvas__check">
+                    <input
+                      type="checkbox"
+                      data-testid="node-preauthorise"
+                      checked={preauthorised.includes(selected.id)}
+                      onChange={(event) => {
+                        const on = event.target.checked;
+                        setPreauthorised((current) =>
+                          on
+                            ? [...current, selected.id]
+                            : current.filter((nodeId) => nodeId !== selected.id),
+                        );
+                      }}
+                    />
+                    <span>
+                      Let this step act without approval. Saved with the automation, so whoever
+                      opens it next can see it.
+                    </span>
+                  </label>
+                </>
+              )}
 
               <p className="canvas__section">Limits</p>
               <div className="canvas__tags">

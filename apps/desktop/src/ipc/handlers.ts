@@ -23,11 +23,17 @@ import {
 } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
-import { answerApproval, cancelRun, startRun } from '../runs/service.ts';
+import { answerApproval, awaitingApprovals, cancelRun, startRun } from '../runs/service.ts';
+import { exportTrace, listRuns, listTrace } from '../runs/history.ts';
 import { listRoles } from '../roles/service.ts';
 import { pickAttachments } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
-import { getAutomation, listAutomations, saveAutomation } from '../automations/store.ts';
+import {
+  checkAutomation,
+  getAutomation,
+  listAutomations,
+  saveAutomation,
+} from '../automations/store.ts';
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
@@ -104,6 +110,10 @@ registerHandler(channels.runSubscribe, (payload, context) =>
 registerHandler(channels.runStart, (payload) => startRun(payload.brief));
 registerHandler(channels.runCancel, (payload) => cancelRun(payload.runId));
 registerHandler(channels.runApprove, (payload) => answerApproval(payload));
+registerHandler(channels.runAwaiting, () => awaitingApprovals());
+registerHandler(channels.runList, (payload) => listRuns(payload.limit));
+registerHandler(channels.traceList, (payload) => listTrace(payload.runId));
+registerHandler(channels.traceExport, (payload) => exportTrace(payload.runId));
 
 registerHandler(channels.workflowSave, (payload) =>
   saveAutomation({
@@ -118,6 +128,7 @@ registerHandler(channels.workflowGet, (payload) => getAutomation(payload.id));
 registerHandler(channels.roleList, () => listRoles());
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
 registerHandler(channels.automationPlan, (payload) => planAutomation(payload));
+registerHandler(channels.automationCheck, (payload) => checkAutomation(payload.definition));
 
 registerHandler(channels.memoryList, (payload) => listMemories(payload.query));
 registerHandler(channels.memoryWrite, (payload) => writeMemory(payload));

@@ -102,6 +102,8 @@ const briefSchema = z.object({
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),
+  // Steps whose author has agreed they may act irreversibly without a gate.
+  preauthorised: z.array(z.string()).optional(),
   // Where each node sits on the canvas. Not part of the run, but part of what
   // the user arranged — and a schema that silently dropped it made every reopen
   // rearrange the graph into a column.
@@ -195,6 +197,98 @@ export const runApprove = defineInvokeChannel({
     note: z.string(),
   }),
   responseSchema: z.object({ accepted: z.boolean() }),
+});
+
+// Gates still open, including ones from before a restart. The renderer asks on
+// mount: a run that stopped for a person and then vanished from the screen
+// would be the one failure this mechanism cannot afford.
+export const runAwaiting = defineInvokeChannel({
+  channel: 'run:awaiting',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    waiting: z.array(
+      z.object({
+        runId: z.string(),
+        nodeId: z.string(),
+        prompt: z.string(),
+        context: z.string(),
+        live: z.boolean(),
+      }),
+    ),
+  }),
+});
+
+// M4-7 and M4-8: what happened, and what it cost. The trace has been written
+// since M2-11 with nothing to read it.
+export const runList = defineInvokeChannel({
+  channel: 'run:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ limit: z.number().optional() }),
+  responseSchema: z.object({
+    runs: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        status: z.string(),
+        startedAt: z.string(),
+        endedAt: z.string().nullable(),
+        tokensUsed: z.number(),
+        costUsd: z.number(),
+        errorSummary: z.string().nullable(),
+      }),
+    ),
+  }),
+});
+
+export const traceList = defineInvokeChannel({
+  channel: 'trace:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string() }),
+  responseSchema: z.object({
+    events: z.array(
+      z.object({
+        seq: z.number(),
+        ts: z.string(),
+        nodeId: z.string(),
+        eventType: z.string(),
+        payloadJson: z.string(),
+        tokensIn: z.number().nullable(),
+        tokensOut: z.number().nullable(),
+        costUsd: z.number().nullable(),
+      }),
+    ),
+  }),
+});
+
+export const traceExport = defineInvokeChannel({
+  channel: 'trace:export',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string() }),
+  responseSchema: z.object({ path: z.string(), events: z.number() }),
+});
+
+// Everything wrong with an automation, asked for while it is being edited.
+// The same rules the save and run paths enforce, so the canvas cannot say a
+// graph is fine and then have `run:start` refuse it.
+export const automationCheck = defineInvokeChannel({
+  channel: 'automation:check',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ definition: briefSchema }),
+  responseSchema: z.object({
+    problems: z.array(
+      z.object({
+        nodeId: z.string().nullable(),
+        message: z.string(),
+        stops: z.enum(['save', 'run']).optional(),
+      }),
+    ),
+  }),
 });
 
 export const providerTestConnection = defineInvokeChannel({
@@ -624,6 +718,10 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runCancel,
   runSubscribe,
   runApprove,
+  runAwaiting,
+  runList,
+  traceList,
+  traceExport,
   runEvent,
   providerTestConnection,
   connectionCreate,
@@ -632,6 +730,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   roleList,
   filesPick,
   automationPlan,
+  automationCheck,
   runCostPreview,
   memoryListFacts,
   memoryList,

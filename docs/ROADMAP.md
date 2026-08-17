@@ -12,7 +12,7 @@ So the order has changed. Everything that makes the product usable — the canva
 | M1 Provider layer | 11 / 11 | Connect providers, chat through them, watch health and cost live |
 | M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
-| **M4 Automations** | **10 / 16** | **Describe an automation, watch it built, run it, see it work** |
+| **M4 Automations** | **12 / 16** | **Describe an automation, watch it built, run it, see it work** |
 | M5 Swarm | 0 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 0 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
@@ -20,9 +20,9 @@ So the order has changed. Everything that makes the product usable — the canva
 | M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**44 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**46 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
-Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates.
+Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. M4-3's subworkflow node waits on M4-9's versioning being used to pin a child, not on a decision.
 
 ## How this plan is followed
 
@@ -901,51 +901,67 @@ Dependencies: M4-1, M3-6.
 
 ### M4-3: Node runners — condition, loop, transform, subworkflow
 
-Description: The non-agent node types, each declaring its own bound (CLAUDE.md: no unbounded loops).
+STATUS: **done, except the subworkflow node.** `packages/core/src/engine/nodeTypes.ts` and the executor's `runShapingStep`. A condition branches on a prior step's output and marks the branch not taken as skipped; a loop repeats its body up to a required bound, stopping early on its exit condition; a transform fills a `{{step-id}}` template with no model call; the validator refuses a loop with no bound. All four are on the palette with their own inspectors, and a branch's yes and no ports are drawn rather than typed.
 
-Acceptance criteria: as the original M4-2 — a condition branches on a prior step's structured output; a loop refuses to save without a bound; a transform reshapes without a model call; a subworkflow's depth counts toward the Governor's recursion limit.
+What remains: the **subworkflow** node — running a saved automation inside another, with its depth counting toward the Governor's recursion limit. Left out deliberately: it needs M4-9's versioning to say *which* version of the child runs, and a child whose definition changes under a running parent is the bug it would ship with.
+
+DECISION: **a condition is a declared comparison, not an expression.** `contains`, `equals`, `matches`, `isEmpty`, `notEmpty` against a named step's output. A workflow that could evaluate code in its branch would be a code-execution surface reachable from a saved file, and the saved file is the thing users send each other.
+
+DECISION: **skipping propagates.** A condition names the steps on the branch not taken; without propagation only the first of them was skipped and everything downstream ran on nothing. A step whose every input was ruled out is ruled out too. Found by a test with two steps on the losing branch — one step deep, the naive version looked correct.
+
+DECISION: **a loop owns its body rather than skipping it.** Body steps are marked owned-by-loop, not skipped, so the step *after* a loop is not mistaken for the far side of a dead branch.
 
 Dependencies: M4-2.
 
 ### M4-4: Human approval node
 
-Description: A run pauses and waits. The runtime half of the irreversible-action gate.
+STATUS: **done.** A run reaching an approval node persists as `awaiting_approval`, shows a panel over the canvas with the question and what is being approved, and waits. Quitting the app with a gate open and reopening shows the same gate, from the workspace rather than from a dead process's memory. Approving resumes the run — replaying every finished step from M2-9's journal rather than paying for it twice — and refusing ends it as `cancelled` with the note recorded in the trace. Proven by an E2E that closes the app mid-gate and relaunches it.
 
-Acceptance criteria: a run reaching an approval node persists as `awaiting_approval` and survives a restart in that state; approving resumes it; rejecting ends it as `cancelled` with the rejection recorded.
+DECISION: **an approval with nobody to ask denies.** A headless run, a closed window and an eval all reach the gate with no person behind it. A gate nobody can answer is a stop, not a pass.
+
+DECISION: **no timeout.** A gate that approves itself after an interval is a gate that approves itself. The user can cancel the run instead.
+
+DECISION: **the gate is a panel over the canvas, not a control in the brief.** A run that has stopped for a person should interrupt; a control docked inside a panel the user has collapsed does not.
 
 Dependencies: M4-2.
 
 ### M4-5: React Flow canvas and inspector
 
-STATUS: **largely delivered early.** See the decisions recorded below this milestone's original position. What remains: persistence, the non-agent node types on the palette, and a run control that is not disabled.
+STATUS: **done.** The palette carries the four shaping node types alongside the agents, each with its own inspector; a branch's outgoing lines leave labelled yes and no ports; Run works and says why when it cannot.
 
 ### M4-6: Validator — save-time rules
 
-Description: `packages/core/src/engine/validator.ts`. Refuses to save a broken automation, including the pre-authorisation gap the founder approved at M0.
+STATUS: **done.** `packages/core/src/engine/validator.ts`, reached from `automation:check` while the user edits, from `workflow:save`, and from `run:start`. One implementation, three callers — the canvas cannot say a graph is fine and then have the run refuse it.
 
-Acceptance criteria: unbounded loop refused; a node bound to a model whose capability matrix entry cannot do what the node needs refused; an irreversible tool without an upstream approval node or explicit pre-authorisation refused; every refusal names the node.
+DECISION: **two bars, not one: what may not be saved, and what may not be run.** A half-finished draft — a step with no model, an empty brief — saves fine; an editor that refused to keep unfinished work is one people stop trusting with it. What it will not save is a file that is unsafe on its own: an unbounded loop, or a step that could act irreversibly with nothing gating it. The saved file is what one person sends another.
+
+DECISION: **`unsupported` refuses, `unknown` does not.** The same reversal M3-1 made, restated here because this was the other place it could have been undone. A live catalogue reports `unknown` for nearly every model.
+
+DECISION: **only always-irreversible grants are refused at save time.** `shell.exec` and any tool from a server this build does not ship. `http.request` is deliberately not on that list — a GET is a read, and refusing every automation that can look something up teaches people to route around the rule. The argument-dependent cases are refused at *call* time by the Governor, which is the only place the arguments exist. `packages/tools/src/reversibility.ts` holds both answers.
+
+DECISION: **the Governor now enforces the gate, not just the validator.** `ToolCallRequest` gained a required `gated` field — required rather than optional-with-a-default, because a field that defaults to "somebody said yes" is a gate that opens itself for every caller who forgets it exists. The engine computes it from the graph: every step downstream of a granted approval, plus anything the automation pre-authorises by name. This replaced M3's blanket `irreversible: true`, which was safe and, being always true, distinguished nothing.
 
 Dependencies: M4-1, M4-3.
 
 ### M4-7: Live run view
 
-Description: The canvas while it runs — per-node status, the spend meter M3-4 already pushes, and the trace appending. Uses `run:subscribe`, which is already a real handler with no consumer.
-
-Acceptance criteria: node status changes visible within one step; the spend figure matches `runs.budget_cost_usd_used`; a halted run shows which node stopped it and why.
+STATUS: **done.** Per-node status on the canvas as the run moves, and a Runs section listing every run with its status, tokens and cost read straight from `runs.budget_cost_usd_used`. A halted run shows its error summary against the run and the halting node's status against the node.
 
 Dependencies: M4-2, M3-4.
 
 ### M4-8: Trace viewer and export
 
-Description: Renders what M2-11 has been writing since. Export to JSON.
+STATUS: **done.** The Runs section's right pane is the trace — every event in sequence, filterable by kind, each expandable to its full payload — and Export JSON writes the whole run to a file the user picks: the brief, the run's outcome, and every event with its payload parsed.
+
+DECISION: **exported with no redaction pass.** There is nothing to redact: secrets are kept out of the trace at the point of writing, per CLAUDE.md, not at the point of reading. A filter here would imply the stored trace is unsafe, and an export people trust is one whose safety does not depend on this step.
 
 Dependencies: M4-2.
 
 ### M4-9: Persistence and versioning
 
-Description: Automations are saved, listed in the sidebar's Recent, versioned so editing one does not break a run in flight.
+STATUS: **done.** Automations save, list in the sidebar, and reopen with their instructions, bindings, brief, attachments and layout. Each save is a new `workflow_versions` row, so a run in flight keeps the graph it started with.
 
-Acceptance criteria: a graph survives quitting; a run holds the version it started with; the sidebar lists saved automations.
+BUG, found and fixed here: `workflow:save` had been silently dropping `layout`. The IPC schema had no such field and zod strips unknown keys, so every reopen rearranged the graph into a column — while the canvas's own comment claimed positions were saved.
 
 Dependencies: M4-1.
 

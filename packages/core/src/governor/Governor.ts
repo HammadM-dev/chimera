@@ -380,6 +380,18 @@ export class Governor {
       );
     }
 
+    // CLAUDE.md: "Irreversible actions require a gate." This is that gate, at
+    // the last point before the call happens. The save-time validator refuses
+    // the obvious cases earlier; this catches the ones only the arguments
+    // reveal — an HTTP POST from a step whose GETs were fine.
+    if (request.irreversible && !request.gated) {
+      return deny(
+        'GOVERNOR_APPROVAL_REQUIRED',
+        `"${request.toolId}" cannot be undone, and nobody has approved this step. Put an approval step before it, or pre-authorise the step.`,
+        { toolId: request.toolId, nodeId: request.nodeId, runId: request.runId },
+      );
+    }
+
     this.tracker.countStep();
     return allow(request, [`step ${String(this.tracker.stepCount)}`]);
   }

@@ -64,7 +64,12 @@ async function connectProvider(page: Page): Promise<void> {
   });
 }
 
-async function join(page: Page, from: string, to: string, handle?: 'true' | 'false'): Promise<void> {
+async function join(
+  page: Page,
+  from: string,
+  to: string,
+  handle?: 'true' | 'false',
+): Promise<void> {
   const source =
     handle === undefined
       ? page.locator(`[data-testid="${from}"] .react-flow__handle-bottom`)
@@ -97,13 +102,16 @@ test('a branch sends the run down one path and leaves the other alone', async ()
     await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
     await page.getByTestId('node-instruction').fill('Summarise the report.');
 
-    await page.getByTestId('palette-coder').click();
+    // A reviewer rather than a coder: a coder may run shell commands, and M4-6
+    // refuses to run a step that can do something irreversible with no approval
+    // between it and the world. That refusal has its own test.
+    await page.getByTestId('palette-reviewer').click();
     await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
-    await page.getByTestId('node-instruction').fill('Fix the report.');
+    await page.getByTestId('node-instruction').fill('Review the report.');
 
     await join(page, 'node-researcher', 'node-condition');
     await join(page, 'node-condition', 'node-summariser', 'true');
-    await join(page, 'node-condition', 'node-coder', 'false');
+    await join(page, 'node-condition', 'node-reviewer', 'false');
 
     await page.getByTestId('brief-input').fill('Write a report, then check it.');
     await expect(page.getByTestId('brief-run')).toBeEnabled();
@@ -116,8 +124,8 @@ test('a branch sends the run down one path and leaves the other alone', async ()
     await expect(page.getByTestId('node-summariser')).toContainText('succeeded');
     // …and the no path is not merely unfinished, it never started. A status of
     // any kind here would mean the branch decided nothing.
-    await expect(page.getByTestId('node-coder')).not.toContainText('succeeded');
-    await expect(page.getByTestId('node-coder')).not.toContainText('running');
+    await expect(page.getByTestId('node-reviewer')).not.toContainText('succeeded');
+    await expect(page.getByTestId('node-reviewer')).not.toContainText('running');
   } finally {
     await app.close();
     removeProfile(profile);
@@ -173,6 +181,111 @@ test('an approval gate stops the run until a person answers it', async () => {
       timeout: 60_000,
     });
     await expect(page.getByTestId('run-note')).toBeVisible();
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});
+
+test('a gate outlives the app, and approving it picks the run back up', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const first = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await first.firstWindow();
+    await connectProvider(page);
+    await goTo(page, 'build');
+
+    await page.getByTestId('palette-researcher').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Draft the report.');
+
+    await page.getByTestId('palette-approval').click();
+    await page.getByTestId('approval-prompt').fill('Send this report?');
+
+    await page.getByTestId('palette-summariser').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Send the report.');
+
+    await join(page, 'node-researcher', 'node-approval');
+    await join(page, 'node-approval', 'node-summariser');
+
+    await page.getByTestId('brief-name').fill('Gated report');
+    await page.getByTestId('brief-input').fill('Draft a report and send it.');
+    await page.getByTestId('brief-run').click();
+    await expect(page.getByTestId('approval')).toBeVisible({ timeout: 60_000 });
+
+    // Quit with the gate still open. Not a graceful answer, not a cancel — the
+    // case where somebody walks away.
+    await first.close();
+
+    const second = await launchApp({
+      profile,
+      env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl },
+    });
+    try {
+      const reopened = await second.firstWindow();
+      await goTo(reopened, 'build');
+
+      // The gate is still there, on a canvas that is otherwise empty, because
+      // the run is in the workspace rather than in a dead process's memory.
+      const gate = reopened.getByTestId('approval');
+      await expect(gate).toBeVisible({ timeout: 30_000 });
+      await expect(gate).toContainText('Send this report?');
+      await expect(reopened.getByTestId('approval-context')).toContainText('ready to send');
+
+      await reopened.getByTestId('approval-approve').click();
+
+      // The run picks up where it stopped, and finishes.
+      await goTo(reopened, 'runs');
+      await expect(reopened.getByTestId('run-summary')).toContainText('Succeeded', {
+        timeout: 60_000,
+      });
+
+      // And the first step was replayed from its journal rather than re-run:
+      // getting past a gate somebody answered yesterday must not re-pay for
+      // everything that led up to it.
+      await reopened.getByTestId('trace-filter-decision').click();
+      await expect(reopened.getByTestId('trace-events')).toContainText('resume:replayed');
+    } finally {
+      await second.close();
+    }
+  } finally {
+    removeProfile(profile);
+    await gateway.close();
+  }
+});
+
+test('a step that can act irreversibly will not run without a gate', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+    await connectProvider(page);
+    await goTo(page, 'build');
+
+    // A coder may run shell commands. Nothing about that is undoable.
+    await page.getByTestId('palette-coder').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Set the project up.');
+    await page.getByTestId('brief-input').fill('Set the project up.');
+
+    // Refused, by name, with both ways out of it stated.
+    await expect(page.getByTestId('brief-blocked')).toContainText('shell.exec', {
+      timeout: 15_000,
+    });
+    await expect(page.getByTestId('brief-blocked')).toContainText('pre-authorise');
+    await expect(page.getByTestId('brief-run')).toBeDisabled();
+
+    // The author says yes explicitly, and it runs.
+    await page.getByTestId('node-preauthorise').check();
+    await expect(page.getByTestId('brief-run')).toBeEnabled({ timeout: 15_000 });
+    await page.getByTestId('brief-run').click();
+    await expect(page.getByTestId('node-coder')).toContainText('succeeded', { timeout: 60_000 });
   } finally {
     await app.close();
     removeProfile(profile);

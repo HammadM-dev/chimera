@@ -72,6 +72,7 @@ function toolRequest(overrides: Partial<ToolCallRequest> = {}): ToolCallRequest 
     toolId: 'filesystem.readFile',
     egressTargets: [],
     irreversible: false,
+    gated: false,
     ...overrides,
   };
 }

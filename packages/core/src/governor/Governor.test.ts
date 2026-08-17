@@ -30,6 +30,7 @@ function toolRequest(overrides: Partial<ToolCallRequest> = {}): ToolCallRequest 
     toolId: 'filesystem.readFile',
     egressTargets: [],
     irreversible: false,
+    gated: false,
     ...overrides,
   };
 }
@@ -114,4 +115,23 @@ test('enforcing mode is a different object, not a different answer from the same
     budget: { run: { maxTokens: 10, maxCostUsd: null } },
   });
   assert.equal(constrained.authorizeModelCall(modelRequest()).decision, 'deny');
+});
+
+test('an irreversible call from a step nobody approved is refused', () => {
+  const governor = new Governor('enforcing');
+
+  const ungated = governor.authorizeToolCall(
+    toolRequest({ toolId: 'shell.exec', irreversible: true, gated: false }),
+  );
+  assert.equal(ungated.decision, 'deny');
+  assert.equal(ungated.code, 'GOVERNOR_APPROVAL_REQUIRED');
+  // The message says what to do about it, because "denied" on its own leaves
+  // the builder guessing at which of several rules they broke.
+  assert.match(ungated.message, /approval step|pre-authorise/);
+
+  // The same call from a step behind an approval node is allowed.
+  const gated = governor.authorizeToolCall(
+    toolRequest({ toolId: 'shell.exec', irreversible: true, gated: true }),
+  );
+  assert.equal(gated.decision, 'allow');
 });

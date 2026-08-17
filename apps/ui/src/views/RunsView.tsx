@@ -1,0 +1,311 @@
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { JSX } from 'react';
+import { bridge, describeError } from '../chat/useChimera.ts';
+import './runs.css';
+
+// M4-7 and M4-8. Every run the workspace has made, what it cost, and — for the
+// one selected — the trace the engine has been writing since M2-11 with nothing
+// to read it.
+//
+// A run you cannot inspect afterwards is a run you cannot trust: "it worked"
+// and "it produced something" are different claims, and only the trace tells
+// them apart.
+
+interface RunListItem {
+  id: string;
+  name: string;
+  status: string;
+  startedAt: string;
+  endedAt: string | null;
+  tokensUsed: number;
+  costUsd: number;
+  errorSummary: string | null;
+}
+
+interface TraceEvent {
+  seq: number;
+  ts: string;
+  nodeId: string;
+  eventType: string;
+  payloadJson: string;
+  tokensIn: number | null;
+  tokensOut: number | null;
+  costUsd: number | null;
+}
+
+const STATUS_WORD: Record<string, string> = {
+  running: 'Running',
+  awaiting_approval: 'Waiting for approval',
+  succeeded: 'Succeeded',
+  halted: 'Halted',
+  cancelled: 'Cancelled',
+  failed: 'Failed',
+  incomplete: 'Incomplete',
+};
+
+/** The one line an event is worth in a timeline, before it is expanded. */
+function headline(event: TraceEvent): string {
+  let payload: Record<string, unknown> = {};
+  try {
+    payload = JSON.parse(event.payloadJson) as Record<string, unknown>;
+  } catch {
+    return event.payloadJson.slice(0, 120);
+  }
+
+  const say = (key: string): string | null => {
+    const value = payload[key];
+    return typeof value === 'string' && value !== '' ? value : null;
+  };
+
+  switch (event.eventType) {
+    case 'request':
+      return say('model') ?? 'Model call';
+    case 'response':
+      return (say('text') ?? say('finishReason') ?? 'Answer').slice(0, 160);
+    case 'tool_call':
+      return `${say('toolId') ?? 'tool'}(${JSON.stringify(payload['args'] ?? {}).slice(0, 80)})`;
+    case 'tool_result':
+      return (say('output') ?? '').slice(0, 160);
+    case 'decision':
+      return say('decision') ?? 'Decision';
+    case 'error':
+      return say('message') ?? 'Error';
+    default:
+      return JSON.stringify(payload).slice(0, 160);
+  }
+}
+
+function money(value: number): string {
+  return value === 0 ? '—' : `$${value.toFixed(4)}`;
+}
+
+function when(iso: string): string {
+  const date = new Date(iso);
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString();
+}
+
+export function RunsView(): JSX.Element {
+  const [runs, setRuns] = useState<RunListItem[]>([]);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [events, setEvents] = useState<TraceEvent[]>([]);
+  const [expanded, setExpanded] = useState<number | null>(null);
+  const [note, setNote] = useState('');
+  const [filter, setFilter] = useState<string>('all');
+
+  const load = useCallback(async () => {
+    try {
+      const result = await bridge().invoke<{ runs: RunListItem[] }>('run:list', {});
+      setRuns(result.runs);
+      setSelected((current) => current ?? result.runs[0]?.id ?? null);
+    } catch (err) {
+      setNote(describeError(err).message);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  // A run that is still going keeps writing. Polling rather than subscribing:
+  // `run:event` carries step transitions, not trace rows, and a viewer that
+  // showed a stale trace of a live run would be worse than one that lagged.
+  useEffect(() => {
+    if (selected === null) return;
+    let stopped = false;
+
+    const pull = async () => {
+      try {
+        const result = await bridge().invoke<{ events: TraceEvent[] }>('trace:list', {
+          runId: selected,
+        });
+        if (!stopped) setEvents(result.events);
+      } catch (err) {
+        if (!stopped) setNote(describeError(err).message);
+      }
+    };
+
+    void pull();
+    const live = runs.find((run) => run.id === selected);
+    if (live && (live.status === 'running' || live.status === 'awaiting_approval')) {
+      const timer = setInterval(() => void pull(), 1500);
+      return () => {
+        stopped = true;
+        clearInterval(timer);
+      };
+    }
+    return () => {
+      stopped = true;
+    };
+  }, [selected, runs]);
+
+  const exportTrace = useCallback(async () => {
+    if (selected === null) return;
+    try {
+      const result = await bridge().invoke<{ path: string; events: number }>('trace:export', {
+        runId: selected,
+      });
+      setNote(
+        result.path === ''
+          ? ''
+          : `Exported ${String(result.events)} events to ${result.path.split('/').pop() ?? ''}.`,
+      );
+    } catch (err) {
+      setNote(describeError(err).message);
+    }
+  }, [selected]);
+
+  const run = runs.find((candidate) => candidate.id === selected) ?? null;
+
+  const kinds = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const event of events) {
+      counts.set(event.eventType, (counts.get(event.eventType) ?? 0) + 1);
+    }
+    return [...counts.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  }, [events]);
+
+  const shown = filter === 'all' ? events : events.filter((event) => event.eventType === filter);
+
+  return (
+    <div className="runs" data-testid="runs-view">
+      <aside className="runs__list scroll" aria-label="Runs">
+        <div className="runs__listHead">
+          <p className="canvas__section">Runs</p>
+          <button
+            type="button"
+            className="button"
+            data-testid="runs-refresh"
+            onClick={() => void load()}
+          >
+            Refresh
+          </button>
+        </div>
+
+        {runs.length === 0 && <p className="canvas__prompt">Nothing has run yet.</p>}
+
+        {runs.map((candidate) => (
+          <button
+            key={candidate.id}
+            type="button"
+            className={`runs__item ${candidate.id === selected ? 'runs__item--selected' : ''}`}
+            data-testid={`run-${candidate.id}`}
+            onClick={() => {
+              setSelected(candidate.id);
+              setExpanded(null);
+              setFilter('all');
+            }}
+          >
+            <span className="runs__name">{candidate.name}</span>
+            <span className={`runs__status runs__status--${candidate.status}`}>
+              {STATUS_WORD[candidate.status] ?? candidate.status}
+            </span>
+            <span className="runs__meta">
+              {when(candidate.startedAt)} · {money(candidate.costUsd)}
+            </span>
+          </button>
+        ))}
+      </aside>
+
+      <section className="runs__trace scroll" aria-label="Trace">
+        {run === null ? (
+          <p className="canvas__prompt">Select a run to see what it did.</p>
+        ) : (
+          <>
+            <header className="runs__head">
+              <div>
+                <p className="runs__title">{run.name}</p>
+                <p className="runs__meta" data-testid="run-summary">
+                  {STATUS_WORD[run.status] ?? run.status} · {run.tokensUsed.toLocaleString()} tokens
+                  · {money(run.costUsd)} · {String(events.length)} events
+                </p>
+              </div>
+              <button
+                type="button"
+                className="button"
+                data-testid="trace-export"
+                onClick={() => void exportTrace()}
+              >
+                Export JSON
+              </button>
+            </header>
+
+            {run.errorSummary !== null && run.errorSummary !== '' && (
+              <p className="runs__error" data-testid="run-error">
+                {run.errorSummary}
+              </p>
+            )}
+
+            <div className="runs__filters">
+              <button
+                type="button"
+                className={`runs__filter ${filter === 'all' ? 'runs__filter--on' : ''}`}
+                onClick={() => {
+                  setFilter('all');
+                }}
+              >
+                All {events.length}
+              </button>
+              {kinds.map(([kind, count]) => (
+                <button
+                  key={kind}
+                  type="button"
+                  className={`runs__filter ${filter === kind ? 'runs__filter--on' : ''}`}
+                  data-testid={`trace-filter-${kind}`}
+                  onClick={() => {
+                    setFilter(kind);
+                  }}
+                >
+                  {kind} {count}
+                </button>
+              ))}
+            </div>
+
+            <ol className="runs__events" data-testid="trace-events">
+              {shown.map((event) => (
+                <li key={event.seq} className={`event event--${event.eventType}`}>
+                  <button
+                    type="button"
+                    className="event__row"
+                    data-testid={`trace-event-${String(event.seq)}`}
+                    onClick={() => {
+                      setExpanded((current) => (current === event.seq ? null : event.seq));
+                    }}
+                  >
+                    <span className="event__seq">{event.seq}</span>
+                    <span className="event__node">{event.nodeId}</span>
+                    <span className="event__type">{event.eventType}</span>
+                    <span className="event__headline">{headline(event)}</span>
+                    <span className="event__cost">
+                      {event.costUsd === null || event.costUsd === 0 ? '' : money(event.costUsd)}
+                    </span>
+                  </button>
+                  {expanded === event.seq && (
+                    <pre className="event__payload" data-testid="trace-payload">
+                      {(() => {
+                        try {
+                          return JSON.stringify(JSON.parse(event.payloadJson) as unknown, null, 2);
+                        } catch {
+                          return event.payloadJson;
+                        }
+                      })()}
+                    </pre>
+                  )}
+                </li>
+              ))}
+            </ol>
+
+            {events.length === 0 && (
+              <p className="canvas__prompt">This run has not written anything yet.</p>
+            )}
+          </>
+        )}
+
+        {note !== '' && (
+          <p className="canvas__prompt" data-testid="runs-note">
+            {note}
+          </p>
+        )}
+      </section>
+    </div>
+  );
+}

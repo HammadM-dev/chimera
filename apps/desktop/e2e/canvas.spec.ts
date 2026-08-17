@@ -112,6 +112,12 @@ test('agents are placed on the canvas, joined, and bound to a model', async () =
     await source.dragTo(target);
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
+    // The coder may run shell commands, and M4-6 will not save a file that
+    // could do something irreversible with nothing gating it. Saying so
+    // explicitly is one of the two ways past that, and the one a graph this
+    // small wants.
+    await page.getByTestId('node-preauthorise').check();
+
     // Saved, and still there after a restart — the whole point of saving.
     await page.getByTestId('brief-name').fill('Invoice summariser');
     await page.getByTestId('brief-save').click();

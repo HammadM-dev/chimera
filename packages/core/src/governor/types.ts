@@ -67,6 +67,18 @@ export interface ToolCallRequest extends CallContext {
    * rule would be one rename away from silently un-gating an irreversible tool.
    */
   irreversible: boolean;
+  /**
+   * Whether a person has already agreed to what this node may do.
+   *
+   * True when an approval node upstream of this one was granted, or when the
+   * automation pre-authorises this node explicitly. Supplied by the engine
+   * because only the engine knows the graph.
+   *
+   * Required rather than optional with a permissive default: a field that
+   * defaults to "somebody said yes" is a gate that opens itself for every
+   * caller who forgets it exists.
+   */
+  gated: boolean;
 }
 
 export type DenialCode =
@@ -76,6 +88,7 @@ export type DenialCode =
   | 'GOVERNOR_STALLED'
   | 'GOVERNOR_RATE_LIMITED'
   | 'GOVERNOR_CAPABILITY_MISMATCH'
+  | 'GOVERNOR_APPROVAL_REQUIRED'
   | 'GOVERNOR_TOOL_NOT_ALLOWED'
   | 'GOVERNOR_EGRESS_NOT_ALLOWED'
   | 'GOVERNOR_APPROVAL_REQUIRED';

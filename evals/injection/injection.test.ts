@@ -188,6 +188,10 @@ test('a compromised model that obeys the injection still cannot call a tool it l
       toolId: 'shell.exec',
       egressTargets: [],
       irreversible: true,
+      // Ungated on purpose: this asserts what the permissive stub does, and
+      // the enforcing Governor's refusal of exactly this call is asserted in
+      // Governor.test.ts.
+      gated: false,
     });
     assert.equal(authorization.decision, 'allow', 'the M2 stub is permissive by design');
 
