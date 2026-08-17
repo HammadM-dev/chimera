@@ -135,6 +135,10 @@ export { runAutomation } from './engine/runAutomation.ts';
 export type { RunAutomationDeps, RunOutcomeSummary, StepOutcome } from './engine/runAutomation.ts';
 export { validateBrief, executionOrder } from './engine/runBrief.ts';
 export { validateForSave } from './engine/validator.ts';
+export { parseCron, nextFireAfter, firedInLastMinute, describeCron } from './triggers/cron.ts';
+export type { CronFields } from './triggers/cron.ts';
+export { validateTrigger, describeTrigger } from './triggers/types.ts';
+export type { Trigger, TriggerProblem } from './triggers/types.ts';
 export type { SaveContext, StepCapabilities } from './engine/validator.ts';
 export type { RunBrief, BriefStep, BriefAttachment, BriefProblem } from './engine/runBrief.ts';
 

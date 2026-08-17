@@ -9,6 +9,7 @@ import { capabilityMatrix } from '@chimera/providers';
 import { workflowsRepository } from '@chimera/store';
 import { getStore } from '../store/lifecycle.ts';
 import { allRoles } from '../roles/service.ts';
+import { reloadTriggers } from '../triggers/service.ts';
 
 // Saving and loading automations. A brief is the definition; each save is a new
 // version, so a run in flight keeps the graph it started with.
@@ -76,6 +77,8 @@ export function saveAutomation(input: { id?: string; name: string; definition: R
     name: input.name,
     definitionJson: JSON.stringify(input.definition),
   });
+  // A trigger the user just added should be armed now, not at the next launch.
+  reloadTriggers();
   return { id: saved.workflowId, versionId: saved.versionId, version: saved.versionNumber };
 }
 

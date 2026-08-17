@@ -287,12 +287,19 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   }
 }
 
-export function startRun(brief: RunBrief): { runId: string } {
+export function startRun(brief: RunBrief, triggerType = 'manual'): { runId: string } {
   // The same rules the save path applies. A run started from an unsaved canvas
   // must not be the way around them.
   assertRunnable(brief);
   const db = getStore();
-  const run = runsRepository.create(db, { id: randomUUID(), inputJson: JSON.stringify(brief) });
+  const run = runsRepository.create(db, {
+    id: randomUUID(),
+    inputJson: JSON.stringify(brief),
+    // Recorded so a run that started itself is distinguishable from one a
+    // person pressed Run for — which is the first question anybody asks about
+    // an automation that ran at three in the morning.
+    triggerType,
+  });
   void execute(run.id, brief, false);
   return { runId: run.id };
 }

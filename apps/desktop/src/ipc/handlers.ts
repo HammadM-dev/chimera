@@ -28,8 +28,9 @@ import { subscribe } from '../runs/subscriptions.ts';
 import { answerApproval, awaitingApprovals, cancelRun, startRun } from '../runs/service.ts';
 import { exportTrace, listFailures, listRuns, listTrace } from '../runs/history.ts';
 import { readScreenshot } from '../runs/screenshots.ts';
+import { listTriggers } from '../triggers/service.ts';
 import { listRoles } from '../roles/service.ts';
-import { pickAttachments } from '../files/service.ts';
+import { pickAttachments, pickDirectory } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
 import {
   checkAutomation,
@@ -134,6 +135,8 @@ registerHandler(channels.workflowGet, (payload) => getAutomation(payload.id));
 
 registerHandler(channels.roleList, () => listRoles());
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
+registerHandler(channels.filesPickDirectory, () => pickDirectory());
+registerHandler(channels.triggerList, () => listTriggers());
 registerHandler(channels.automationPlan, (payload) => planAutomation(payload));
 registerHandler(channels.automationCheck, (payload) => checkAutomation(payload.definition));
 

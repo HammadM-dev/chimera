@@ -15,6 +15,8 @@ export interface RunListItem {
   id: string;
   name: string;
   status: string;
+  /** `manual`, or the kind of trigger that started it without anybody asking. */
+  triggerType: string;
   startedAt: string;
   endedAt: string | null;
   tokensUsed: number;
@@ -45,6 +47,7 @@ export function listRuns(limit = 50): { runs: RunListItem[] } {
       id: run.id,
       name: name === '' ? 'Untitled run' : name,
       status: run.status,
+      triggerType: run.triggerType,
       startedAt: run.startedAt,
       endedAt: run.endedAt,
       tokensUsed: run.tokensUsed,
@@ -139,6 +142,7 @@ export async function exportTrace(runId: string): Promise<{ path: string; events
     run: {
       id: run.id,
       status: run.status,
+      triggerType: run.triggerType,
       startedAt: run.startedAt,
       endedAt: run.endedAt,
       workflow: workflow?.name ?? null,

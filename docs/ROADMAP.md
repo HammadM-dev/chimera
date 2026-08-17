@@ -17,10 +17,10 @@ So the order has changed. Everything that makes the product usable — the canva
 | M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
-| M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
+| M9 Triggers and observability | 1 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**59 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**60 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1444,7 +1444,23 @@ Dependencies: M8-3, M8-4, M8-5.
 
 Master plan deliverables: scheduler, webhooks, file-watch, workflow evals, cost dashboard, OTel export.
 
-### M9-1: Trigger runtime — schedule, webhook, file-watch, folder-drop, hotkey
+### M9-1: Trigger runtime — schedule, webhook, file-watch, folder-drop
+
+STATUS: **done, except the hotkey**, which waits on M8-3's OS-level registration — the CI guard forbidding a global hotkey before M8 is still in place and still correct.
+
+`packages/core/src/triggers/` holds the cron parser and the trigger types; `apps/desktop/src/triggers/service.ts` is the runtime. Triggers are part of the saved automation, edited in the brief, and armed the moment it is saved.
+
+DECISION: **the cron parser is written, not depended on.** Five fields, with stars, lists, ranges, steps and names. What it deliberately refuses is the extended vocabulary — `@daily`, `L`, `W`, `#`, seconds fields — because each behaves differently in every implementation, and a scheduler that silently misreads one fires at the wrong time forever. Refusing an expression is a thing a user can see; misreading it is not.
+
+DECISION: **the next fire is found by walking minutes, not by arithmetic on fields.** A year of minutes is half a million iterations and takes microseconds, and it is obviously correct — where field arithmetic across month ends and daylight saving is where every scheduler bug lives. A pattern with no valid date (the 31st of February) reports *never* rather than looping.
+
+DECISION: **the ticker asks "did this fire in the minute that just ended", not "is it time yet".** A stored next-fire time is lost on restart, and for a nightly job that means missing a night with nothing looking wrong. The same decision means a schedule missed while the app was closed is *not* fired late at launch: a nightly job running six hours late is worse than one that waits for tonight.
+
+DECISION: **the webhook listener binds to loopback only.** A listener on 0.0.0.0 would be a way to start somebody's automations from their coffee shop's network. Tokens are 24 random bytes, and an unknown token gets the same 404 as a missing one so nobody can enumerate them.
+
+DECISION: **a dropped file arrives as an attachment, not as an instruction.** It is what the run is about, and it is somebody else's file — so it enters where data enters, through M2-6's envelope, and the watcher debounces because one save from an editor is three filesystem events.
+
+Not implemented: the licence-tier gate the original ticket names. Licensing is out of scope at the founder's direction, and a gate against a tier nothing sets would be dead code pretending to be a rule.
 
 Description: The schema already defines trigger node types (`manual|schedule(cron)|webhook|fileWatch|folderDrop|hotkey`, per `docs/WORKFLOW_SCHEMA.md`); this ticket builds the actual runtime service that fires them — a cron scheduler, a local webhook listener, an OS file-watcher, a folder-drop watcher, and hotkey registration (reusing the OS-level hotkey mechanism built for the panic key at M8-3, generalised to arbitrary user-defined hotkeys). This converts CHIMERA "from a tool someone opens into infrastructure that runs the business," per the master plan, and is gated behind licence tier (Community has no scheduling, per M7-1).
 

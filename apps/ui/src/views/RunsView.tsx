@@ -15,6 +15,7 @@ interface RunListItem {
   id: string;
   name: string;
   status: string;
+  triggerType: string;
   startedAt: string;
   endedAt: string | null;
   tokensUsed: number;
@@ -288,8 +289,10 @@ export function RunsView(): JSX.Element {
               <div>
                 <p className="runs__title">{run.name}</p>
                 <p className="runs__meta" data-testid="run-summary">
-                  {STATUS_WORD[run.status] ?? run.status} · {run.tokensUsed.toLocaleString()} tokens
-                  · {money(run.costUsd)} · {String(events.length)} events
+                  {STATUS_WORD[run.status] ?? run.status} ·{' '}
+                  {run.triggerType === 'manual' ? 'started by you' : run.triggerType} ·{' '}
+                  {run.tokensUsed.toLocaleString()} tokens · {money(run.costUsd)} ·{' '}
+                  {String(events.length)} events
                 </p>
                 {/* Shown only when it is both known and favourable: a saving of
                     nothing is not worth a line, and an invented comparison is

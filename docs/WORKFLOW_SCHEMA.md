@@ -332,6 +332,28 @@ implemented feature reads yet.
 | `aggregate` | `{ "type": "aggregate", "aggregate": { "source", "strategy", "separator", "template", "roleId", "chunkSize", "instruction" } }` | `concat`, `json_merge`, `vote`, `template`, `reduce_with_agent`. Only the last makes a model call; it folds a chunk at a time and folds the results again. |
 | `swarm` | `{ "type": "swarm", "swarm": { "goal", "orchestratorRoleId", "agents": [], "maxRounds", "maxConcurrentAgents", "stallRounds", "goalPredicate" } }` | An orchestrator and specialists on one goal, through the blackboard. Concurrency is hard-capped at 20 by the engine. Three ways to stop: the goal predicate, the round limit, and rounds that change nothing. |
 
+### Triggers
+
+`triggers` on the brief is what starts the automation when nobody presses Run:
+
+```jsonc
+"triggers": [
+  { "kind": "schedule", "cron": "0 9 * * mon-fri" },
+  { "kind": "folderDrop", "path": "/home/me/Dropbox/orders" },
+  { "kind": "fileWatch", "path": "/home/me/reports" },
+  { "kind": "webhook", "token": "…24 random bytes as hex…" }
+]
+```
+
+Five fields of cron, with `*`, lists, ranges, steps and names (`mon-fri`,
+`jan`). The extended vocabulary — `@daily`, `L`, `W`, `#`, seconds — is refused
+rather than approximated. A schedule missed while the app was closed is not
+fired late when it opens.
+
+A `folderDrop` hands the new file to the first step as an attachment. A webhook
+listens on loopback only, at `http://127.0.0.1:<port>/hook/<token>`; the port is
+chosen at launch and shown in the brief.
+
 ### Tiers instead of model ids
 
 A step may carry `"tier": "cheap" | "standard" | "frontier"` **instead of**

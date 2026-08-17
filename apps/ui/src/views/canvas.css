@@ -506,3 +506,34 @@
 .brief__sites {
   width: 100%;
 }
+
+/* Triggers live in the brief, with the instruction and the allowlist: they are
+ * part of what the automation is, not a setting about it, and they travel with
+ * the saved file. */
+.brief__triggers {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-2) 0;
+  border-top: var(--border-width) solid var(--border-hairline);
+}
+
+.brief__trigger {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.brief__triggerKind {
+  font-size: var(--type-meta);
+  color: var(--text-primary);
+}
+
+.brief__triggerDetail {
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

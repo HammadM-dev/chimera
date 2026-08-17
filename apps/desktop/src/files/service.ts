@@ -163,3 +163,19 @@ export async function pickAttachments(mode: 'files' | 'folder'): Promise<{
   const truncated = mode === 'folder' && paths.length >= MAX_FOLDER_FILES;
   return { attachments: paths.map(describe), truncated };
 }
+
+/**
+ * Asks for a folder, and returns the folder.
+ *
+ * Separate from `pickAttachments`, which reads what it finds: a watched folder
+ * is a place, not a payload, and reading a hundred files to learn a path would
+ * be both slow and wrong.
+ */
+export async function pickDirectory(): Promise<{ path: string }> {
+  const scripted = process.env.CHIMERA_E2E_PICK_DIRECTORY;
+  if (scripted !== undefined && scripted !== '') return { path: scripted };
+
+  const { dialog } = await import('electron');
+  const result = await dialog.showOpenDialog({ properties: ['openDirectory'] });
+  return { path: result.canceled ? '' : (result.filePaths[0] ?? '') };
+}

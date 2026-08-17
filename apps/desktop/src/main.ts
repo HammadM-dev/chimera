@@ -4,6 +4,7 @@ import { registerIpcMainHandlers } from './ipc/mainDispatch.ts';
 import { openStore, closeStore } from './store/lifecycle.ts';
 import { setScreenshotRoot } from './runs/screenshots.ts';
 import { closeBrowsers, setBrowserRoot } from './runs/browser.ts';
+import { reloadTriggers, stopTriggers } from './triggers/service.ts';
 
 // Electron derives `userData` from the app name, and unpackaged it reads that
 // from package.json — which here is the scoped npm name `@chimera/desktop`,
@@ -24,6 +25,9 @@ void app.whenReady().then(() => {
   setScreenshotRoot(app.getPath('userData'));
   setBrowserRoot(app.getPath('userData'));
   registerIpcMainHandlers();
+  // Armed before the window exists: an automation on a schedule belongs to the
+  // workspace, not to whether somebody is looking at it.
+  reloadTriggers();
   createWindow();
 
   app.on('activate', () => {
@@ -48,4 +52,5 @@ app.on('will-quit', () => {
   // An orphaned headless Chromium is invisible in the dock and immortal in the
   // process list, and the user has no idea it is ours.
   void closeBrowsers();
+  stopTriggers();
 });

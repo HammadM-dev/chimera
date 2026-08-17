@@ -156,6 +156,18 @@ const briefSchema = z.object({
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),
+  // What starts this automation when nobody presses Run.
+  triggers: z
+    .array(
+      z.discriminatedUnion('kind', [
+        z.object({ kind: z.literal('manual') }),
+        z.object({ kind: z.literal('schedule'), cron: z.string() }),
+        z.object({ kind: z.literal('webhook'), token: z.string() }),
+        z.object({ kind: z.literal('fileWatch'), path: z.string() }),
+        z.object({ kind: z.literal('folderDrop'), path: z.string() }),
+      ]),
+    )
+    .optional(),
   // Hosts this automation's tools may reach. Empty means none.
   egressAllowlist: z.array(z.string()).optional(),
   // Steps whose author has agreed they may act irreversibly without a gate.
@@ -291,6 +303,7 @@ export const runList = defineInvokeChannel({
         status: z.string(),
         startedAt: z.string(),
         endedAt: z.string().nullable(),
+        triggerType: z.string(),
         tokensUsed: z.number(),
         costUsd: z.number(),
         frontierCostUsd: z.number().nullable(),
@@ -403,6 +416,36 @@ export const tiersSet = defineInvokeChannel({
   sensitive: false,
   requestSchema: z.object({ tiers: tierMapSchema }),
   responseSchema: z.object({ tiers: tierMapSchema }),
+});
+
+// What is armed right now, and where to post for a webhook.
+export const triggerList = defineInvokeChannel({
+  channel: 'trigger:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    webhookPort: z.number(),
+    triggers: z.array(
+      z.object({
+        workflowId: z.string(),
+        name: z.string(),
+        kind: z.enum(['manual', 'schedule', 'webhook', 'fileWatch', 'folderDrop']),
+        detail: z.string(),
+        url: z.string(),
+      }),
+    ),
+  }),
+});
+
+// A folder to watch. Separate from `files:pick`, which reads files into a
+// brief — this wants the folder itself, and reads nothing.
+export const filesPickDirectory = defineInvokeChannel({
+  channel: 'files:pickDirectory',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ path: z.string() }),
 });
 
 export const providerTestConnection = defineInvokeChannel({
@@ -836,6 +879,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runList,
   traceList,
   runFailures,
+  triggerList,
+  filesPickDirectory,
   traceScreenshot,
   tiersGet,
   tiersSet,

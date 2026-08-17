@@ -1,4 +1,5 @@
 import type { NodeConfig, NodeType } from './nodeTypes.ts';
+import type { Trigger } from '../triggers/types.ts';
 
 // What a run starts from: the instruction, the files, and the ordered steps.
 // The canvas produces this and the executor consumes it — one shape, so a
@@ -62,6 +63,14 @@ export interface RunBrief {
    * that defaulted to off.
    */
   egressAllowlist?: string[];
+  /**
+   * What starts this automation when nobody presses Run.
+   *
+   * Part of the saved definition rather than of a settings screen: a trigger is
+   * something the automation does, and one that lived elsewhere would be lost
+   * the moment the file was sent to somebody else.
+   */
+  triggers?: Trigger[];
   /** Where each node sits on the canvas. Not part of the run. */
   layout?: { nodeId: string; x: number; y: number }[];
 }

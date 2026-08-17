@@ -343,6 +343,22 @@ interface BriefStepWire {
   model: string;
 }
 
+/** What starts this automation when nobody presses Run. */
+type TriggerWire =
+  | { kind: 'manual' }
+  | { kind: 'schedule'; cron: string }
+  | { kind: 'webhook'; token: string }
+  | { kind: 'fileWatch'; path: string }
+  | { kind: 'folderDrop'; path: string };
+
+const TRIGGER_LABEL: Record<TriggerWire['kind'], string> = {
+  manual: 'When you press Run',
+  schedule: 'On a schedule',
+  webhook: 'When something posts to a URL',
+  fileWatch: 'When anything in a folder changes',
+  folderDrop: 'When a file lands in a folder',
+};
+
 interface PendingApproval {
   nodeId: string;
   prompt: string;
@@ -364,6 +380,8 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachNote, setAttachNote] = useState('');
   const [sites, setSites] = useState('');
+  const [triggers, setTriggers] = useState<TriggerWire[]>([]);
+  const [webhookPort, setWebhookPort] = useState(0);
   const appliedTemplate = useRef<AutomationTemplate | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
@@ -467,6 +485,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             steps: BriefStepWire[];
             edges: [string, string][];
             egressAllowlist?: string[];
+            triggers?: TriggerWire[];
             layout?: { nodeId: string; x: number; y: number }[];
           };
         }>('workflow:get', { id: openId });
@@ -590,6 +609,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         );
         setBrief(loaded.definition.instruction);
         setSites((loaded.definition.egressAllowlist ?? []).join(', '));
+        setTriggers(loaded.definition.triggers ?? []);
         setAttachments(loaded.definition.attachments);
         setName(loaded.name);
         setSavedId(loaded.id);
@@ -849,6 +869,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       steps,
       edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
       preauthorised,
+      triggers,
       // Hosts, not URLs. Empty means the browser and the HTTP tool reach
       // nothing, which is the right default for an automation nobody has
       // granted the network to.
@@ -861,7 +882,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       // it half-worked.
       layout: nodes.map((node) => ({ nodeId: node.id, x: node.position.x, y: node.position.y })),
     };
-  }, [name, brief, attachments, nodes, edges, preauthorised, sites]);
+  }, [name, brief, attachments, nodes, edges, preauthorised, sites, triggers]);
 
   // The rules that decide whether this can run, asked of the one place that
   // implements them. Duplicating them in the renderer would mean two rule sets
@@ -888,6 +909,44 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       clearTimeout(timer);
     };
   }, [nodes, edges, preauthorised, currentBrief]);
+
+  // Where a webhook actually lives, so the user can copy the URL. Asked after
+  // a save, because that is when a trigger becomes armed.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ webhookPort: number }>('trigger:list', {});
+        setWebhookPort(result.webhookPort);
+      } catch {
+        setWebhookPort(0);
+      }
+    })();
+  }, [savedId]);
+
+  const addTrigger = useCallback(async (kind: TriggerWire['kind']) => {
+    if (kind === 'manual') return;
+    if (kind === 'schedule') {
+      setTriggers((current) => [...current, { kind, cron: '0 9 * * *' }]);
+      return;
+    }
+    if (kind === 'webhook') {
+      // Long and random. A short token is a URL somebody can guess, and the
+      // thing on the other end of it starts an automation.
+      const bytes = new Uint8Array(24);
+      crypto.getRandomValues(bytes);
+      const token = [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+      setTriggers((current) => [...current, { kind, token }]);
+      return;
+    }
+
+    try {
+      const picked = await bridge().invoke<{ path: string }>('files:pickDirectory', {});
+      if (picked.path === '') return;
+      setTriggers((current) => [...current, { kind, path: picked.path }]);
+    } catch (err) {
+      setRunNote(describeError(err).message);
+    }
+  }, []);
 
   const save = useCallback(async () => {
     try {
@@ -1281,6 +1340,76 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               )}
 
               {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
+
+              <section className="brief__triggers" data-testid="brief-triggers">
+                <p className="canvas__section">Runs when</p>
+                {triggers.length === 0 && <p className="brief__note">Only when you press Run.</p>}
+                {triggers.map((trigger, index) => (
+                  <div key={`${trigger.kind}-${String(index)}`} className="brief__trigger">
+                    <span className="brief__triggerKind">{TRIGGER_LABEL[trigger.kind]}</span>
+                    {trigger.kind === 'schedule' && (
+                      <input
+                        className="control"
+                        data-testid={`trigger-cron-${String(index)}`}
+                        aria-label="Schedule"
+                        value={trigger.cron}
+                        onChange={(event) => {
+                          const cron = event.target.value;
+                          setTriggers((current) =>
+                            current.map((one, at) =>
+                              at === index && one.kind === 'schedule' ? { ...one, cron } : one,
+                            ),
+                          );
+                        }}
+                      />
+                    )}
+                    {(trigger.kind === 'fileWatch' || trigger.kind === 'folderDrop') && (
+                      <span className="brief__triggerDetail">{trigger.path}</span>
+                    )}
+                    {trigger.kind === 'webhook' && (
+                      <span
+                        className="brief__triggerDetail"
+                        data-testid={`trigger-url-${String(index)}`}
+                      >
+                        {webhookPort === 0
+                          ? 'Save to get the URL'
+                          : `http://127.0.0.1:${String(webhookPort)}/hook/${trigger.token}`}
+                      </span>
+                    )}
+                    <button
+                      type="button"
+                      className="button"
+                      data-testid={`trigger-remove-${String(index)}`}
+                      onClick={() => {
+                        setTriggers((current) => current.filter((_, at) => at !== index));
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ))}
+
+                <select
+                  className="control"
+                  data-testid="trigger-add"
+                  aria-label="Add a trigger"
+                  value=""
+                  onChange={(event) => {
+                    void addTrigger(event.target.value as TriggerWire['kind']);
+                    event.target.value = '';
+                  }}
+                >
+                  <option value="">Add a trigger</option>
+                  <option value="schedule">On a schedule</option>
+                  <option value="folderDrop">When a file lands in a folder</option>
+                  <option value="fileWatch">When anything in a folder changes</option>
+                  <option value="webhook">When something posts to a URL</option>
+                </select>
+                <p className="brief__note">
+                  A trigger is armed when the automation is saved, and stays armed while CHIMERA is
+                  open.
+                </p>
+              </section>
 
               <input
                 className="control brief__sites"
