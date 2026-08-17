@@ -24,7 +24,7 @@ import {
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
 import { answerApproval, awaitingApprovals, cancelRun, startRun } from '../runs/service.ts';
-import { exportTrace, listRuns, listTrace } from '../runs/history.ts';
+import { exportTrace, listFailures, listRuns, listTrace } from '../runs/history.ts';
 import { listRoles } from '../roles/service.ts';
 import { pickAttachments } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
@@ -113,6 +113,7 @@ registerHandler(channels.runApprove, (payload) => answerApproval(payload));
 registerHandler(channels.runAwaiting, () => awaitingApprovals());
 registerHandler(channels.runList, (payload) => listRuns(payload.limit));
 registerHandler(channels.traceList, (payload) => listTrace(payload.runId));
+registerHandler(channels.runFailures, (payload) => listFailures(payload.runId));
 registerHandler(channels.traceExport, (payload) => exportTrace(payload.runId));
 
 registerHandler(channels.workflowSave, (payload) =>

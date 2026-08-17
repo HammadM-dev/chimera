@@ -1,11 +1,13 @@
 // The node types an automation is built from, beyond an agent.
 //
 // Each one exists because a real automation needs a shape a straight line
-// cannot express: a branch, a repetition, a reshape, or a pause for a person.
+// cannot express: a branch, a repetition, a reshape, a pause for a person,
+// another automation, or the same work over a thousand items at once.
 // Each also declares its own bound — CLAUDE.md's "no unbounded loops" is not a
 // rule about the loop node alone, it is a rule about anything that can repeat.
 
-export type NodeType = 'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow';
+export type NodeType =
+  'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow' | 'fanout';
 
 /**
  * Branches on what a previous step produced.
@@ -52,6 +54,34 @@ export interface TransformConfig {
 }
 
 /**
+ * Runs the same steps over many items, several at a time.
+ *
+ * `concurrency` is how many items are in flight, not how many exist — the rest
+ * queue. Sized to the provider's rate-limit headroom rather than to ambition:
+ * a thousand simultaneous calls is a thousand rate-limit errors.
+ */
+export interface FanoutConfig {
+  /** Which step's output holds the items. Empty means the step before. */
+  source: string;
+  /** How to read that output as a list. Declared, never evaluated. */
+  parse: 'json' | 'lines';
+  /** Node ids run once per item. */
+  body: string[];
+  concurrency: number;
+  /** The bound on the work, the way a loop declares one. */
+  maxItems: number;
+  /** `continue` collects failures and carries on; `halt` stops at the first. */
+  onItemError: 'continue' | 'halt';
+  /**
+   * How many items may fail before the whole node stops.
+   *
+   * A systematic failure — a bad prompt, a provider outage — should not burn
+   * the entire budget proving itself a thousand times.
+   */
+  deadLetterLimit: number;
+}
+
+/**
  * Runs another saved automation inside this one.
  *
  * Pinned to a version, not to "whatever that automation is now". A child that
@@ -77,7 +107,8 @@ export type NodeConfig =
   | { type: 'loop'; loop: LoopConfig }
   | { type: 'transform'; transform: TransformConfig }
   | { type: 'approval'; approval: ApprovalConfig }
-  | { type: 'subworkflow'; subworkflow: SubworkflowConfig };
+  | { type: 'subworkflow'; subworkflow: SubworkflowConfig }
+  | { type: 'fanout'; fanout: FanoutConfig };
 
 /** Runs a declared comparison against a value. No evaluation, no code. */
 export function evaluateCondition(config: ConditionConfig, actual: string): boolean {

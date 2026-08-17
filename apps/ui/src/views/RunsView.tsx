@@ -22,6 +22,14 @@ interface RunListItem {
   errorSummary: string | null;
 }
 
+interface RunFailure {
+  nodeId: string;
+  itemIndex: number;
+  itemJson: string;
+  error: string;
+  ts: string;
+}
+
 interface TraceEvent {
   seq: number;
   ts: string;
@@ -89,6 +97,7 @@ export function RunsView(): JSX.Element {
   const [selected, setSelected] = useState<string | null>(null);
   const [events, setEvents] = useState<TraceEvent[]>([]);
   const [expanded, setExpanded] = useState<number | null>(null);
+  const [failures, setFailures] = useState<RunFailure[]>([]);
   const [note, setNote] = useState('');
   const [filter, setFilter] = useState<string>('all');
 
@@ -137,6 +146,26 @@ export function RunsView(): JSX.Element {
       stopped = true;
     };
   }, [selected, runs]);
+
+  // What the run could not process. Its own request rather than part of the
+  // trace, because this is the list a person has to act on, not the record of
+  // what happened.
+  useEffect(() => {
+    if (selected === null) {
+      setFailures([]);
+      return;
+    }
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ failures: RunFailure[] }>('run:failures', {
+          runId: selected,
+        });
+        setFailures(result.failures);
+      } catch {
+        setFailures([]);
+      }
+    })();
+  }, [selected, events.length]);
 
   const exportTrace = useCallback(async () => {
     if (selected === null) return;
@@ -233,6 +262,29 @@ export function RunsView(): JSX.Element {
               <p className="runs__error" data-testid="run-error">
                 {run.errorSummary}
               </p>
+            )}
+
+            {failures.length > 0 && (
+              <section className="runs__failures" data-testid="run-failures">
+                <p className="canvas__section">
+                  {failures.length === 1
+                    ? '1 item could not be processed'
+                    : `${String(failures.length)} items could not be processed`}
+                </p>
+                <ol className="runs__failureList">
+                  {failures.slice(0, 50).map((failure) => (
+                    <li key={`${failure.nodeId}-${String(failure.itemIndex)}`}>
+                      <span className="runs__failureItem">{failure.itemJson}</span>
+                      <span className="runs__failureError">{failure.error}</span>
+                    </li>
+                  ))}
+                </ol>
+                {failures.length > 50 && (
+                  <p className="canvas__prompt">
+                    The first 50 are shown. Export the trace for all of them.
+                  </p>
+                )}
+              </section>
             )}
 
             <div className="runs__filters">

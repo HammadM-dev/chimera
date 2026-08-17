@@ -13,14 +13,14 @@ So the order has changed. Everything that makes the product usable — the canva
 | M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
 | **M4 Automations** | **14 / 16** | **Describe an automation, watch it built, run it, see it work** |
-| M5 Swarm | 0 / 6 | Point a team of agents at a batch |
+| M5 Swarm | 1 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 0 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
 | M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**48 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**49 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1043,6 +1043,18 @@ Master plan deliverables: fan-out queue+worker pool, blackboard, collaborative o
 ### M5-1: Fan-out node runner, job queue, and worker pool
 
 Description: `packages/core/src/engine/nodeRunners/fanout.ts` (F5.1): `over` (template expression producing an array), `bodyNodeId`, `concurrency` (in-flight count, not task count — the queue holds the rest; default 25, ceiling set by rate-limit headroom per schema rule 8, not ambition), `maxItems`, `itemBudget`, `modelTier`, `onItemError`, `deadLetterLimit` (exceeding it halts the entire fan-out — a systematic failure shouldn't burn the full budget proving itself thousands of times). Failed items beyond retry policy write to the `dead_letter` table (`run_id`, `node_id`, `item_json`, `error`, `ts`) via `packages/store/src/repositories/deadLetter.ts`.
+
+STATUS: **done.** `packages/core/src/engine/nodeRunners/fanout.ts`, a fan-out node on the palette with its own inspector, migration `0006` widening `dead_letter`, and a failure report in Runs. The 1000-item / 25-concurrency criterion is asserted directly against a counter on the work itself; the E2E builds a 40-item fan-out on the canvas, runs it with two items scripted to fail, and reads the report afterwards.
+
+DECISION: **items come from a declared source and a declared shape, not an expression.** A step id and `json` or `lines`. The same reasoning as a condition's test: this is data in a file people send each other, and a fan-out that could evaluate an expression to decide what to iterate is a bound nobody can read. Unparseable JSON falls back to lines, because the commonest thing a model returns when asked for a list is a list.
+
+DECISION: **each item is its own nested run of the body.** Own node ids, own carried output, own journal rows. Sharing either would have the items racing each other for the same "previous answer".
+
+DECISION: **the item arrives as data, not as an instruction.** A body step usually has an instruction of its own — "handle this invoice" — so an item passed as the brief's instruction is an item the model never sees. Found by the E2E, where all forty items succeeded because none of them had reached the model.
+
+DECISION: **item steps stay out of the run's step summary.** The fan-out node's own outcome summarises them and the trace keeps the detail. A thousand-item run would otherwise return a thousand-entry summary to a UI that renders one line per entry.
+
+BUG, found here: **a nested run finalised the outer run.** `runAutomation` ends by writing the run's terminal status, and the subworkflow node had been calling it recursively — stamping `ended_at` on a run that was still going. Nested runs now pass `finalize: false`.
 
 Acceptance criteria:
 - A fan-out over 1000 synthetic items with `concurrency: 25` never has more than 25 items in flight simultaneously, verified by instrumenting the mock provider's concurrent-call counter at its peak.

@@ -145,7 +145,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   ],
   licence: ['id', 'tier', 'activation_token_ref', 'activated_at', 'grace_expires_at', 'seat_id'],
   blackboard_entries: ['id', 'run_id', 'role_id', 'key', 'value_json', 'written_at', 'scope'],
-  dead_letter: ['run_id', 'node_id', 'item_json', 'error', 'ts'],
+  dead_letter: ['id', 'run_id', 'node_id', 'item_index', 'item_json', 'error', 'ts'],
   evals: ['workflow_id', 'eval_id'],
   eval_runs: [
     'id',

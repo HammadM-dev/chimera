@@ -78,7 +78,7 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   // A subworkflow does the work too — by running agents of its own. The rule is
   // that something in the graph must act, not that it must act directly.
   const workSteps = brief.steps.filter((step) =>
-    ['agent', 'subworkflow'].includes(step.type ?? 'agent'),
+    ['agent', 'subworkflow', 'fanout'].includes(step.type ?? 'agent'),
   );
 
   if (brief.steps.length === 0) {
@@ -153,6 +153,27 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
         problems.push({
           nodeId: step.nodeId,
           message: 'An approval step needs a question for the person approving it.',
+        });
+      }
+    }
+
+    if (type === 'fanout') {
+      const fanout = step.config?.type === 'fanout' ? step.config.fanout : undefined;
+      // The same rule as a loop, for the same reason: this repeats, so it
+      // declares its bound. CLAUDE.md's no-unbounded-loops rule is about
+      // anything that can repeat, not about the loop node alone.
+      if (!fanout || !Number.isFinite(fanout.maxItems) || fanout.maxItems < 1) {
+        problems.push({
+          nodeId: step.nodeId,
+          message: 'This fan-out needs a maximum number of items.',
+          stops: 'save',
+        });
+      } else if (fanout.body.length === 0) {
+        problems.push({ nodeId: step.nodeId, message: 'This fan-out has no steps to run.' });
+      } else if (fanout.concurrency < 1) {
+        problems.push({
+          nodeId: step.nodeId,
+          message: 'This fan-out needs to run at least one item at a time.',
         });
       }
     }

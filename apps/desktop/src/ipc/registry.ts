@@ -78,6 +78,18 @@ const nodeConfigSchema = z.discriminatedUnion('type', [
     type: z.literal('subworkflow'),
     subworkflow: z.object({ workflowId: z.string(), version: z.string() }),
   }),
+  z.object({
+    type: z.literal('fanout'),
+    fanout: z.object({
+      source: z.string(),
+      parse: z.enum(['json', 'lines']),
+      body: z.array(z.string()),
+      concurrency: z.number(),
+      maxItems: z.number(),
+      onItemError: z.enum(['continue', 'halt']),
+      deadLetterLimit: z.number(),
+    }),
+  }),
 ]);
 
 const briefSchema = z.object({
@@ -98,7 +110,7 @@ const briefSchema = z.object({
       // Absent means `agent`, which is every brief saved before the other node
       // types existed. Adding an optional field is a v-compatible change.
       type: z
-        .enum(['agent', 'condition', 'loop', 'transform', 'approval', 'subworkflow'])
+        .enum(['agent', 'condition', 'loop', 'transform', 'approval', 'subworkflow', 'fanout'])
         .optional(),
       config: nodeConfigSchema.optional(),
       roleId: z.string(),
@@ -265,6 +277,26 @@ export const traceList = defineInvokeChannel({
         tokensIn: z.number().nullable(),
         tokensOut: z.number().nullable(),
         costUsd: z.number().nullable(),
+      }),
+    ),
+  }),
+});
+
+// The failure report M5's exit criterion asks for: what could not be
+// processed, and why, kept rather than counted.
+export const runFailures = defineInvokeChannel({
+  channel: 'run:failures',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string() }),
+  responseSchema: z.object({
+    failures: z.array(
+      z.object({
+        nodeId: z.string(),
+        itemIndex: z.number(),
+        itemJson: z.string(),
+        error: z.string(),
+        ts: z.string(),
       }),
     ),
   }),
@@ -727,6 +759,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runAwaiting,
   runList,
   traceList,
+  runFailures,
   traceExport,
   runEvent,
   providerTestConnection,

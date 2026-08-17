@@ -30,7 +30,8 @@ import './canvas.css';
 // is the product's vocabulary, so it is on screen from the first step rather
 // than hidden behind a mode.
 
-export type StepKind = 'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow';
+export type StepKind =
+  'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow' | 'fanout';
 
 /**
  * Everything the shaping node types need, in one flat shape.
@@ -54,6 +55,12 @@ export interface StepSettings {
   maxIterations: number;
   /** Subworkflow: the saved automation this step runs. */
   workflowId: string;
+  /** Fan-out: how many items at a time, and how many at most. */
+  concurrency: number;
+  maxItems: number;
+  parse: 'json' | 'lines';
+  onItemError: 'continue' | 'halt';
+  deadLetterLimit: number;
 }
 
 const DEFAULT_SETTINGS: StepSettings = {
@@ -65,6 +72,11 @@ const DEFAULT_SETTINGS: StepSettings = {
   showSource: '',
   maxIterations: 3,
   workflowId: '',
+  concurrency: 5,
+  maxItems: 100,
+  parse: 'json',
+  onItemError: 'continue',
+  deadLetterLimit: 10,
 };
 
 export interface StepNodeData extends Record<string, unknown> {
@@ -96,6 +108,7 @@ const KIND_LABEL: Record<StepKind, string> = {
   transform: 'Reshape',
   approval: 'Approval',
   subworkflow: 'Automation',
+  fanout: 'Fan out',
 };
 
 const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
@@ -104,6 +117,7 @@ const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
   transform: 'Joins earlier answers together, without a model',
   approval: 'Pauses until a person says yes',
   subworkflow: 'Runs another saved automation here',
+  fanout: 'Runs the steps below it once per item, several at a time',
 };
 
 /** The one line a shaping node shows about what it will do. */
@@ -122,6 +136,8 @@ function summarise(data: StepNodeData): string {
       return settings.prompt === '' ? 'No question yet' : settings.prompt;
     case 'subworkflow':
       return settings.workflowId === '' ? 'No automation chosen' : settings.workflowId;
+    case 'fanout':
+      return `${String(settings.concurrency)} at a time, up to ${String(settings.maxItems)}`;
     default:
       return '';
   }
@@ -208,6 +224,7 @@ const NODE_TYPES = {
   transform: ShapingNodeBody,
   approval: ShapingNodeBody,
   subworkflow: ShapingNodeBody,
+  fanout: ShapingNodeBody,
 };
 
 let nodeSeq = 0;
@@ -395,6 +412,21 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             settings.maxIterations = (config['loop'] as { maxIterations: number }).maxIterations;
           } else if (config && config['type'] === 'transform') {
             settings.template = (config['transform'] as { template: string }).template;
+          } else if (config && config['type'] === 'fanout') {
+            const fanout = config['fanout'] as {
+              source: string;
+              parse: 'json' | 'lines';
+              concurrency: number;
+              maxItems: number;
+              onItemError: 'continue' | 'halt';
+              deadLetterLimit: number;
+            };
+            settings.source = fanout.source;
+            settings.parse = fanout.parse;
+            settings.concurrency = fanout.concurrency;
+            settings.maxItems = fanout.maxItems;
+            settings.onItemError = fanout.onItemError;
+            settings.deadLetterLimit = fanout.deadLetterLimit;
           } else if (config && config['type'] === 'subworkflow') {
             settings.workflowId = (config['subworkflow'] as { workflowId: string }).workflowId;
           } else if (config && config['type'] === 'approval') {
@@ -606,6 +638,23 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               approval: { prompt: settings.prompt, showSource: settings.showSource },
             },
           };
+        case 'fanout':
+          return {
+            ...base,
+            config: {
+              type: 'fanout',
+              fanout: {
+                source: settings.source,
+                parse: settings.parse,
+                // Same as a loop: the steps joined below it are its body.
+                body: outgoing.map((edge) => edge.target),
+                concurrency: settings.concurrency,
+                maxItems: settings.maxItems,
+                onItemError: settings.onItemError,
+                deadLetterLimit: settings.deadLetterLimit,
+              },
+            },
+          };
         case 'subworkflow':
           return {
             ...base,
@@ -702,9 +751,9 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   // Why Run is unavailable, said rather than left to a greyed-out button. An
   // unexplained disabled control is the same dead end as no control at all.
   const agentNodes = nodes.filter((node) => node.data.kind === 'agent');
-  // A subworkflow acts too, by running agents of its own.
-  const workNodes = nodes.filter(
-    (node) => node.data.kind === 'agent' || node.data.kind === 'subworkflow',
+  // A subworkflow and a fan-out act too, by running agents of their own.
+  const workNodes = nodes.filter((node) =>
+    ['agent', 'subworkflow', 'fanout'].includes(node.data.kind),
   );
   const badShaping = nodes.find((node) => {
     const settings = node.data.settings;
@@ -719,6 +768,12 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         return edges.every((edge) => edge.source !== node.id);
       case 'subworkflow':
         return settings.workflowId === '';
+      case 'fanout':
+        return (
+          settings.maxItems < 1 ||
+          settings.concurrency < 1 ||
+          edges.every((edge) => edge.source !== node.id)
+        );
       default:
         return false;
     }
@@ -736,9 +791,11 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               ? 'An approval needs a question to ask.'
               : badShaping.data.kind === 'transform'
                 ? 'A reshape needs a template.'
-                : badShaping.data.kind === 'subworkflow'
-                  ? 'Choose which automation that step runs.'
-                  : 'A branch needs somewhere to go — join it to a step.'
+                : badShaping.data.kind === 'fanout'
+                  ? 'A fan-out needs a maximum, a concurrency of at least one, and steps to run.'
+                  : badShaping.data.kind === 'subworkflow'
+                    ? 'Choose which automation that step runs.'
+                    : 'A branch needs somewhere to go — join it to a step.'
           : agentNodes.length > 0 &&
               brief.trim() === '' &&
               agentNodes.every((node) => node.data.instruction.trim() === '')
@@ -849,25 +906,27 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         ))}
 
         <p className="canvas__section">Flow</p>
-        {(['condition', 'loop', 'transform', 'approval', 'subworkflow'] as const).map((kind) => (
-          <button
-            key={kind}
-            type="button"
-            className="palette__agent palette__agent--flow"
-            data-testid={`palette-${kind}`}
-            draggable
-            onDragStart={(event) => {
-              event.dataTransfer.setData('application/chimera-node', kind);
-              event.dataTransfer.effectAllowed = 'move';
-            }}
-            onClick={() => {
-              addStep(kind, null, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
-            }}
-          >
-            <span className="palette__name">{KIND_LABEL[kind]}</span>
-            <span className="palette__meta">{KIND_BLURB[kind]}</span>
-          </button>
-        ))}
+        {(['condition', 'loop', 'fanout', 'transform', 'approval', 'subworkflow'] as const).map(
+          (kind) => (
+            <button
+              key={kind}
+              type="button"
+              className="palette__agent palette__agent--flow"
+              data-testid={`palette-${kind}`}
+              draggable
+              onDragStart={(event) => {
+                event.dataTransfer.setData('application/chimera-node', kind);
+                event.dataTransfer.effectAllowed = 'move';
+              }}
+              onClick={() => {
+                addStep(kind, null, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
+              }}
+            >
+              <span className="palette__name">{KIND_LABEL[kind]}</span>
+              <span className="palette__meta">{KIND_BLURB[kind]}</span>
+            </button>
+          ),
+        )}
       </aside>
 
       <div className="canvas__main">
@@ -1316,6 +1375,102 @@ function ShapingInspector({
           <p className="canvas__prompt">
             Use {'{{previous}}'} for the step before this one, or {'{{step-id}}'} for any earlier
             step. No model runs here, so this costs nothing.
+          </p>
+        </>
+      )}
+
+      {data.kind === 'fanout' && (
+        <>
+          <p className="canvas__section">Items come from</p>
+          <select
+            className="control"
+            data-testid="fanout-source"
+            value={settings.source}
+            onChange={(event) => {
+              onChange('source', event.target.value);
+            }}
+          >
+            <option value="">The step before this one</option>
+            {others.map((step) => (
+              <option key={step.id} value={step.id}>
+                {step.label}
+              </option>
+            ))}
+          </select>
+
+          <p className="canvas__section">Read that as</p>
+          <select
+            className="control"
+            data-testid="fanout-parse"
+            value={settings.parse}
+            onChange={(event) => {
+              onChange('parse', event.target.value as StepSettings['parse']);
+            }}
+          >
+            <option value="json">A JSON list</option>
+            <option value="lines">One item per line</option>
+          </select>
+
+          <p className="canvas__section">At a time</p>
+          <input
+            className="control"
+            type="number"
+            min={1}
+            max={50}
+            data-testid="fanout-concurrency"
+            aria-label="Items at a time"
+            value={settings.concurrency}
+            onChange={(event) => {
+              onChange('concurrency', Number(event.target.value));
+            }}
+          />
+
+          <p className="canvas__section">At most</p>
+          <input
+            className="control"
+            type="number"
+            min={1}
+            data-testid="fanout-max"
+            aria-label="Maximum items"
+            value={settings.maxItems}
+            onChange={(event) => {
+              onChange('maxItems', Number(event.target.value));
+            }}
+          />
+
+          <p className="canvas__section">When an item fails</p>
+          <select
+            className="control"
+            data-testid="fanout-on-error"
+            value={settings.onItemError}
+            onChange={(event) => {
+              onChange('onItemError', event.target.value as StepSettings['onItemError']);
+            }}
+          >
+            <option value="continue">Keep going, and list it afterwards</option>
+            <option value="halt">Stop the whole fan-out</option>
+          </select>
+
+          {settings.onItemError === 'continue' && (
+            <>
+              <p className="canvas__section">Stop after this many failures</p>
+              <input
+                className="control"
+                type="number"
+                min={0}
+                data-testid="fanout-dead-letter"
+                aria-label="Failures allowed"
+                value={settings.deadLetterLimit}
+                onChange={(event) => {
+                  onChange('deadLetterLimit', Number(event.target.value));
+                }}
+              />
+            </>
+          )}
+
+          <p className="canvas__prompt">
+            Every step joined below this one runs once per item. Failed items are listed in Runs
+            rather than thrown away, and one bad item does not cost the rest.
           </p>
         </>
       )}

@@ -20,7 +20,7 @@ import {
 import { Governor } from '../governor/Governor.ts';
 import { STARTER_ROLES } from '../runtime/roleRegistry.ts';
 import { runAutomation } from './runAutomation.ts';
-import type { RunBrief } from './runBrief.ts';
+import type { BriefStep, RunBrief } from './runBrief.ts';
 
 // The executor running a graph that is not a straight line: a branch, a
 // transform, and a gate that waits for a person.
@@ -72,15 +72,17 @@ function agent(nodeId: string, roleId: string, instruction: string) {
   };
 }
 
-const shaping = (nodeId: string, config: RunBrief['steps'][number]['config']) => ({
-  nodeId,
-  type: config?.type ?? 'agent',
-  config,
-  roleId: '',
-  instruction: '',
-  connectionId: '',
-  model: '',
-});
+function shaping(nodeId: string, config: NonNullable<BriefStep['config']>): BriefStep {
+  return {
+    nodeId,
+    type: config.type,
+    config,
+    roleId: '',
+    instruction: '',
+    connectionId: '',
+    model: '',
+  };
+}
 
 function deps(db: ReturnType<typeof open>['db'], runId: string, brief: RunBrief, tools: unknown) {
   const provider = new MockProvider({
@@ -517,6 +519,88 @@ test('an automation that contains itself stops rather than recursing', async () 
     assert.ok(denied, 'the recursion was never refused');
     assert.match(denied.output, /nested 5 deep|contains itself/);
     assert.ok(outcome.steps.length < 20, 'it recursed further than it should have');
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a fan-out runs its body over every item the step before produced', async () => {
+  const { db, dir } = open('run-10');
+  const tools = await toolsFor(dir, 'run-10');
+
+  const brief: RunBrief = {
+    name: 'fanned',
+    instruction: 'list them, then handle each',
+    attachments: [],
+    steps: [
+      agent('list', 'researcher', 'List the invoices.'),
+      shaping('each', {
+        type: 'fanout',
+        fanout: {
+          source: 'items',
+          parse: 'json',
+          body: ['handle'],
+          concurrency: 3,
+          maxItems: 100,
+          onItemError: 'continue',
+          deadLetterLimit: 10,
+        },
+      }),
+      agent('handle', 'summariser', 'Handle this one.'),
+    ],
+    edges: [
+      ['list', 'each'],
+      ['each', 'handle'],
+    ],
+  };
+
+  try {
+    // The item list comes from a transform rather than the model, so the test
+    // is about the fan-out rather than about what a mock happened to say.
+    brief.steps.splice(
+      1,
+      0,
+      shaping('items', { type: 'transform', transform: { template: '["a","b","c","d"]' } }),
+    );
+    brief.edges.push(['list', 'items'], ['items', 'each']);
+
+    const outcome = await runAutomation(deps(db, 'run-10', brief, tools));
+
+    const fan = outcome.steps.find((step) => step.nodeId === 'each');
+    assert.ok(fan);
+    assert.equal(fan.status, 'succeeded');
+    assert.match(fan.output, /4 of 4 items done/);
+
+    // The body ran once per item, under its own name each time. Asserted from
+    // the trace rather than the step list: a fan-out over a thousand items
+    // would otherwise return a thousand-entry summary, so the node's own
+    // outcome summarises and the trace keeps the detail.
+    const itemNodes = new Set(
+      tracesRepository
+        .listForRun(db, 'run-10')
+        .map((event) => event.nodeId)
+        .filter((nodeId) => nodeId.startsWith('each/')),
+    );
+    assert.equal(itemNodes.size, 4);
+    assert.equal(
+      outcome.steps.some((step) => step.nodeId === 'handle'),
+      false,
+      'the body also ran outside the fan-out',
+    );
+
+    // The run is finished once, by the outer run — a nested run that finalised
+    // would have stamped an end time on a run that was still going.
+    const run = runsRepository.get(db, 'run-10');
+    assert.equal(run?.status, 'succeeded');
+
+    const decision = tracesRepository
+      .listForRun(db, 'run-10')
+      .map((event) => JSON.parse(event.payloadJson) as { decision?: string; peakInFlight?: number })
+      .find((payload) => payload.decision === 'fanout:finished');
+    assert.ok(decision);
+    assert.ok((decision.peakInFlight ?? 0) <= 3);
   } finally {
     await tools.close();
     db.close();

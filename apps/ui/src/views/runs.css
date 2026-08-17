@@ -219,3 +219,46 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* The failure report. Above the trace rather than inside it: what a run could
+ * not process is the thing a person has to act on, and burying it among a
+ * thousand events is the same as not reporting it. */
+.runs__failures {
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--semantic-danger);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+
+.runs__failureList {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-height: 220px;
+  overflow: auto;
+}
+
+.runs__failureList li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
+  gap: var(--space-2);
+  font-size: var(--type-meta);
+}
+
+.runs__failureItem {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.runs__failureError {
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

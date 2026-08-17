@@ -13,6 +13,7 @@ import type { Role } from '../runtime/roleRegistry.ts';
 import type { ToolObservation } from '../runtime/promptAssembly.ts';
 import { executionOrder, validateBrief, type BriefStep, type RunBrief } from './runBrief.ts';
 import { applyTransform, evaluateCondition } from './nodeTypes.ts';
+import { itemsFrom, runFanout } from './nodeRunners/fanout.ts';
 
 // The executor. Runs a brief's steps in order, each as an agent, each through
 // the Governor, each journaled and traced.
@@ -91,6 +92,23 @@ export interface RunAutomationDeps {
    * is why the status bar said "No spend yet" through a run that was spending.
    */
   onSpend?: (snapshot: SpendSnapshot) => void;
+  /**
+   * Whether to write the run's terminal status when this returns.
+   *
+   * False for a nested run — a subworkflow, or one fan-out item. A nested run
+   * that finalised would stamp `ended_at` on a run that is still going, and the
+   * next thing to look at the row would believe it.
+   */
+  finalize?: boolean;
+  /**
+   * What the first step should treat as "the previous step's answer".
+   *
+   * A fan-out item arrives this way rather than as the brief's instruction: a
+   * body step usually has an instruction of its own — "handle this invoice" —
+   * and an item passed as an instruction is an item the step never sees. It is
+   * data, so it enters where data enters.
+   */
+  seedCarried?: string;
 }
 
 /**
@@ -179,7 +197,7 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
   });
 
   const steps: StepOutcome[] = [];
-  let carried = '';
+  let carried = deps.seedCarried ?? '';
   let last: LoopResult | null = null;
 
   const byId = new Map(brief.steps.map((step) => [step.nodeId, step]));
@@ -440,6 +458,7 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         ...deps,
         brief: prefixed,
         depth,
+        finalize: false,
       });
 
       for (const innerStep of inner.steps) steps.push(innerStep);
@@ -452,6 +471,102 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         status: inner.status === 'succeeded' ? 'succeeded' : 'denied',
         haltCause: inner.status === 'succeeded' ? 'completed' : 'limit',
         output: inner.output,
+      };
+    }
+
+    if (type === 'fanout' && step.config?.type === 'fanout') {
+      const config = step.config.fanout;
+      const source = config.source === '' ? carried : (outputs.get(config.source) ?? '');
+      const items = itemsFrom(source, config.parse);
+
+      const bodySteps = config.body
+        .map((nodeId) => byId.get(nodeId))
+        .filter((candidate): candidate is BriefStep => candidate !== undefined);
+      for (const bodyStep of bodySteps) ownedByLoop.add(bodyStep.nodeId);
+
+      if (bodySteps.length === 0) {
+        return {
+          ...base,
+          status: 'denied',
+          haltCause: 'limit',
+          output: 'This fan-out has no steps to run over its items.',
+        };
+      }
+
+      const fanned = await runFanout({
+        db,
+        runId,
+        nodeId: step.nodeId,
+        config,
+        items,
+        ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
+        runItem: async ({ index, item }) => {
+          // Each item is its own run of the body, with its own node ids and its
+          // own carried output. Sharing either would make the items race each
+          // other for the same journal rows and the same "previous answer".
+          const text = typeof item === 'string' ? item : JSON.stringify(item);
+          const itemBrief: RunBrief = {
+            name: `${brief.name} — item ${String(index + 1)}`,
+            instruction: text,
+            attachments: [],
+            steps: bodySteps.map((bodyStep) => ({
+              ...bodyStep,
+              nodeId: `${step.nodeId}/${String(index)}/${bodyStep.nodeId}`,
+            })),
+            edges: [],
+            preauthorised: (brief.preauthorised ?? []).map(
+              (id) => `${step.nodeId}/${String(index)}/${id}`,
+            ),
+          };
+
+          const itemOutcome = await runAutomation({
+            ...deps,
+            brief: itemBrief,
+            seedCarried: text,
+            finalize: false,
+            depth: (deps.depth ?? 0) + 1,
+          });
+
+          const halted = itemOutcome.steps.find((one) => one.status !== 'succeeded');
+          return halted
+            ? { ok: false, output: `${halted.nodeId}: ${halted.output}` }
+            : { ok: true, output: itemOutcome.output };
+        },
+      });
+
+      trace.append({
+        nodeId: step.nodeId,
+        eventType: 'decision',
+        payload: {
+          decision: 'fanout:finished',
+          items: items.length,
+          succeeded: fanned.succeeded,
+          failed: fanned.failed,
+          peakInFlight: fanned.peakInFlight,
+          concurrency: config.concurrency,
+          ...(fanned.halted ? { haltReason: fanned.haltReason } : {}),
+        },
+      });
+
+      // The successful items' answers, in input order, as one output. A
+      // downstream aggregate step (M5-5) reduces them; without one, the list
+      // itself is the honest answer.
+      const collected = JSON.stringify(
+        fanned.results.filter((result) => result.ok).map((result) => result.output),
+      );
+      outputs.set(step.nodeId, collected);
+      carried = collected;
+
+      return {
+        ...base,
+        iterations: fanned.results.length,
+        status: fanned.halted ? 'denied' : 'succeeded',
+        haltCause: fanned.halted ? 'limit' : 'completed',
+        output: fanned.halted
+          ? fanned.haltReason
+          : `${String(fanned.succeeded)} of ${String(items.length)} items done${
+              fanned.failed === 0 ? '' : `, ${String(fanned.failed)} failed`
+            }.`,
       };
     }
 
@@ -658,7 +773,14 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
     verification: null,
     structuredOutput: null,
   };
-  const outcome = finalizeRun(db, runId, finalResult);
+  const outcome =
+    deps.finalize === false
+      ? {
+          status: (finalResult.status === 'succeeded' ? 'succeeded' : 'halted') as
+            'succeeded' | 'halted',
+          summary: null,
+        }
+      : finalizeRun(db, runId, finalResult);
 
   return { runId, status: outcome.status, summary: outcome.summary, steps, output: carried };
 }

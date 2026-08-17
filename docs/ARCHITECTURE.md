@@ -331,11 +331,19 @@ Append-only, written by collaborative-swarm agent nodes during a `swarm` node's 
 
 | column | type | notes |
 |---|---|---|
+| `id` | text | pk |
 | `run_id` | text | fk → `runs.id` |
-| `node_id` | text | |
+| `node_id` | text | the fan-out node, not the body step that failed — the step is named in `error` |
+| `item_index` | text | position in the input array, so a report reads in the order the user's own list is in |
 | `item_json` | text | the fan-out item (or swarm task) that failed past its retry policy |
 | `error` | text | |
 | `ts` | text | |
+
+Widened by migration `0006` (M5-1). `0001` created this table ahead of the
+feature that would use it, with no primary key and no record of *which* item
+failed; a row you cannot address is a row you cannot clear once it is dealt
+with. It was recreated rather than altered — SQLite cannot add a primary key to
+an existing table, and the table had never been written to.
 
 Written by `fanout` and `swarm` node runners when an item exhausts its retry policy under `onItemError: dead_letter`; read by the run view's failure report (F5.1's "on budget, with a failure report" exit criterion for M5) and by the aggregate node when a strategy needs to know what was excluded.
 

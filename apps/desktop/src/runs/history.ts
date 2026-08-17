@@ -1,6 +1,11 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { runsRepository, tracesRepository, workflowsRepository } from '@chimera/store';
+import {
+  deadLetterRepository,
+  runsRepository,
+  tracesRepository,
+  workflowsRepository,
+} from '@chimera/store';
 import { getStore } from '../store/lifecycle.ts';
 
 // M4-7 and M4-8's main-process half: what has run, and what happened inside it.
@@ -75,6 +80,26 @@ export function listTrace(runId: string): { events: TraceEvent[] } {
 }
 
 /**
+ * What a run could not process.
+ *
+ * Separate from the trace: the trace is what happened, and this is the list a
+ * person has to do something about. A run over a thousand items that reports
+ * "973 succeeded" and nothing else is a run whose failures nobody can act on.
+ */
+export function listFailures(runId: string): {
+  failures: { nodeId: string; itemIndex: number; itemJson: string; error: string; ts: string }[];
+} {
+  const failures = deadLetterRepository.listForRun(getStore(), runId).map((row) => ({
+    nodeId: row.nodeId,
+    itemIndex: row.itemIndex,
+    itemJson: row.itemJson,
+    error: row.error,
+    ts: row.ts,
+  }));
+  return { failures };
+}
+
+/**
  * Writes a run's whole trace to a file the user chooses.
  *
  * Exported as it is stored, with no redaction pass, because there is nothing to
@@ -119,6 +144,7 @@ export async function exportTrace(runId: string): Promise<{ path: string; events
     // The brief is included: a trace without what was asked for is a list of
     // answers to a question nobody wrote down.
     brief: JSON.parse(run.inputJson) as unknown,
+    failures: listFailures(runId).failures,
     events: events.map((event) => ({
       ...event,
       payload: JSON.parse(event.payloadJson) as unknown,
