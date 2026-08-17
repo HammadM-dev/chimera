@@ -12,7 +12,7 @@ So the order has changed. Everything that makes the product usable — the canva
 | M1 Provider layer | 11 / 11 | Connect providers, chat through them, watch health and cost live |
 | M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
-| **M4 Automations** | **13 / 16** | **Describe an automation, watch it built, run it, see it work** |
+| **M4 Automations** | **14 / 16** | **Describe an automation, watch it built, run it, see it work** |
 | M5 Swarm | 0 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 0 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
@@ -20,7 +20,7 @@ So the order has changed. Everything that makes the product usable — the canva
 | M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**47 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**48 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1024,6 +1024,13 @@ DECISION: **detected, never required — the same shape as OmniRoute.** CHIMERA 
 Stated limit: it is not running on the founder's machine, so only the not-available path has been exercised. The call path is written against its documented API and is unverified against the real service. Wiring it as the *active* backend for writes stays open until it can be tested against a running instance — shipping an untested path as the default store for everything the agents know would be the wrong risk to take.
 
 ### M4-13: M4 demo — build it, run it, watch it
+
+STATUS: **done.** `apps/desktop/e2e/m4-demo.spec.ts` drives the whole thing: connect a provider, describe an automation on Home, open the draft the planner returned, bind each step to a model, attach a file, run it, watch both nodes reach `succeeded`, see the spend in the status bar, then read the trace in Runs afterwards.
+
+It found three real defects on the way to passing, which is what a demo test is for:
+- **"New automation" did not make a new automation.** It cleared the sidebar's idea of what was open and left the previous graph, brief and saved id on screen.
+- **The status bar never showed a run's spend.** M3-4's meter has had an `onUpdate` hook since it was written with nothing attached to it, so the bar read "No spend yet" through a run that was spending.
+- **A step denied for exceeding its role budget** — the Governor doing its job, on a test that had asked for 150K tokens a call.
 
 Description: Milestone demo. Exit criterion, revised from "build a workflow visually and see the trace" to the founder's actual test: **describe an automation on Home, open the generated draft, attach a file, press Run, and watch it execute node by node with live spend.**
 
