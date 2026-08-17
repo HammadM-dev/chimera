@@ -114,6 +114,16 @@ test('an API key entered during setup reaches the vault, not the database', asyn
     await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 20_000 });
 
     await page.getByTestId('intro-start').click();
+
+    // Real logos, not the monogram fallback: the marks render as images, and
+    // the one on the API-key card leans out of its badge rather than sitting
+    // squarely inside it.
+    const marks = page.locator('.intro__choice .mark--logo img');
+    await expect(marks.first()).toBeVisible();
+    expect(await marks.count()).toBeGreaterThanOrEqual(3);
+    const transform = await marks.first().evaluate((node) => getComputedStyle(node).transform);
+    expect(transform).not.toBe('none');
+
     await page.getByTestId('choose-cloud').click();
     // Ollama Cloud is offered alongside the other key-based providers, and is
     // its own kind rather than local Ollama pointed elsewhere.
@@ -196,6 +206,16 @@ test('the intro replays even on a workspace that is already set up', async () =>
 
     // Connect something, so both gates are now closed.
     await page.getByTestId('intro-start').click();
+
+    // Real logos, not the monogram fallback: the marks render as images, and
+    // the one on the API-key card leans out of its badge rather than sitting
+    // squarely inside it.
+    const marks = page.locator('.intro__choice .mark--logo img');
+    await expect(marks.first()).toBeVisible();
+    expect(await marks.count()).toBeGreaterThanOrEqual(3);
+    const transform = await marks.first().evaluate((node) => getComputedStyle(node).transform);
+    expect(transform).not.toBe('none');
+
     await page.getByTestId('choose-cloud').click();
     await page.getByTestId('intro-key').fill('sk-a-real-looking-key');
     await page.getByTestId('intro-connect').click();

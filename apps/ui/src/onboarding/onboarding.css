@@ -288,15 +288,58 @@
   height: 12px;
 }
 
-/* A real logo fills its badge and keeps its own colours; the monogram version
- * is tinted because a letter with no colour is not an identity. */
+/* A real logo keeps its own colours; the monogram version is tinted, because a
+ * letter with no colour is not an identity.
+ *
+ * The mark breaks its own frame — larger than the badge, nudged up and left, so
+ * it crosses the top-left corner. Perfectly contained logos in perfectly equal
+ * squares read as a spreadsheet of vendors; one that leans out of its box reads
+ * as a thing someone placed. The overflow is on one corner only and the same
+ * corner every time, so it is a decision rather than an accident. */
 .mark--logo {
-  background: var(--surface-raised);
-  overflow: hidden;
+  background: linear-gradient(
+    140deg,
+    var(--surface-raised),
+    color-mix(in srgb, var(--surface-raised) 70%, var(--surface-canvas))
+  );
+  overflow: visible;
+  position: relative;
 }
 
 .mark--logo img {
-  width: 22px;
-  height: 22px;
+  width: 30px;
+  height: 30px;
   object-fit: contain;
+  /* Out past the top-left corner by a quarter of its own size. */
+  transform: translate(-5px, -5px) rotate(-4deg);
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+  transition: transform var(--motion-base) var(--ease-standard);
+}
+
+/* It leans further out on hover — the card is a button, and the mark
+ * acknowledging the pointer is what tells you so before you read anything. */
+.intro__choice:hover .mark--logo img {
+  transform: translate(-7px, -7px) rotate(-6deg) scale(1.06);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mark--logo img,
+  .intro__choice:hover .mark--logo img {
+    transition: none;
+    transform: translate(-5px, -5px) rotate(-4deg);
+  }
+}
+
+/* The stacked row under the API-key card is small and crowded, so its marks
+ * stay inside their boxes — three overlapping logos leaning at once is noise,
+ * not emphasis. */
+.intro__stack .mark--logo img {
+  width: 20px;
+  height: 20px;
+  transform: none;
+  filter: none;
+}
+
+.intro__stack .mark--logo {
+  overflow: hidden;
 }
