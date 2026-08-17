@@ -1,7 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
-import { subscribeToSession, sessionTotals, type SessionTotals } from './sessionMeter.ts';
+import {
+  recordRunSpend,
+  subscribeToSession,
+  sessionTotals,
+  type SessionTotals,
+} from './sessionMeter.ts';
 
 // M1-11's exit criterion: live health state and a running session cost across
 // every connection. The minimal version the ticket asks for — M4's shell work
@@ -14,6 +19,20 @@ export function StatusBar(): JSX.Element {
   const [totals, setTotals] = useState<SessionTotals>(sessionTotals());
 
   useEffect(() => subscribeToSession(setTotals), []);
+
+  // What runs are spending, as they spend it. The bar showed chat exchanges
+  // only, so an automation could run for a minute against a paid model and the
+  // bar would still read "No spend yet".
+  useEffect(() => {
+    return bridge().on<{ runId: string; type: string; data: unknown }>('run:event', (event) => {
+      if (event.type !== 'spend') return;
+      const snapshot = event.data as { costUsd: number; hasUnpricedCalls: boolean };
+      recordRunSpend(event.runId, {
+        costUsd: snapshot.costUsd,
+        unpriced: snapshot.hasUnpricedCalls,
+      });
+    });
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

@@ -128,6 +128,21 @@ export async function pickAttachments(mode: 'files' | 'folder'): Promise<{
   attachments: Attachment[];
   truncated: boolean;
 }> {
+  // The OS file dialog is the one part of this flow a test cannot click, so
+  // the E2E suite hands the paths in directly. Environment-gated and read only
+  // here: with the variable unset — which is every real launch — this is dead
+  // code, and with it set the rest of the flow is unchanged, so what the test
+  // exercises afterwards is the real reader.
+  const scripted = process.env.CHIMERA_E2E_PICK_FILES;
+  if (scripted !== undefined && scripted !== '') {
+    const picked = scripted.split(path.delimiter).filter((entry) => entry !== '');
+    const expanded = mode === 'folder' ? picked.flatMap((folder) => expandFolder(folder)) : picked;
+    return {
+      attachments: expanded.map(describe),
+      truncated: mode === 'folder' && expanded.length >= MAX_FOLDER_FILES,
+    };
+  }
+
   // Imported here rather than at module scope. Everything reachable from
   // ipc/handlers.ts must load under plain `node --test`, and a top-level
   // `import { dialog } from 'electron'` broke the IPC registry's own test the

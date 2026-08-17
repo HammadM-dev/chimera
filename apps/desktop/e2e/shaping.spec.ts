@@ -292,3 +292,54 @@ test('a step that can act irreversibly will not run without a gate', async () =>
     await gateway.close();
   }
 });
+
+test('one automation runs another', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+    await connectProvider(page);
+    await goTo(page, 'build');
+
+    // The child: one step, saved.
+    await page.getByTestId('palette-researcher').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Look the answer up.');
+    await page.getByTestId('brief-input').fill('Look it up.');
+    await page.getByTestId('brief-name').fill('Lookup');
+    await page.getByTestId('brief-save').click();
+    await expect(page.getByTestId('run-note')).toContainText('Saved as version 1');
+
+    // The parent: a fresh canvas that calls it.
+    await page.getByTestId('nav-new').click();
+    await page.getByTestId('palette-subworkflow').click();
+    await expect(page.getByTestId('brief-blocked')).toContainText('which automation');
+    await page.getByTestId('subworkflow-id').selectOption({ label: 'Lookup' });
+
+    await page.getByTestId('palette-summariser').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Summarise what it found.');
+
+    await join(page, 'node-subworkflow', 'node-summariser');
+    await page.getByTestId('brief-input').fill('Look it up, then summarise.');
+
+    await expect(page.getByTestId('brief-run')).toBeEnabled();
+    await page.getByTestId('brief-run').click();
+
+    await expect(page.getByTestId('node-subworkflow')).toContainText('succeeded', {
+      timeout: 60_000,
+    });
+    await expect(page.getByTestId('node-summariser')).toContainText('succeeded');
+
+    // The child's own step is in the trace, named under the node that called it.
+    await goTo(page, 'runs');
+    await page.getByTestId('trace-filter-decision').click();
+    await expect(page.getByTestId('trace-events')).toContainText('subworkflow:started');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});

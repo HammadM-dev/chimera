@@ -5,7 +5,7 @@
 // Each also declares its own bound — CLAUDE.md's "no unbounded loops" is not a
 // rule about the loop node alone, it is a rule about anything that can repeat.
 
-export type NodeType = 'agent' | 'condition' | 'loop' | 'transform' | 'approval';
+export type NodeType = 'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow';
 
 /**
  * Branches on what a previous step produced.
@@ -51,6 +51,19 @@ export interface TransformConfig {
   template: string;
 }
 
+/**
+ * Runs another saved automation inside this one.
+ *
+ * Pinned to a version, not to "whatever that automation is now". A child that
+ * changes under a running parent is a parent that stops meaning what its author
+ * read when they wrote it.
+ */
+export interface SubworkflowConfig {
+  workflowId: string;
+  /** The version to run. Empty means the latest at the time of the run. */
+  version: string;
+}
+
 /** Pauses for a person. The runtime half of the irreversible-action gate. */
 export interface ApprovalConfig {
   prompt: string;
@@ -63,7 +76,8 @@ export type NodeConfig =
   | { type: 'condition'; condition: ConditionConfig }
   | { type: 'loop'; loop: LoopConfig }
   | { type: 'transform'; transform: TransformConfig }
-  | { type: 'approval'; approval: ApprovalConfig };
+  | { type: 'approval'; approval: ApprovalConfig }
+  | { type: 'subworkflow'; subworkflow: SubworkflowConfig };
 
 /** Runs a declared comparison against a value. No evaluation, no code. */
 export function evaluateCondition(config: ConditionConfig, actual: string): boolean {

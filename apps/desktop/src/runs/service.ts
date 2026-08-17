@@ -225,6 +225,9 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       onStep: (event) => {
         emitRunEvent(runId, `step:${event.phase}`, event);
       },
+      onSpend: (snapshot) => {
+        emitRunEvent(runId, 'spend', snapshot);
+      },
       requestApproval: (input) =>
         new Promise((resolve) => {
           const forRun = pendingApprovals.get(runId) ?? new Map();

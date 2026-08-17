@@ -74,6 +74,10 @@ const nodeConfigSchema = z.discriminatedUnion('type', [
     type: z.literal('approval'),
     approval: z.object({ prompt: z.string(), showSource: z.string() }),
   }),
+  z.object({
+    type: z.literal('subworkflow'),
+    subworkflow: z.object({ workflowId: z.string(), version: z.string() }),
+  }),
 ]);
 
 const briefSchema = z.object({
@@ -93,7 +97,9 @@ const briefSchema = z.object({
       nodeId: z.string(),
       // Absent means `agent`, which is every brief saved before the other node
       // types existed. Adding an optional field is a v-compatible change.
-      type: z.enum(['agent', 'condition', 'loop', 'transform', 'approval']).optional(),
+      type: z
+        .enum(['agent', 'condition', 'loop', 'transform', 'approval', 'subworkflow'])
+        .optional(),
       config: nodeConfigSchema.optional(),
       roleId: z.string(),
       instruction: z.string(),

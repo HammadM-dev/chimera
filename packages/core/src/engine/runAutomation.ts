@@ -1,10 +1,10 @@
 import type Database from 'better-sqlite3';
 import { ValidationError } from '@chimera/errors';
-import { tracesRepository } from '@chimera/store';
+import { tracesRepository, workflowsRepository } from '@chimera/store';
 import type { AdapterCallOptions, ProviderAdapter } from '@chimera/providers';
 import type { ToolRegistry } from '@chimera/tools';
 import { Governor } from '../governor/Governor.ts';
-import { createSpendMeter } from '../governor/spendMeter.ts';
+import { createSpendMeter, type SpendSnapshot } from '../governor/spendMeter.ts';
 import { runAgentLoop, type HaltCause, type LoopResult } from '../runtime/agentLoop.ts';
 import { createCheckpointStore } from '../runtime/checkpoint.ts';
 import { createTraceSink } from '../runtime/trace.ts';
@@ -77,7 +77,32 @@ export interface RunAutomationDeps {
    * answered yesterday would charge for it twice.
    */
   resume?: boolean;
+  /**
+   * How deep this run already is inside other automations.
+   *
+   * Counts toward the Governor's recursion limit, and toward this engine's own
+   * bound below. Absent means the top.
+   */
+  depth?: number;
+  /**
+   * Called after every cost-incurring call with the run's new totals.
+   *
+   * The meter has had this hook since M3-4 with nothing attached to it, which
+   * is why the status bar said "No spend yet" through a run that was spending.
+   */
+  onSpend?: (snapshot: SpendSnapshot) => void;
 }
+
+/**
+ * How deeply automations may nest.
+ *
+ * A hard bound in the engine rather than a policy setting, because the
+ * Governor's `maxDepth` defaults to no limit and an automation that includes
+ * itself would otherwise recurse until the process died. CLAUDE.md's rule
+ * against unbounded loops is a rule about anything that can repeat, and
+ * nesting is repetition with extra steps.
+ */
+const MAX_NESTING = 5;
 
 /** The last decision recorded for a node, so a resume does not ask twice. */
 function priorApproval(
@@ -146,7 +171,12 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
 
   const checkpoints = createCheckpointStore(db);
   const trace = createTraceSink(db, runId);
-  const meter = createSpendMeter({ db, runId, governor });
+  const meter = createSpendMeter({
+    db,
+    runId,
+    governor,
+    ...(deps.onSpend ? { onUpdate: deps.onSpend } : {}),
+  });
 
   const steps: StepOutcome[] = [];
   let carried = '';
@@ -306,6 +336,125 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
           };
     }
 
+    if (type === 'subworkflow' && step.config?.type === 'subworkflow') {
+      const child = step.config.subworkflow;
+      const depth = (deps.depth ?? 0) + 1;
+
+      if (depth > MAX_NESTING) {
+        return {
+          ...base,
+          status: 'denied',
+          haltCause: 'limit',
+          output: `Automations may be nested ${String(MAX_NESTING)} deep. This one goes further, which usually means it contains itself.`,
+        };
+      }
+
+      const version = workflowsRepository.get(
+        db,
+        child.workflowId,
+        child.version === '' ? undefined : child.version,
+      );
+      if (!version) {
+        return {
+          ...base,
+          status: 'denied',
+          haltCause: 'limit',
+          output: 'That automation is not in this workspace any more.',
+        };
+      }
+
+      let childBrief: RunBrief;
+      try {
+        childBrief = JSON.parse(version.definitionJson) as RunBrief;
+      } catch {
+        return {
+          ...base,
+          status: 'denied',
+          haltCause: 'limit',
+          output: 'That automation could not be read.',
+        };
+      }
+
+      // The child's steps are renamed under this node. Node ids are unique
+      // within an automation, not across them, and both the journal and the
+      // trace key on (run, node) — two automations that both call a step
+      // "check" would otherwise resume each other's work.
+      const prefixed: RunBrief = {
+        ...childBrief,
+        // The parent's carried output is what the child is told, unless the
+        // child has an instruction of its own.
+        instruction: childBrief.instruction === '' ? carried : childBrief.instruction,
+        steps: childBrief.steps.map((childStep) => ({
+          ...childStep,
+          nodeId: `${step.nodeId}/${childStep.nodeId}`,
+          ...(childStep.config?.type === 'condition'
+            ? {
+                config: {
+                  type: 'condition' as const,
+                  condition: {
+                    ...childStep.config.condition,
+                    source:
+                      childStep.config.condition.source === ''
+                        ? ''
+                        : `${step.nodeId}/${childStep.config.condition.source}`,
+                    whenTrue: childStep.config.condition.whenTrue.map(
+                      (id) => `${step.nodeId}/${id}`,
+                    ),
+                    whenFalse: childStep.config.condition.whenFalse.map(
+                      (id) => `${step.nodeId}/${id}`,
+                    ),
+                  },
+                },
+              }
+            : {}),
+          ...(childStep.config?.type === 'loop'
+            ? {
+                config: {
+                  type: 'loop' as const,
+                  loop: {
+                    ...childStep.config.loop,
+                    body: childStep.config.loop.body.map((id) => `${step.nodeId}/${id}`),
+                  },
+                },
+              }
+            : {}),
+        })),
+        edges: childBrief.edges.map(
+          ([from, to]) => [`${step.nodeId}/${from}`, `${step.nodeId}/${to}`] as [string, string],
+        ),
+        preauthorised: (childBrief.preauthorised ?? []).map((id) => `${step.nodeId}/${id}`),
+      };
+
+      trace.append({
+        nodeId: step.nodeId,
+        eventType: 'decision',
+        payload: {
+          decision: 'subworkflow:started',
+          workflowId: child.workflowId,
+          version: version.versionNumber,
+          depth,
+        },
+      });
+
+      const inner = await runAutomation({
+        ...deps,
+        brief: prefixed,
+        depth,
+      });
+
+      for (const innerStep of inner.steps) steps.push(innerStep);
+      carried = inner.output;
+      outputs.set(step.nodeId, inner.output);
+
+      return {
+        ...base,
+        iterations: inner.steps.length,
+        status: inner.status === 'succeeded' ? 'succeeded' : 'denied',
+        haltCause: inner.status === 'succeeded' ? 'completed' : 'limit',
+        output: inner.output,
+      };
+    }
+
     if (type === 'loop' && step.config?.type === 'loop') {
       const loop = step.config.loop;
       const bodySteps = loop.body
@@ -430,6 +579,7 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         task,
         connectionId: step.connectionId,
         model: step.model,
+        depth: deps.depth ?? 0,
         // A person agreed to this node's actions if an approval node upstream
         // of it was granted — the run only reaches here if it was — or if the
         // automation pre-authorises the node by name.

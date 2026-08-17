@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { openDatabase, runsRepository, tracesRepository } from '@chimera/store';
+import {
+  openDatabase,
+  runsRepository,
+  tracesRepository,
+  workflowsRepository,
+} from '@chimera/store';
 import { MockProvider, type ModelCapabilities } from '@chimera/providers';
 import {
   connectInProcess,
@@ -400,6 +405,118 @@ test('a loop stops at its exit condition rather than its bound', async () => {
       .map((event) => JSON.parse(event.payloadJson) as { decision?: string; reason?: string })
       .find((payload) => payload.decision === 'loop:finished');
     assert.equal(decision?.reason, 'exit-condition');
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a subworkflow runs the saved automation it names, under this run', async () => {
+  const { db, dir } = open('run-8');
+  const tools = await toolsFor(dir, 'run-8');
+
+  // A child automation, saved the way the canvas saves one.
+  const child: RunBrief = {
+    name: 'child',
+    instruction: 'do the inner thing',
+    attachments: [],
+    steps: [agent('inner', 'researcher', 'Look it up.')],
+    edges: [],
+  };
+  const saved = workflowsRepository.save(db, {
+    name: 'child',
+    definitionJson: JSON.stringify(child),
+  });
+
+  const parent: RunBrief = {
+    name: 'parent',
+    instruction: 'call the child, then summarise',
+    attachments: [],
+    steps: [
+      agent('start', 'researcher', 'Start.'),
+      shaping('call', {
+        type: 'subworkflow',
+        subworkflow: { workflowId: saved.workflowId, version: '' },
+      }),
+      agent('finish', 'summariser', 'Summarise.'),
+    ],
+    edges: [
+      ['start', 'call'],
+      ['call', 'finish'],
+    ],
+  };
+
+  try {
+    const outcome = await runAutomation(deps(db, 'run-8', parent, tools));
+
+    // The child's step ran, named under the node that called it — node ids are
+    // unique within an automation, not across them, and the journal keys on
+    // (run, node).
+    assert.deepEqual(
+      outcome.steps.map((step) => step.nodeId),
+      ['start', 'call/inner', 'call', 'finish'],
+    );
+
+    const decision = tracesRepository
+      .listForRun(db, 'run-8')
+      .map((event) => JSON.parse(event.payloadJson) as { decision?: string; depth?: number })
+      .find((payload) => payload.decision === 'subworkflow:started');
+    assert.equal(decision?.depth, 1);
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('an automation that contains itself stops rather than recursing', async () => {
+  const { db, dir } = open('run-9');
+  const tools = await toolsFor(dir, 'run-9');
+
+  // Saved first with a placeholder, then rewritten to call itself: the shape a
+  // user reaches by editing an automation that something else already calls.
+  const placeholder: RunBrief = {
+    name: 'self',
+    instruction: 'go',
+    attachments: [],
+    steps: [agent('work', 'researcher', 'Work.')],
+    edges: [],
+  };
+  const saved = workflowsRepository.save(db, {
+    name: 'self',
+    definitionJson: JSON.stringify(placeholder),
+  });
+
+  const recursive: RunBrief = {
+    name: 'self',
+    instruction: 'go',
+    attachments: [],
+    steps: [
+      agent('work', 'researcher', 'Work.'),
+      shaping('again', {
+        type: 'subworkflow',
+        subworkflow: { workflowId: saved.workflowId, version: '' },
+      }),
+    ],
+    edges: [['work', 'again']],
+  };
+  workflowsRepository.save(db, {
+    workflowId: saved.workflowId,
+    name: 'self',
+    definitionJson: JSON.stringify(recursive),
+  });
+
+  try {
+    const outcome = await runAutomation(deps(db, 'run-9', recursive, tools));
+
+    // It stops at the engine's bound rather than running until the process
+    // dies. The Governor's own depth limit defaults to none, so this bound is
+    // the one that has to hold.
+    const denied = outcome.steps.find((step) => step.status === 'denied');
+    assert.ok(denied, 'the recursion was never refused');
+    assert.match(denied.output, /nested 5 deep|contains itself/);
+    assert.ok(outcome.steps.length < 20, 'it recursed further than it should have');
   } finally {
     await tools.close();
     db.close();

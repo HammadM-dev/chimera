@@ -130,6 +130,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   const [view, setView] = useState<View>('home');
   const [goal, setGoal] = useState('');
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
+  const [canvasKey, setCanvasKey] = useState(0);
   const [openId, setOpenId] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string }[]>([]);
   // Bumped whenever the set of connections changes, so every view reading it
@@ -172,6 +173,11 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
             setGoal('');
             setTemplate(null);
             setOpenId(null);
+            // Bumped so the canvas remounts. Without it "New automation"
+            // cleared the sidebar's idea of what was open and left the previous
+            // graph, its brief and its saved id sitting on screen — a new
+            // automation that was the old one wearing a different label.
+            setCanvasKey((current) => current + 1);
             setView('build');
           }}
         >
@@ -263,6 +269,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
 
             {view === 'build' && (
               <CanvasView
+                key={`${openId ?? 'new'}-${String(canvasKey)}`}
                 goal={goal}
                 template={template}
                 openId={openId}

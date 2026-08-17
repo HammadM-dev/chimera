@@ -30,7 +30,7 @@ import './canvas.css';
 // is the product's vocabulary, so it is on screen from the first step rather
 // than hidden behind a mode.
 
-export type StepKind = 'agent' | 'condition' | 'loop' | 'transform' | 'approval';
+export type StepKind = 'agent' | 'condition' | 'loop' | 'transform' | 'approval' | 'subworkflow';
 
 /**
  * Everything the shaping node types need, in one flat shape.
@@ -52,6 +52,8 @@ export interface StepSettings {
   showSource: string;
   /** Loop: the bound CLAUDE.md requires every loop to declare. */
   maxIterations: number;
+  /** Subworkflow: the saved automation this step runs. */
+  workflowId: string;
 }
 
 const DEFAULT_SETTINGS: StepSettings = {
@@ -62,6 +64,7 @@ const DEFAULT_SETTINGS: StepSettings = {
   prompt: '',
   showSource: '',
   maxIterations: 3,
+  workflowId: '',
 };
 
 export interface StepNodeData extends Record<string, unknown> {
@@ -92,6 +95,7 @@ const KIND_LABEL: Record<StepKind, string> = {
   loop: 'Loop',
   transform: 'Reshape',
   approval: 'Approval',
+  subworkflow: 'Automation',
 };
 
 const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
@@ -99,6 +103,7 @@ const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
   loop: 'Repeats the steps below it, a set number of times',
   transform: 'Joins earlier answers together, without a model',
   approval: 'Pauses until a person says yes',
+  subworkflow: 'Runs another saved automation here',
 };
 
 /** The one line a shaping node shows about what it will do. */
@@ -115,6 +120,8 @@ function summarise(data: StepNodeData): string {
       return settings.template === '' ? 'No template' : settings.template;
     case 'approval':
       return settings.prompt === '' ? 'No question yet' : settings.prompt;
+    case 'subworkflow':
+      return settings.workflowId === '' ? 'No automation chosen' : settings.workflowId;
     default:
       return '';
   }
@@ -200,6 +207,7 @@ const NODE_TYPES = {
   loop: ShapingNodeBody,
   transform: ShapingNodeBody,
   approval: ShapingNodeBody,
+  subworkflow: ShapingNodeBody,
 };
 
 let nodeSeq = 0;
@@ -257,6 +265,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const [runOutput, setRunOutput] = useState('');
   const [pending, setPending] = useState<PendingApproval | null>(null);
   const [approvalNote, setApprovalNote] = useState('');
+  const [saved, setSaved] = useState<{ id: string; name: string }[]>([]);
   const [problems, setProblems] = useState<{ nodeId: string | null; message: string }[]>([]);
   const [preauthorised, setPreauthorised] = useState<string[]>([]);
   const [savedId, setSavedId] = useState<string | null>(null);
@@ -386,6 +395,8 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             settings.maxIterations = (config['loop'] as { maxIterations: number }).maxIterations;
           } else if (config && config['type'] === 'transform') {
             settings.template = (config['transform'] as { template: string }).template;
+          } else if (config && config['type'] === 'subworkflow') {
+            settings.workflowId = (config['subworkflow'] as { workflowId: string }).workflowId;
           } else if (config && config['type'] === 'approval') {
             const approval = config['approval'] as { prompt: string; showSource: string };
             settings.prompt = approval.prompt;
@@ -481,6 +492,22 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       }
     });
   }, [runId]);
+
+  // The automations a subworkflow node can name. Loaded once: this is a picker
+  // of things the user has already saved, not a live feed.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ workflows: { id: string; name: string }[] }>(
+          'workflow:list',
+          {},
+        );
+        setSaved(result.workflows);
+      } catch {
+        // An empty picker is the honest answer when nothing has been saved.
+      }
+    })();
+  }, [savedId]);
 
   // A gate left open by a previous session. Asked for once, on mount: a run
   // that stopped for a person and then disappeared from the screen when the app
@@ -579,6 +606,17 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               approval: { prompt: settings.prompt, showSource: settings.showSource },
             },
           };
+        case 'subworkflow':
+          return {
+            ...base,
+            config: {
+              type: 'subworkflow',
+              // Version left empty: the latest at the time of the run. Pinning
+              // a specific one is a control this canvas does not have yet, and
+              // an id nobody chose is worse than the newest.
+              subworkflow: { workflowId: settings.workflowId, version: '' },
+            },
+          };
         default:
           return { ...base, config: { type: 'agent' } };
       }
@@ -664,6 +702,10 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   // Why Run is unavailable, said rather than left to a greyed-out button. An
   // unexplained disabled control is the same dead end as no control at all.
   const agentNodes = nodes.filter((node) => node.data.kind === 'agent');
+  // A subworkflow acts too, by running agents of its own.
+  const workNodes = nodes.filter(
+    (node) => node.data.kind === 'agent' || node.data.kind === 'subworkflow',
+  );
   const badShaping = nodes.find((node) => {
     const settings = node.data.settings;
     switch (node.data.kind) {
@@ -675,13 +717,15 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         return settings.template.trim() === '';
       case 'condition':
         return edges.every((edge) => edge.source !== node.id);
+      case 'subworkflow':
+        return settings.workflowId === '';
       default:
         return false;
     }
   });
 
   const blocked =
-    agentNodes.length === 0
+    workNodes.length === 0
       ? 'Add an agent first.'
       : agentNodes.some((node) => node.data.binding === null)
         ? 'Every agent needs a model.'
@@ -692,8 +736,12 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               ? 'An approval needs a question to ask.'
               : badShaping.data.kind === 'transform'
                 ? 'A reshape needs a template.'
-                : 'A branch needs somewhere to go — join it to a step.'
-          : brief.trim() === '' && agentNodes.every((node) => node.data.instruction.trim() === '')
+                : badShaping.data.kind === 'subworkflow'
+                  ? 'Choose which automation that step runs.'
+                  : 'A branch needs somewhere to go — join it to a step.'
+          : agentNodes.length > 0 &&
+              brief.trim() === '' &&
+              agentNodes.every((node) => node.data.instruction.trim() === '')
             ? 'Write a brief, or give a step its own instruction.'
             : (problems[0]?.message ?? '');
 
@@ -801,7 +849,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         ))}
 
         <p className="canvas__section">Flow</p>
-        {(['condition', 'loop', 'transform', 'approval'] as const).map((kind) => (
+        {(['condition', 'loop', 'transform', 'approval', 'subworkflow'] as const).map((kind) => (
           <button
             key={kind}
             type="button"
@@ -1133,6 +1181,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 id: node.id,
                 label: node.data.role?.name ?? KIND_LABEL[node.data.kind],
               }))}
+              automations={saved.filter((workflow) => workflow.id !== savedId)}
               selfId={selected.id}
               onChange={setSetting}
             />
@@ -1151,12 +1200,20 @@ interface ShapingInspectorProps {
   data: StepNodeData;
   /** Every step on the canvas, so a source is picked rather than typed. */
   steps: { id: string; label: string }[];
+  /** Saved automations a subworkflow step can run, minus this one. */
+  automations: { id: string; name: string }[];
   selfId: string;
   onChange: <K extends keyof StepSettings>(key: K, value: StepSettings[K]) => void;
 }
 
 /** The settings panel for the four shaping node types. */
-function ShapingInspector({ data, steps, selfId, onChange }: ShapingInspectorProps): JSX.Element {
+function ShapingInspector({
+  data,
+  steps,
+  automations,
+  selfId,
+  onChange,
+}: ShapingInspectorProps): JSX.Element {
   const settings = data.settings;
   const others = steps.filter((step) => step.id !== selfId);
 
@@ -1259,6 +1316,32 @@ function ShapingInspector({ data, steps, selfId, onChange }: ShapingInspectorPro
           <p className="canvas__prompt">
             Use {'{{previous}}'} for the step before this one, or {'{{step-id}}'} for any earlier
             step. No model runs here, so this costs nothing.
+          </p>
+        </>
+      )}
+
+      {data.kind === 'subworkflow' && (
+        <>
+          <p className="canvas__section">Automation</p>
+          <select
+            className="control"
+            data-testid="subworkflow-id"
+            value={settings.workflowId}
+            onChange={(event) => {
+              onChange('workflowId', event.target.value);
+            }}
+          >
+            <option value="">Choose an automation</option>
+            {automations.map((workflow) => (
+              <option key={workflow.id} value={workflow.id}>
+                {workflow.name}
+              </option>
+            ))}
+          </select>
+          <p className="canvas__prompt">
+            {automations.length === 0
+              ? 'Save an automation first, and it appears here.'
+              : 'It runs the latest saved version, and what it produces carries on to the next step. Automations can be nested five deep.'}
           </p>
         </>
       )}

@@ -75,10 +75,15 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   const problems: BriefProblem[] = [];
 
   const agentSteps = brief.steps.filter((step) => (step.type ?? 'agent') === 'agent');
+  // A subworkflow does the work too — by running agents of its own. The rule is
+  // that something in the graph must act, not that it must act directly.
+  const workSteps = brief.steps.filter((step) =>
+    ['agent', 'subworkflow'].includes(step.type ?? 'agent'),
+  );
 
   if (brief.steps.length === 0) {
     problems.push({ nodeId: null, message: 'Add at least one agent.' });
-  } else if (agentSteps.length === 0) {
+  } else if (workSteps.length === 0) {
     // The shaping types branch, repeat, reshape and pause a run. None of them
     // does the work, so a graph made only of them has nothing to shape.
     problems.push({
@@ -89,6 +94,7 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   }
 
   if (
+    agentSteps.length > 0 &&
     brief.instruction.trim() === '' &&
     agentSteps.every((step) => step.instruction.trim() === '')
   ) {
@@ -147,6 +153,16 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
         problems.push({
           nodeId: step.nodeId,
           message: 'An approval step needs a question for the person approving it.',
+        });
+      }
+    }
+
+    if (type === 'subworkflow') {
+      const child = step.config?.type === 'subworkflow' ? step.config.subworkflow : undefined;
+      if (!child || child.workflowId === '') {
+        problems.push({
+          nodeId: step.nodeId,
+          message: 'Choose an automation for this step to run.',
         });
       }
     }

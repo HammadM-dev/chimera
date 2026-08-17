@@ -12,7 +12,7 @@ So the order has changed. Everything that makes the product usable — the canva
 | M1 Provider layer | 11 / 11 | Connect providers, chat through them, watch health and cost live |
 | M2 Agent runtime | 11 / 11 | An agent plans, uses sandboxed tools, verifies its work, and survives a kill |
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
-| **M4 Automations** | **12 / 16** | **Describe an automation, watch it built, run it, see it work** |
+| **M4 Automations** | **13 / 16** | **Describe an automation, watch it built, run it, see it work** |
 | M5 Swarm | 0 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 0 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
@@ -20,9 +20,9 @@ So the order has changed. Everything that makes the product usable — the canva
 | M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**46 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**47 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
-Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. M4-3's subworkflow node waits on M4-9's versioning being used to pin a child, not on a decision.
+Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
 ## How this plan is followed
 
@@ -901,9 +901,15 @@ Dependencies: M4-1, M3-6.
 
 ### M4-3: Node runners — condition, loop, transform, subworkflow
 
-STATUS: **done, except the subworkflow node.** `packages/core/src/engine/nodeTypes.ts` and the executor's `runShapingStep`. A condition branches on a prior step's output and marks the branch not taken as skipped; a loop repeats its body up to a required bound, stopping early on its exit condition; a transform fills a `{{step-id}}` template with no model call; the validator refuses a loop with no bound. All four are on the palette with their own inspectors, and a branch's yes and no ports are drawn rather than typed.
+STATUS: **done.** `packages/core/src/engine/nodeTypes.ts` and the executor's `runShapingStep`. A condition branches on a prior step's output and marks the branch not taken as skipped; a loop repeats its body up to a required bound, stopping early on its exit condition; a transform fills a `{{step-id}}` template with no model call; the validator refuses a loop with no bound. All four are on the palette with their own inspectors, and a branch's yes and no ports are drawn rather than typed.
 
-What remains: the **subworkflow** node — running a saved automation inside another, with its depth counting toward the Governor's recursion limit. Left out deliberately: it needs M4-9's versioning to say *which* version of the child runs, and a child whose definition changes under a running parent is the bug it would ship with.
+The **subworkflow** node landed with M4-9's versioning underneath it: a step names a saved automation, the engine loads that version's brief and runs it inside the parent run.
+
+DECISION: **the child's node ids are prefixed with the calling node's.** Node ids are unique within an automation, not across them, and both the journal and the trace key on (run, node). Two automations that each call a step "check" would otherwise resume each other's work.
+
+DECISION: **a hard nesting bound of five in the engine, not a policy setting.** The Governor's `maxDepth` defaults to no limit, so an automation that contains itself would recurse until the process died. CLAUDE.md's rule against unbounded loops is a rule about anything that can repeat, and nesting is repetition with extra steps. Tested by saving an automation that calls itself.
+
+DECISION: **a subworkflow counts as doing the work.** The "add at least one agent" rule asks that something in the graph acts, not that it acts directly — a graph of one subworkflow node runs agents, just not its own.
 
 DECISION: **a condition is a declared comparison, not an expression.** `contains`, `equals`, `matches`, `isEmpty`, `notEmpty` against a named step's output. A workflow that could evaluate code in its branch would be a code-execution surface reachable from a saved file, and the saved file is the thing users send each other.
 

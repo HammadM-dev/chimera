@@ -22,8 +22,8 @@ const CONTAINED: readonly string[] = [
   'filesystem.listDirectory',
   'filesystem.writeFile',
   'filesystem.makeDirectory',
-  // Memory is a store the user can read and delete from in the Memory section.
-  // A wrong memory is a row to remove, not an action to undo.
+  // Memory is a store the user can read, and forget entries from, in the
+  // Memory section. A wrong memory is a row to remove, not an action to undo.
   'memory.remember',
   'memory.recall',
 ];

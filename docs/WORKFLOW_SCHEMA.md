@@ -4,7 +4,8 @@
 **Status** contract. The canvas, engine, and swarm all bind to this. Changing it is expensive — get it right before writing engine code.
 
 **Version 2** (M4-3, M4-6) added, to the run brief below: `steps[].type` and
-`steps[].config` for the non-agent node types, `preauthorised`, and `layout`.
+`steps[].config` for the five non-agent node types, `preauthorised`, and
+`layout`.
 Every one is optional, so a version 1 definition loads unchanged.
 
 ---
@@ -301,7 +302,7 @@ implemented feature reads yet.
   "steps": [
     {
       "nodeId": "researcher-1",
-      "type": "agent",            // agent | condition | loop | transform | approval
+      "type": "agent",            // agent | condition | loop | transform | approval | subworkflow
       "config": { "type": "agent" },
       "roleId": "researcher",
       "instruction": "",          // empty falls back to the brief's
@@ -324,6 +325,7 @@ implemented feature reads yet.
 | `loop` | `{ "type": "loop", "loop": { "body": [], "maxIterations": 3, "until": { …condition } } }` | `maxIterations` is required and has no default; the editor refuses to save without it. `body` is the node ids the loop runs itself. |
 | `transform` | `{ "type": "transform", "transform": { "template": "…{{step-id}}…" } }` | Fills `{{step-id}}` from earlier outputs; `{{previous}}` is the step before. No model call. |
 | `approval` | `{ "type": "approval", "approval": { "prompt": "Send this?", "showSource": "" } }` | The run stops, persists as `awaiting_approval`, and survives a restart in that state. |
+| `subworkflow` | `{ "type": "subworkflow", "subworkflow": { "workflowId": "wf_…", "version": "" } }` | Runs another saved automation here. `version` empty means the latest at run time. The child's node ids are prefixed with the calling node's, and automations nest at most five deep. |
 
 ### What the editor refuses, and when
 
