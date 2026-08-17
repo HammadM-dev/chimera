@@ -9,5 +9,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "node --test"
+  },
+  "dependencies": {
+    "@chimera/errors": "*",
+    "playwright": "^1.62.1"
   }
 }

@@ -14,13 +14,13 @@ So the order has changed. Everything that makes the product usable — the canva
 | M3 Governor | 7 / 7 | Set a cap and know a run stops at it |
 | **M4 Automations** | **14 / 16** | **Describe an automation, watch it built, run it, see it work** |
 | M5 Swarm | 6 / 6 | Point a team of agents at a batch |
-| M6 Browser control | 0 / 5 | Agents use sites that have no API |
+| M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
 | M9 Triggers and observability | 0 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**54 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**59 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1163,6 +1163,12 @@ Master plan deliverables: Playwright integration, isolated profiles, browser too
 
 ### M6-1: Playwright profile manager
 
+STATUS: **done.** `packages/control/src/browser/profileManager.ts`. One profile per workspace under the app's own data directory, launched lazily, closed on app quit.
+
+DECISION: **an isolated profile is a security boundary, not a preference.** An agent driving a browser already logged into the user's bank, email and admin consoles has all of those sessions available to it, and a prompt injection on any page it visits becomes an injection with the user's credentials attached. Our profile starts logged out of everything.
+
+DECISION: **launch is lazy and de-duplicated.** Most automations never open a browser, so paying Chromium's startup on every run would cost every user a second and 200MB for nothing. Two steps asking at once get one browser — Chromium locks the profile directory, so the second launch would fail, and a fan-out's first parallel items ask at exactly the same moment.
+
 Description: `packages/control/src/browser/` manages a Playwright browser context per workspace, with a dedicated, isolated profile — never the user's personal browser profile or live sessions (explicit master-plan constraint: "never drive the user's personal profile with live sessions"). Cross-platform (Windows/macOS/Linux) using Playwright's own cross-platform support, no per-OS branching needed here.
 
 Acceptance criteria:
@@ -1173,6 +1179,12 @@ Acceptance criteria:
 Dependencies: M5-6.
 
 ### M6-2: Browser MCP server and tool set
+
+STATUS: **done.** `packages/tools/src/servers/browser.ts` — navigate, read, click, type, extract, screenshot — tested against a real Chromium on a real page, and refused for a role without the grant by the same allowlist mechanism as every other server.
+
+DECISION: **`type` reports the length, never the text.** A tool that echoed what it typed would put every password an agent enters into the trace, and the trace is exportable.
+
+DECISION: **`packages/tools` does not depend on Playwright.** The server is written against the slice of a page it uses, and the desktop app passes the real one in. Every other server in that package works without a browser, and a package that dragged a browser in for one of them would make the others impossible to test without it.
 
 Description: `packages/tools/src/servers/browser.ts` — the file the kernel's package layout named back at M2 but deliberately deferred to here. Implements navigate/read/click/type/extract/screenshot as MCP tools, following the exact same allowlist/Governor discipline as every other tool server (M2-2): no special-cased bypass for browser tools.
 
@@ -1185,6 +1197,14 @@ Dependencies: M6-1, M2-2.
 
 ### M6-3: Domain egress allowlist for browser navigation
 
+STATUS: **done**, including the redirect case.
+
+DECISION: **the check is request interception, not a check on `goto`.** Every request the page makes is intercepted; one to a host outside the allowlist is aborted, so it never leaves. A check on navigation alone tells you a disallowed host was contacted — this means it was not.
+
+DECISION: **each redirect hop is fetched with `maxRedirects: 0` and inspected.** The browser follows redirects itself, so a handler that simply continued would never see the second hop. The `Location` is read here, and a disallowed one is refused before anything goes to that host. This is the bypass the ticket named, and it is the reason the interception is not just a URL check.
+
+The automation carries its own allowlist (`egressAllowlist` on the brief, edited in the brief panel). Absent means empty, which means the browser reaches nothing at all.
+
 Description: Extend the egress-control discipline already built for `http.ts` in M2-4 to `browser.ts`: a `navigate` (or any browser action that would cause outbound navigation) to a domain outside `policy.egressAllowlist` is rejected before the browser context follows it.
 
 Acceptance criteria:
@@ -1196,6 +1216,12 @@ Dependencies: M6-2.
 
 ### M6-4: Screenshot-in-trace
 
+STATUS: **done.** Screenshots are written to `run-screenshots/<runId>/` and the trace carries the name; the trace viewer renders the picture inline when the event is opened, fetching it over its own channel.
+
+DECISION: **the trace holds the name, not the bytes.** A PNG is hundreds of kilobytes, the trace is read whole every time a run is opened, and a base64 image in the agent's own observation would be tens of thousands of tokens of noise in the next prompt.
+
+The redaction limitation the ticket asks to have documented is documented, in `docs/SECURITY.md`: text is protected, pictures are not scanned, and a credential visible on a captured page is in the PNG.
+
 Description: Browser tool screenshots are written into the run's trace (`traces.event_type` accommodates this as `tool_result` payload data, or a natural extension of the existing event types — no new event type needed, screenshots are just a `tool_result` whose payload includes an image reference/blob). The trace viewer (M4-7) renders them inline.
 
 Acceptance criteria:
@@ -1205,6 +1231,12 @@ Acceptance criteria:
 Dependencies: M6-2, M4-7.
 
 ### M6-5: M6 demo — Tier 1 browser control exit criteria
+
+STATUS: **done.** `apps/desktop/e2e/m6-demo.spec.ts`: a real site with a session cookie, a real Chromium in CHIMERA's own profile, an agent that signs in, navigates to a list that redirects to the login page without the cookie, reads the table, extracts the references and screenshots the page — then stops at an approval node before the step that would send. The trace shows the whole sequence with the screenshot inline, and does not contain the password.
+
+DECISION: **`browser.click` and `browser.type` are irreversible, always.** They are how a browser sends, buys, publishes and deletes, and unlike an HTTP method the arguments cannot tell you which — a selector is `#send` or `.btn-primary`, and neither says what the button does. So a browser operator needs an approval upstream or an explicit pre-authorisation, which is exactly what the demo does: the reading step is pre-authorised, the sending step is behind the gate.
+
+BUG, found here: **the desktop build had been failing since the browser was wired in.** Rollup could not resolve an optional native dependency inside `playwright-core`, so `dist/main.js` was never rebuilt and every E2E ran the last good bundle. Playwright is now external, like the other native packages. The build did exit non-zero the whole time; nothing was watching it.
 
 Description: Milestone demo ticket. Exit criterion per master plan: **"an agent logs into a test site, extracts a table, fills a form under supervision."**
 

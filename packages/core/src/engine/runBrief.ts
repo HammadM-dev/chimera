@@ -53,6 +53,15 @@ export interface RunBrief {
    * saved file, so whoever opens the automation next can see it.
    */
   preauthorised?: string[];
+  /**
+   * Hosts this automation's tools may reach — `policy.egressAllowlist`.
+   *
+   * Absent or empty means none, which is the correct default: a tool server
+   * nobody has granted egress to should not have any. Capability limits are the
+   * real defence, and an allowlist that defaulted to open would be a defence
+   * that defaulted to off.
+   */
+  egressAllowlist?: string[];
   /** Where each node sits on the canvas. Not part of the run. */
   layout?: { nodeId: string; x: number; y: number }[];
 }

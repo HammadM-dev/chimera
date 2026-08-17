@@ -84,6 +84,49 @@ function headline(event: TraceEvent): string {
   }
 }
 
+/**
+ * The screenshot a `tool_result` refers to, if it refers to one.
+ *
+ * The trace carries the name rather than the picture — a PNG is hundreds of
+ * kilobytes, and the trace is read whole every time a run is opened.
+ */
+function shotNameOf(event: TraceEvent): string {
+  if (event.eventType !== 'tool_result') return '';
+  const match = /Screenshot saved as (\d{3}\.png)/.exec(event.payloadJson);
+  return match?.[1] ?? '';
+}
+
+/** One screenshot, fetched when its event is opened rather than with the trace. */
+function Screenshot({ runId, name }: { runId: string; name: string }): JSX.Element {
+  const [dataUrl, setDataUrl] = useState('');
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ dataUrl: string }>('trace:screenshot', {
+          runId,
+          name,
+        });
+        setDataUrl(result.dataUrl);
+      } catch {
+        setDataUrl('');
+      }
+    })();
+  }, [runId, name]);
+
+  if (dataUrl === '') {
+    return <p className="canvas__prompt">That screenshot is no longer on disk.</p>;
+  }
+  return (
+    <img
+      className="event__shot"
+      data-testid="trace-screenshot"
+      src={dataUrl}
+      alt="Page as the agent saw it"
+    />
+  );
+}
+
 function money(value: number): string {
   return value === 0 ? '—' : `$${value.toFixed(4)}`;
 }
@@ -341,6 +384,9 @@ export function RunsView(): JSX.Element {
                       {event.costUsd === null || event.costUsd === 0 ? '' : money(event.costUsd)}
                     </span>
                   </button>
+                  {expanded === event.seq && shotNameOf(event) !== '' && selected !== null && (
+                    <Screenshot runId={selected} name={shotNameOf(event)} />
+                  )}
                   {expanded === event.seq && (
                     <pre className="event__payload" data-testid="trace-payload">
                       {(() => {

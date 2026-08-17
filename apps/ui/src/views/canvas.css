@@ -500,3 +500,9 @@
   border: var(--border-width) solid var(--border-hairline);
   border-radius: var(--radius-control);
 }
+
+/* The egress allowlist, in the brief rather than in a settings screen: it is
+ * part of what this automation is allowed to do, and it travels with the file. */
+.brief__sites {
+  width: 100%;
+}

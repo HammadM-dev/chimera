@@ -2,6 +2,8 @@ import { app, BrowserWindow } from 'electron';
 import { createWindow } from './windows.ts';
 import { registerIpcMainHandlers } from './ipc/mainDispatch.ts';
 import { openStore, closeStore } from './store/lifecycle.ts';
+import { setScreenshotRoot } from './runs/screenshots.ts';
+import { closeBrowsers, setBrowserRoot } from './runs/browser.ts';
 
 // Electron derives `userData` from the app name, and unpackaged it reads that
 // from package.json — which here is the scoped npm name `@chimera/desktop`,
@@ -19,6 +21,8 @@ void app.whenReady().then(() => {
   // and a renderer that came up first could invoke a channel whose handler
   // expects a migrated database.
   openStore(app.getPath('userData'));
+  setScreenshotRoot(app.getPath('userData'));
+  setBrowserRoot(app.getPath('userData'));
   registerIpcMainHandlers();
   createWindow();
 
@@ -40,4 +44,8 @@ app.on('window-all-closed', () => {
 // but it turns every quit into an unclean shutdown for no reason.
 app.on('will-quit', () => {
   closeStore();
+  // Browsers do not close themselves when the app that launched them exits.
+  // An orphaned headless Chromium is invisible in the dock and immortal in the
+  // process list, and the user has no idea it is ours.
+  void closeBrowsers();
 });

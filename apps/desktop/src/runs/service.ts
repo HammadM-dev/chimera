@@ -6,6 +6,7 @@ import { runsRepository, settingsRepository, tracesRepository } from '@chimera/s
 import { adapterFor } from '@chimera/providers';
 import {
   connectInProcess,
+  createBrowserServer,
   createFilesystemServer,
   createSandbox,
   createMemoryServer,
@@ -17,6 +18,8 @@ import { connectionFor } from '../providers/service.ts';
 import { emitRunEvent } from './subscriptions.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
+import { pageForWorkspace } from './browser.ts';
+import { screenshotSinkFor } from './screenshots.ts';
 
 // Starting a run: the main-process half. Assembles the real pieces — the role
 // registry, a per-run sandbox, the tool servers, an enforcing Governor — and
@@ -182,6 +185,23 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   await tools.registerServer(
     'memory',
     await connectInProcess(createMemoryServer(localBackend(runId, 'agent'))),
+  );
+  // The browser. Registered every run, launched on the first call that needs
+  // it: most automations never open one, and paying Chromium's startup for a
+  // run that reads files would be a second and 200MB nobody asked for.
+  //
+  // The allowlist is the automation's own. Absent means empty, which means the
+  // browser goes nowhere — capability limits are the real defence, and one that
+  // defaulted to open would be a defence that defaulted to off.
+  await tools.registerServer(
+    'browser',
+    await connectInProcess(
+      createBrowserServer({
+        page: pageForWorkspace(),
+        egressAllowlist: brief.egressAllowlist ?? [],
+        screenshotSink: screenshotSinkFor(runId),
+      }),
+    ),
   );
 
   // Enforcing, with each role's own declared budget as its cap. A run started

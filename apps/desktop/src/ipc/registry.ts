@@ -156,6 +156,8 @@ const briefSchema = z.object({
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),
+  // Hosts this automation's tools may reach. Empty means none.
+  egressAllowlist: z.array(z.string()).optional(),
   // Steps whose author has agreed they may act irreversibly without a gate.
   preauthorised: z.array(z.string()).optional(),
   // Where each node sits on the canvas. Not part of the run, but part of what
@@ -337,6 +339,17 @@ export const runFailures = defineInvokeChannel({
       }),
     ),
   }),
+});
+
+// A screenshot the browser tool took, for the trace viewer. Returned as a data
+// URL rather than a path: the renderer cannot read the disk, and it should not
+// be able to.
+export const traceScreenshot = defineInvokeChannel({
+  channel: 'trace:screenshot',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string(), name: z.string() }),
+  responseSchema: z.object({ dataUrl: z.string() }),
 });
 
 export const traceExport = defineInvokeChannel({
@@ -823,6 +836,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   runList,
   traceList,
   runFailures,
+  traceScreenshot,
   tiersGet,
   tiersSet,
   traceExport,

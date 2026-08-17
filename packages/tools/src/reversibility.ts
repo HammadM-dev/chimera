@@ -14,6 +14,12 @@ const ALWAYS: readonly string[] = [
   // A command has whatever effect it has. Sandboxed to a directory, not to a
   // set of consequences: `curl | sh` is one string away.
   'shell.exec',
+  // Clicking and typing are how a browser sends, buys, publishes and deletes.
+  // Unlike an HTTP method, the arguments cannot tell us which: a selector is
+  // `#send` or `.btn-primary`, and neither says what the button does. The
+  // honest classification is the one that assumes it sends.
+  'browser.click',
+  'browser.type',
 ];
 
 /** Calls whose effect stays inside the run's own sandbox, and stops there. */
@@ -26,6 +32,12 @@ const CONTAINED: readonly string[] = [
   // Memory section. A wrong memory is a row to remove, not an action to undo.
   'memory.remember',
   'memory.recall',
+  // Reading the web. A page load leaves the machine, which is why the egress
+  // allowlist governs it — but it changes nothing on the other end.
+  'browser.navigate',
+  'browser.read',
+  'browser.extract',
+  'browser.screenshot',
 ];
 
 /**

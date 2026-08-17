@@ -363,6 +363,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const [briefOpen, setBriefOpen] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachNote, setAttachNote] = useState('');
+  const [sites, setSites] = useState('');
   const appliedTemplate = useRef<AutomationTemplate | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
@@ -465,6 +466,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             attachments: Attachment[];
             steps: BriefStepWire[];
             edges: [string, string][];
+            egressAllowlist?: string[];
             layout?: { nodeId: string; x: number; y: number }[];
           };
         }>('workflow:get', { id: openId });
@@ -587,6 +589,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
           })),
         );
         setBrief(loaded.definition.instruction);
+        setSites((loaded.definition.egressAllowlist ?? []).join(', '));
         setAttachments(loaded.definition.attachments);
         setName(loaded.name);
         setSavedId(loaded.id);
@@ -846,12 +849,19 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       steps,
       edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
       preauthorised,
+      // Hosts, not URLs. Empty means the browser and the HTTP tool reach
+      // nothing, which is the right default for an automation nobody has
+      // granted the network to.
+      egressAllowlist: sites
+        .split(',')
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== ''),
       // Positions are not part of the run, but they are part of the thing the
       // user arranged. Losing the layout on reload would make saving feel like
       // it half-worked.
       layout: nodes.map((node) => ({ nodeId: node.id, x: node.position.x, y: node.position.y })),
     };
-  }, [name, brief, attachments, nodes, edges, preauthorised]);
+  }, [name, brief, attachments, nodes, edges, preauthorised, sites]);
 
   // The rules that decide whether this can run, asked of the one place that
   // implements them. Duplicating them in the renderer would mean two rule sets
@@ -1271,6 +1281,17 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               )}
 
               {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
+
+              <input
+                className="control brief__sites"
+                data-testid="brief-sites"
+                aria-label="Sites this automation may use"
+                placeholder="Sites it may use, comma separated — nothing else is reachable"
+                value={sites}
+                onChange={(event) => {
+                  setSites(event.target.value);
+                }}
+              />
 
               <div className="brief__actions">
                 <div className="brief__left">

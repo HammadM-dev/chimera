@@ -36,6 +36,24 @@ CHIMERA's threat model is unusual for a desktop app: it grants autonomous softwa
 
 - `tool_call` results returned by any internal MCP server (`packages/tools/src/servers/filesystem.ts`, `shell.ts`, `http.ts`, `browser.ts`) before they reach `promptAssembly.ts`.
 - Rendered web page content, DOM text, and screenshots surfaced by the browser tool (`packages/control/src/browser/`).
+
+### Known limitation: screenshots are not scanned (M6-4)
+
+Text written to the trace goes through the same secret discipline as everything
+else: nothing reads a secret out of the vault into a payload, and the `type`
+tool deliberately reports *how many characters* it typed rather than what they
+were, so a password entered into a login form is not in the trace.
+
+A screenshot is a picture, and picture-level redaction is not implemented. If a
+page displays a credential — an API key on a settings screen, a one-time code —
+and an agent screenshots it, that credential is in the PNG on disk under
+`run-screenshots/<runId>/` and in any trace export the user makes.
+
+What is done about it: screenshots are taken only when a workflow asks for one,
+they are stored beside the workspace rather than in the trace rows, and they are
+never sent anywhere. What is not done: no OCR, no masking, no scanning. A user
+exporting a trace that contains screenshots is exporting whatever was on those
+pages, and that is stated here rather than discovered later.
 - File contents read by the filesystem tool, including files the agent did not itself create in the run's workspace.
 - HTTP responses (API bodies, email content fetched via an integration, scraped pages) returned by the `http` tool.
 - Responses from any externally-registered MCP server reached through `packages/tools/src/mcpClient.ts` — this is the least-controlled surface, since CHIMERA does not author that server's code.

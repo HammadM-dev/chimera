@@ -18,7 +18,20 @@ export default defineConfig({
       // Native modules and Electron itself are resolved at runtime from
       // node_modules, never bundled — they ship compiled .node addons that
       // a JS bundle can't inline. See docs/ARCHITECTURE.md.
-      external: [...nodeBuiltins, 'electron', 'better-sqlite3', '@napi-rs/keyring'],
+      //
+      // Playwright is external for a related reason: it drives a browser
+      // binary it locates relative to its own package, and its bundle reaches
+      // for optional native dependencies (`kerberos`) that are not installed
+      // and are not meant to be. Bundling it fails the build outright, which
+      // is how this list gained the entry.
+      external: [
+        ...nodeBuiltins,
+        'electron',
+        'better-sqlite3',
+        '@napi-rs/keyring',
+        'playwright',
+        'playwright-core',
+      ],
     },
   },
 });
