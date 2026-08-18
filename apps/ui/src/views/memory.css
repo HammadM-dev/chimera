@@ -205,9 +205,12 @@
   font-style: italic;
 }
 
+/* An empty screen is an invitation, and an invitation set flush left under a
+ * toolbar reads as a failed load. */
 .memory__empty {
-  margin: 0;
-  max-width: 52ch;
+  margin: var(--space-6) auto;
+  text-align: center;
+  max-width: 48ch;
   font-size: var(--type-body);
   line-height: var(--line-height-prose);
   color: var(--text-muted);

@@ -196,6 +196,18 @@ Region borders are `--border-hairline` at `--border-width` (0.5px) between each 
 
 Popovers (command palette results, context menus, node-type picker) use `--surface-popover`, the lightest surface step, so they read as floating above the panel/canvas/raised stack beneath them without needing a shadow to establish elevation — the surface-lightness step *is* the elevation cue.
 
+### 4.2 Panel widths are a floor, not a constant
+
+DECISION: the fixed widths in the table above are the widths at a comfortable viewport, not at every viewport. The app opens at 1203×710, where a 240px rail plus a 232px palette plus a 320px inspector left the canvas — the region the product exists to show — 435px, less than a third of the window and less than half the content area. Below 1400px the palette and inspector step down (204px and 260px) and step back up above it. The rail is unchanged.
+
+The same rule governs the brief docked under the canvas: it lays out in two columns only when it has at least 660px to do it in, measured with a container query against its own box rather than the viewport, since the space it has is the window minus the two panels either side of it. Pinned to a fixed two-column grid at every width it collapsed its own first column to 75px and painted the side column over the Run button — caught by an E2E that could no longer press it, which is the only reason this rule is written down rather than assumed.
+
+### 4.3 The graph arranges itself until somebody arranges it
+
+DECISION: steps placed by clicking the palette land on a grid (264px column pitch, 108px row pitch), in the first slot nothing already occupies, and the whole graph re-lays itself left-to-right in run order — column = longest path from a step with no inputs — each time a line is drawn. That stops permanently the first time a step is dragged by hand: from then on the arrangement is the user's, and a "Tidy up" control is the only thing that will move it. Rationale: a builder whose default output is a diagonal cascade of overlapping cards teaches the user that the canvas is theirs to untangle; a builder that keeps itself readable until they take over teaches them what a well-formed automation looks like.
+
+Step status on canvas is a 6px dot in the card's corner (`--accent-primary` pulsing for running per §1.1, `--semantic-success`, `--semantic-warning`, `--semantic-danger`) **and** the status word in the card's last line, satisfying §7's colour-independence requirement without spending a second line on it.
+
 ### 4.1 Bordered rows vs. cards
 
 DECISION (implementable restatement of master plan §4.3's "dense lists use bordered rows not cards; cards are for bounded objects only" — the rule itself is given, the *criteria* for which is which is not, so this document supplies it): a **bordered row** is used for any item in an open-ended, scrollable, filterable collection — workflow list, run history, trace event list, connection list. Rows are full-width, separated by a single `--border-hairline` bottom border (not a border on every side, which would look like a stack of cards), `--radius-control` corners applied only to the *containing* list panel, not per row. A **card** is used for a bounded, small-N object presented for comparison or selection — template gallery tiles, provider-kind picker tiles, onboarding step cards. Cards get full borders on all sides (`--border-hairline`, `--radius-card`) and sit in a grid, not a scrolling list, because master plan §4.3 draws the line at *boundedness*: a list that could hold thousands of runs must scan cheaply (rows), a picker with a dozen options benefits from being visually parsed as discrete choices (cards).

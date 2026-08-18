@@ -238,7 +238,7 @@
 
 .agents {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(272px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: var(--space-3);
   align-content: start;
 }
@@ -247,10 +247,19 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  min-height: 176px;
   background: var(--surface-panel);
   border: var(--border-width) solid var(--border-hairline);
   border-radius: var(--radius-card);
   padding: var(--space-4);
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.agent-card:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-raised);
 }
 
 .agent-card__name {
@@ -260,11 +269,38 @@
   color: var(--text-primary);
 }
 
+/* Three lines of the prompt, then an ellipsis. The whole thing is one click
+ * away, and cards of wildly different heights make a roster look like a list
+ * of unrelated things. */
 .agent-card__prompt {
   margin: 0;
   font-size: var(--type-meta);
   line-height: var(--line-height-prose);
   color: var(--text-muted);
+}
+
+.agents .agent-card__prompt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.agent-card__name {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.agent-card__plus {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  font-size: var(--type-body);
+  color: var(--text-secondary);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-control);
 }
 
 .agent-card__tags {
@@ -276,11 +312,25 @@
 
 /* ---- providers ---------------------------------------------------------- */
 
+/* One column, the width of a comfortable read.
+ *
+ * It was two: a list of connections on the left and a 320px rail of six
+ * stacked panels on the right. With one connection the left half was empty
+ * and the right half was a column of squeezed forms — the screen looked
+ * broken in both directions at once. */
 .providers {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
-  gap: var(--space-5);
-  align-items: start;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+}
+
+.providers > div {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
 .panel {
@@ -395,13 +445,37 @@
   cursor: pointer;
 }
 
+/* The editor is a form, and a form is prose: one column, centred, no wider
+ * than it is comfortable to read. Pinned to the left of a wide window it read
+ * as an unfinished panel rather than a page. */
 .agent-editor {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
-  padding: var(--space-4) var(--space-6);
-  max-width: 720px;
-  overflow-y: auto;
+  width: 100%;
+  max-width: var(--measure);
+  margin: 0 auto;
+  padding: var(--space-5) var(--space-4) var(--space-6);
+}
+
+.agent-editor__head {
+  margin-bottom: var(--space-2);
+}
+
+.agent-editor__title {
+  margin: 0 0 var(--space-1);
+  font-size: var(--type-heading-max);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-primary);
+}
+
+.agent-editor__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  padding-top: var(--space-4);
+  border-top: var(--border-width) solid var(--border-hairline);
 }
 
 .agent-editor__tools {
@@ -409,7 +483,6 @@
   flex-direction: column;
   gap: var(--space-2);
   max-height: 320px;
-  overflow-y: auto;
   padding: var(--space-2);
   border: var(--border-width) solid var(--border-hairline);
   border-radius: var(--radius-control);

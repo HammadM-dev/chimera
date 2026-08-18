@@ -68,11 +68,11 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
           <h3 className="panel__title">Add a provider</h3>
           <ConnectionForm kinds={kinds} onCreated={onChanged} />
         </div>
-        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+        <div className="panel">
           <h3 className="panel__title">OmniRoute</h3>
           <OmniRouteSetup onImported={onChanged} />
         </div>
-        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+        <div className="panel">
           <h3 className="panel__title">Plugins</h3>
           <p className="agent-card__prompt">
             Tool servers your agents can be granted — email, calendars, issue trackers, anything
@@ -80,18 +80,18 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
           </p>
           <PluginsPanel refreshToken={refreshToken} />
         </div>
-        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+        <div className="panel">
           <h3 className="panel__title">Reusing answers</h3>
           <p className="agent-card__prompt">
             An answer already paid for can be given again instead of asked for again.
           </p>
           <AnswerCache refreshToken={refreshToken} />
         </div>
-        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+        <div className="panel">
           <h3 className="panel__title">Sending runs elsewhere</h3>
           <TelemetryPanel refreshToken={refreshToken} />
         </div>
-        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+        <div className="panel">
           <h3 className="panel__title">Model tiers</h3>
           <p className="agent-card__prompt">
             An automation can ask for a tier instead of naming a model, so the same automation runs

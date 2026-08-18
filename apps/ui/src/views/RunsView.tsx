@@ -86,7 +86,27 @@ function headline(event: TraceEvent): string {
     return typeof value === 'string' && value !== '' ? value : null;
   };
 
+  const number = (key: string): number | null => {
+    const value = payload[key];
+    return typeof value === 'number' ? value : null;
+  };
+
   switch (event.eventType) {
+    // A prompt and a checkpoint are the two commonest rows in any trace, and
+    // both used to fall through to raw JSON — so the record of what a run did
+    // read as debug output rather than as an account of the work.
+    case 'prompt': {
+      const parts = [say('purpose'), say('model')].filter((part) => part !== null);
+      return parts.length === 0 ? 'Prompt' : parts.join(' · ');
+    }
+    case 'checkpoint': {
+      const parts = [say('status') ?? 'checkpoint'];
+      const iteration = number('iteration');
+      const steps = number('steps');
+      if (iteration !== null) parts.push(`iteration ${String(iteration)}`);
+      if (steps !== null) parts.push(`${String(steps)} step${steps === 1 ? '' : 's'}`);
+      return parts.join(' · ');
+    }
     case 'request':
       return say('model') ?? 'Model call';
     case 'response':

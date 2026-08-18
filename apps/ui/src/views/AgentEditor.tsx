@@ -150,7 +150,16 @@ export function AgentEditor({ draft, onSaved, onCancel }: Props): JSX.Element {
   }
 
   return (
-    <section className="agent-editor" data-testid="agent-editor">
+    <section className="agent-editor scroll" data-testid="agent-editor">
+      <header className="agent-editor__head">
+        <h2 className="agent-editor__title">
+          {agent.id === '' ? 'Build an agent' : `Edit ${agent.name}`}
+        </h2>
+        <p className="canvas__hint">
+          An agent is a job description: what it does, what it may touch, and when it has to stop.
+        </p>
+      </header>
+
       <div className="field">
         <label className="field__label" htmlFor="agent-name">
           Name
@@ -189,7 +198,7 @@ export function AgentEditor({ draft, onSaved, onCancel }: Props): JSX.Element {
       </div>
 
       <p className="canvas__section">What it may use</p>
-      <div className="agent-editor__tools" data-testid="agent-tools">
+      <div className="agent-editor__tools scroll" data-testid="agent-tools">
         {[...byServer.entries()].map(([serverId, group]) => (
           <div key={serverId}>
             <p className="agent-editor__server">{serverId}</p>
@@ -293,7 +302,7 @@ export function AgentEditor({ draft, onSaved, onCancel }: Props): JSX.Element {
         </span>
       </label>
 
-      <div className="brief__left">
+      <div className="agent-editor__actions">
         <button
           type="button"
           className="button button--primary"

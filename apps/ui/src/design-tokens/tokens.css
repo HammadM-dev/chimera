@@ -61,6 +61,21 @@ body,
   height: 100%;
 }
 
+/* The one line that stops the browser painting its own light-theme scrollbars,
+ * checkboxes and select menus into a dark application. Everything native
+ * follows the app instead of contradicting it. */
+html {
+  color-scheme: dark;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--accent-primary);
+  width: 13px;
+  height: 13px;
+  margin: 1px 0 0;
+}
+
 body {
   margin: 0;
   background: var(--surface-canvas);

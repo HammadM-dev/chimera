@@ -5,6 +5,8 @@ import {
   Controls,
   Handle,
   Position,
+  ConnectionLineType,
+  MarkerType,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -236,7 +238,12 @@ function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
           only express a line, and the shapes real automations take are joins
           and splits. */}
       <Handle type="target" position={Position.Left} className="node__port node__port--in" />
-      <p className="node__name">{role?.name ?? 'Agent'}</p>
+      <div className="node__head">
+        <p className="node__name">{role?.name ?? 'Agent'}</p>
+        {typeof status === 'string' && status !== '' && (
+          <span className={`node__status node__status--${status}`} title={status} />
+        )}
+      </div>
       <p
         className={`node__model ${binding === null && data.tier === undefined ? 'node__model--unset' : ''}`}
       >
@@ -246,13 +253,10 @@ function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
             ? 'No model chosen'
             : binding.model}
       </p>
-      {typeof status === 'string' && status !== '' && (
-        <p className={`node__status node__status--${status}`}>{status}</p>
-      )}
       <p className="node__tools">
-        {role === null || role.toolAllowlist.length === 0
-          ? 'No tools'
-          : `${String(role.toolAllowlist.length)} tools`}
+        {typeof status === 'string' && status !== ''
+          ? status
+          : countOf(role?.toolAllowlist.length ?? 0, 'tool', 'No tools')}
       </p>
       <Handle type="source" position={Position.Right} className="node__port node__port--out" />
     </div>
@@ -275,11 +279,14 @@ function ShapingNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
       data-testid={`node-${kind}`}
     >
       <Handle type="target" position={Position.Left} className="node__port node__port--in" />
-      <p className="node__name">{KIND_LABEL[kind]}</p>
+      <div className="node__head">
+        <p className="node__name">{KIND_LABEL[kind]}</p>
+        {typeof status === 'string' && status !== '' && (
+          <span className={`node__status node__status--${status}`} title={status} />
+        )}
+      </div>
       <p className="node__model">{summarise(data)}</p>
-      {typeof status === 'string' && status !== '' && (
-        <p className={`node__status node__status--${status}`}>{status}</p>
-      )}
+      {typeof status === 'string' && status !== '' && <p className="node__tools">{status}</p>}
       {kind === 'condition' ? (
         <>
           <span className="node__portLabel node__portLabel--true">yes</span>
@@ -319,6 +326,98 @@ const NODE_TYPES = {
 };
 
 let nodeSeq = 0;
+
+/* ---- where a step goes --------------------------------------------------
+ *
+ * Steps used to be dropped along a diagonal — each one 24px right and 72px
+ * down from the last — which overlapped as soon as there were three, and
+ * carried on drifting off the canvas because the counter never reset. A graph
+ * you have to untangle before you can read it is a graph nobody trusts.
+ *
+ * Both halves below work on one grid: columns are the order things run in,
+ * rows are the things that run at the same time. */
+const COLUMN_PITCH = 264;
+const ROW_PITCH = 108;
+const ORIGIN_X = 48;
+const ORIGIN_Y = 40;
+
+/** The first grid slot no existing step is sitting on. */
+function freeSlot(placed: { position: { x: number; y: number } }[]): { x: number; y: number } {
+  for (let slot = 0; slot < 240; slot += 1) {
+    const x = ORIGIN_X + Math.floor(slot / 4) * COLUMN_PITCH;
+    const y = ORIGIN_Y + (slot % 4) * ROW_PITCH;
+    const taken = placed.some(
+      (node) =>
+        Math.abs(node.position.x - x) < COLUMN_PITCH - 40 &&
+        Math.abs(node.position.y - y) < ROW_PITCH - 24,
+    );
+    if (!taken) return { x, y };
+  }
+  return { x: ORIGIN_X, y: ORIGIN_Y };
+}
+
+/**
+ * Every step laid out left to right in the order it can run.
+ *
+ * A step's column is the longest path to it from a step with no inputs, so
+ * anything that has to wait sits to the right of what it waits for, and
+ * anything that can run at the same time shares a column. Columns are centred
+ * against each other so a fan-out reads as a fan rather than a staircase.
+ *
+ * Cycles are possible — a loop node can feed a step that feeds it back — so
+ * the walk remembers what it is already inside and stops rather than
+ * recursing forever.
+ */
+function tidyPositions(
+  steps: { id: string; position: { x: number; y: number } }[],
+  links: { source: string; target: string }[],
+): Map<string, { x: number; y: number }> {
+  const inputs = new Map<string, string[]>();
+  for (const step of steps) inputs.set(step.id, []);
+  for (const link of links) {
+    if (!inputs.has(link.target) || !inputs.has(link.source)) continue;
+    inputs.get(link.target)?.push(link.source);
+  }
+
+  const column = new Map<string, number>();
+  const depthOf = (id: string, visiting: Set<string>): number => {
+    const settled = column.get(id);
+    if (settled !== undefined) return settled;
+    if (visiting.has(id)) return 0;
+    visiting.add(id);
+    const feeders = inputs.get(id) ?? [];
+    const depth =
+      feeders.length === 0 ? 0 : Math.max(...feeders.map((from) => depthOf(from, visiting) + 1));
+    visiting.delete(id);
+    column.set(id, depth);
+    return depth;
+  };
+
+  const columns = new Map<number, string[]>();
+  for (const step of [...steps].sort((a, b) => a.position.y - b.position.y)) {
+    const depth = depthOf(step.id, new Set());
+    columns.set(depth, [...(columns.get(depth) ?? []), step.id]);
+  }
+
+  const tallest = Math.max(1, ...[...columns.values()].map((members) => members.length));
+  const layout = new Map<string, { x: number; y: number }>();
+  for (const [depth, members] of columns) {
+    const offset = ((tallest - members.length) * ROW_PITCH) / 2;
+    members.forEach((id, row) => {
+      layout.set(id, {
+        x: ORIGIN_X + depth * COLUMN_PITCH,
+        y: ORIGIN_Y + offset + row * ROW_PITCH,
+      });
+    });
+  }
+  return layout;
+}
+
+/** "1 tool", not "1 tools". */
+function countOf(count: number, noun: string, none: string): string {
+  if (count === 0) return none;
+  return `${String(count)} ${noun}${count === 1 ? '' : 's'}`;
+}
 
 export interface Attachment {
   path: string;
@@ -431,7 +530,7 @@ function CanvasInner({
   const { screenToFlowPosition, fitView } = useReactFlow();
 
   const addStep = useCallback(
-    (kind: StepKind, role: AgentRole | null, position: { x: number; y: number }) => {
+    (kind: StepKind, role: AgentRole | null, dropped: { x: number; y: number } | null) => {
       nodeSeq += 1;
       const id = `${role?.id ?? kind}-${String(nodeSeq)}`;
       setNodes((current) => [
@@ -439,7 +538,9 @@ function CanvasInner({
         {
           id,
           type: kind,
-          position,
+          // Dropped where the pointer let go; clicked, into the first free
+          // slot on the grid, worked out against what is already there.
+          position: dropped ?? freeSlot(current),
           data: {
             kind,
             role,
@@ -479,7 +580,7 @@ function CanvasInner({
       built.push({
         id: `${role.id}-${String(nodeSeq)}`,
         type: 'agent',
-        position: { x: 120, y: 60 + index * 132 },
+        position: { x: ORIGIN_X + index * COLUMN_PITCH, y: ORIGIN_Y },
         data: {
           kind: 'agent',
           role,
@@ -611,7 +712,10 @@ function CanvasInner({
           restored.push({
             id: step.nodeId,
             type: kind,
-            position: { x: at?.x ?? 120, y: at?.y ?? 60 + index * 132 },
+            position: {
+              x: at?.x ?? ORIGIN_X + index * COLUMN_PITCH,
+              y: at?.y ?? ORIGIN_Y,
+            },
             data: {
               kind,
               role,
@@ -1157,11 +1261,42 @@ function CanvasInner({
     [roles, addStep, screenToFlowPosition],
   );
 
+  /* True once a step has been dragged. Up to that point the canvas keeps
+   * itself in order as lines are drawn; after it, the arrangement is the
+   * user's and moving their nodes out from under them would be rude. */
+  const arrangedByHand = useRef(false);
+
   const onConnect = useCallback(
     (connection: Connection) => {
-      setEdges((current) => addEdge({ ...connection, animated: true }, current));
+      setEdges((current) =>
+        addEdge(
+          {
+            ...connection,
+            type: 'smoothstep',
+            markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+          },
+          current,
+        ),
+      );
+      if (arrangedByHand.current) return;
+      setNodes((current) => {
+        const layout = tidyPositions(current, [
+          ...edges,
+          { source: connection.source, target: connection.target },
+        ]);
+        return current.map((node) => ({
+          ...node,
+          position: layout.get(node.id) ?? node.position,
+        }));
+      });
+      // No animation on this one. The nodes have just moved under a pointer
+      // that may be about to draw the next line, and a viewport still sliding
+      // when the next drag starts drops it in the wrong place.
+      requestAnimationFrame(() => {
+        void fitView({ padding: 0.24, maxZoom: 1 });
+      });
     },
-    [setEdges],
+    [setEdges, setNodes, edges, fitView],
   );
 
   const selected = nodes.find((node) => node.id === selectedId);
@@ -1257,15 +1392,12 @@ function CanvasInner({
                   // gesture and the only one some people can make comfortably;
                   // a canvas reachable by exactly one input is a canvas some
                   // users cannot use at all.
-                  addStep('agent', role, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
+                  addStep('agent', role, null);
                 }}
               >
                 <span className="palette__name">{role.name}</span>
                 <span className="palette__meta">
-                  {role.tier} ·{' '}
-                  {role.toolAllowlist.length === 0
-                    ? 'no tools'
-                    : `${String(role.toolAllowlist.length)} tools`}
+                  {role.tier} · {countOf(role.toolAllowlist.length, 'tool', 'no tools')}
                 </span>
               </button>
             ))}
@@ -1285,7 +1417,7 @@ function CanvasInner({
               event.dataTransfer.effectAllowed = 'move';
             }}
             onClick={() => {
-              addStep(kind, null, { x: 80 + nodeSeq * 24, y: 60 + nodeSeq * 72 });
+              addStep(kind, null, null);
             }}
           >
             <span className="palette__name">{KIND_LABEL[kind]}</span>
@@ -1319,15 +1451,52 @@ function CanvasInner({
             onNodeClick={(_event, node) => {
               setSelectedId(node.id);
             }}
+            onNodeDragStop={() => {
+              arrangedByHand.current = true;
+            }}
             onPaneClick={() => {
               setSelectedId(null);
             }}
             fitView
+            fitViewOptions={{ padding: 0.24, maxZoom: 1 }}
+            minZoom={0.35}
+            maxZoom={1.6}
+            /* A line with no arrowhead says two steps are related; it does not
+               say which way the work flows, which is the only thing the line
+               is there for. */
+            defaultEdgeOptions={{
+              type: 'smoothstep',
+              markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
+            }}
+            connectionLineType={ConnectionLineType.SmoothStep}
             proOptions={{ hideAttribution: false }}
           >
-            <Background gap={20} size={1} />
-            <Controls showInteractive={false} />
+            <Background gap={22} size={1} />
+            <Controls showInteractive={false} position="bottom-left" />
           </ReactFlow>
+
+          {nodes.length > 1 && (
+            <button
+              type="button"
+              className="canvas__tidy"
+              data-testid="canvas-tidy"
+              title="Lay the steps out in the order they run"
+              onClick={() => {
+                const layout = tidyPositions(nodes, edges);
+                setNodes((current) =>
+                  current.map((node) => ({
+                    ...node,
+                    position: layout.get(node.id) ?? node.position,
+                  })),
+                );
+                requestAnimationFrame(() => {
+                  void fitView({ padding: 0.24, maxZoom: 1, duration: 220 });
+                });
+              }}
+            >
+              Tidy up
+            </button>
+          )}
 
           {nodes.length === 0 && (
             <p className="canvas__empty" data-testid="canvas-empty">
@@ -1483,311 +1652,318 @@ function CanvasInner({
 
           {briefOpen && (
             <div className="brief__body">
-              <textarea
-                className="brief__input"
-                data-testid="brief-input"
-                rows={3}
-                value={brief}
-                placeholder="What should this automation do? This goes to the first agent."
-                onChange={(event) => {
-                  setBrief(event.target.value);
-                }}
-              />
+              {/* Two columns, because the brief was taller than the canvas it
+                  belongs to: what the automation is asked to do on the left,
+                  what governs it on the right. */}
+              <div className="brief__col">
+                <textarea
+                  className="brief__input"
+                  data-testid="brief-input"
+                  rows={3}
+                  value={brief}
+                  placeholder="What should this automation do? This goes to the first agent."
+                  onChange={(event) => {
+                    setBrief(event.target.value);
+                  }}
+                />
 
-              {attachments.length > 0 && (
-                <div className="brief__files" data-testid="brief-files">
-                  {attachments.map((file) => (
-                    <span
-                      key={file.path}
-                      className={`brief__file ${file.content === '' ? 'brief__file--unread' : ''}`}
-                      title={file.note === '' ? file.path : `${file.path} — ${file.note}`}
+                {attachments.length > 0 && (
+                  <div className="brief__files" data-testid="brief-files">
+                    {attachments.map((file) => (
+                      <span
+                        key={file.path}
+                        className={`brief__file ${file.content === '' ? 'brief__file--unread' : ''}`}
+                        title={file.note === '' ? file.path : `${file.path} — ${file.note}`}
+                      >
+                        {file.name}
+                        {file.note !== '' && ` (${file.note})`}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
+
+                <input
+                  className="control brief__sites"
+                  data-testid="brief-sites"
+                  aria-label="Sites this automation may use"
+                  placeholder="Sites it may use, comma separated — nothing else is reachable"
+                  value={sites}
+                  onChange={(event) => {
+                    setSites(event.target.value);
+                  }}
+                />
+
+                <div className="brief__actions">
+                  <div className="brief__left">
+                    <button
+                      type="button"
+                      className="button"
+                      data-testid="brief-attach-files"
+                      onClick={() => void attach('files')}
                     >
-                      {file.name}
-                      {file.note !== '' && ` (${file.note})`}
-                    </span>
-                  ))}
+                      Attach files
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      data-testid="brief-attach-folder"
+                      onClick={() => void attach('folder')}
+                    >
+                      Attach folder
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    className="button button--primary"
+                    data-testid="brief-run"
+                    disabled={blocked !== '' || runId !== null}
+                    title={blocked}
+                    onClick={() => void start()}
+                  >
+                    {runId === null ? 'Run' : 'Running'}
+                  </button>
                 </div>
-              )}
-
-              {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
-
-              <section className="brief__triggers" data-testid="brief-checks">
-                <p className="canvas__section">Checks</p>
-                {evals.length === 0 && (
-                  <p className="brief__note">
-                    Nothing is checked. A check runs this automation against a stand-in model and
-                    says whether the answer still holds.
+                {blocked !== '' && (
+                  <p className="brief__note" data-testid="brief-blocked">
+                    {blocked}
                   </p>
                 )}
-                {evals.map((evalCase, index) => {
-                  const outcome = evalOutcomes.find((one) => one.caseId === evalCase.id);
-                  return (
-                    <div
-                      key={evalCase.id}
-                      className="brief__check"
-                      data-testid={`check-${String(index)}`}
-                    >
-                      <input
-                        className="control"
-                        data-testid={`check-name-${String(index)}`}
-                        aria-label="What this check is called"
-                        placeholder="What this check is called"
-                        value={evalCase.name}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setEvals((current) =>
-                            current.map((one, at) =>
-                              at === index ? { ...one, name: value } : one,
-                            ),
-                          );
-                        }}
-                      />
-                      <input
-                        className="control"
-                        data-testid={`check-input-${String(index)}`}
-                        aria-label="What the automation is told"
-                        placeholder="What the automation is told"
-                        value={evalCase.input}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setEvals((current) =>
-                            current.map((one, at) =>
-                              at === index ? { ...one, input: value } : one,
-                            ),
-                          );
-                        }}
-                      />
-                      <input
-                        className="control"
-                        data-testid={`check-answer-${String(index)}`}
-                        aria-label="What the stand-in model answers"
-                        placeholder="What the stand-in model answers"
-                        value={evalCase.scriptedAnswer}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setEvals((current) =>
-                            current.map((one, at) =>
-                              at === index ? { ...one, scriptedAnswer: value } : one,
-                            ),
-                          );
-                        }}
-                      />
-                      <input
-                        className="control"
-                        data-testid={`check-contains-${String(index)}`}
-                        aria-label="The answer has to contain"
-                        placeholder="The answer has to contain…"
-                        value={evalCase.assertions[0]?.value ?? ''}
-                        onChange={(event) => {
-                          const value = event.target.value;
-                          setEvals((current) =>
-                            current.map((one, at) =>
-                              at === index
-                                ? { ...one, assertions: [{ path: '', op: 'contains', value }] }
-                                : one,
-                            ),
-                          );
-                        }}
-                      />
-                      {outcome && (
-                        <span
-                          className={`brief__checkResult brief__checkResult--${outcome.passed ? 'pass' : 'fail'}`}
-                          data-testid={`check-result-${String(index)}`}
+                {runNote !== '' && (
+                  <p className="brief__note" data-testid="run-note">
+                    {runNote}
+                  </p>
+                )}
+                {runOutput !== '' && !resultOpen && (
+                  <button
+                    type="button"
+                    className="button"
+                    data-testid="brief-show-result"
+                    onClick={() => {
+                      setResultOpen(true);
+                    }}
+                  >
+                    Show what it produced
+                  </button>
+                )}
+              </div>
+
+              <div className="brief__col brief__col--side scroll">
+                <section className="brief__triggers" data-testid="brief-checks">
+                  <p className="canvas__section">Checks</p>
+                  {evals.length === 0 && (
+                    <p className="brief__note">
+                      Nothing is checked. A check runs this automation against a stand-in model and
+                      says whether the answer still holds.
+                    </p>
+                  )}
+                  {evals.map((evalCase, index) => {
+                    const outcome = evalOutcomes.find((one) => one.caseId === evalCase.id);
+                    return (
+                      <div
+                        key={evalCase.id}
+                        className="brief__check"
+                        data-testid={`check-${String(index)}`}
+                      >
+                        <input
+                          className="control"
+                          data-testid={`check-name-${String(index)}`}
+                          aria-label="What this check is called"
+                          placeholder="What this check is called"
+                          value={evalCase.name}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setEvals((current) =>
+                              current.map((one, at) =>
+                                at === index ? { ...one, name: value } : one,
+                              ),
+                            );
+                          }}
+                        />
+                        <input
+                          className="control"
+                          data-testid={`check-input-${String(index)}`}
+                          aria-label="What the automation is told"
+                          placeholder="What the automation is told"
+                          value={evalCase.input}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setEvals((current) =>
+                              current.map((one, at) =>
+                                at === index ? { ...one, input: value } : one,
+                              ),
+                            );
+                          }}
+                        />
+                        <input
+                          className="control"
+                          data-testid={`check-answer-${String(index)}`}
+                          aria-label="What the stand-in model answers"
+                          placeholder="What the stand-in model answers"
+                          value={evalCase.scriptedAnswer}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setEvals((current) =>
+                              current.map((one, at) =>
+                                at === index ? { ...one, scriptedAnswer: value } : one,
+                              ),
+                            );
+                          }}
+                        />
+                        <input
+                          className="control"
+                          data-testid={`check-contains-${String(index)}`}
+                          aria-label="The answer has to contain"
+                          placeholder="The answer has to contain…"
+                          value={evalCase.assertions[0]?.value ?? ''}
+                          onChange={(event) => {
+                            const value = event.target.value;
+                            setEvals((current) =>
+                              current.map((one, at) =>
+                                at === index
+                                  ? { ...one, assertions: [{ path: '', op: 'contains', value }] }
+                                  : one,
+                              ),
+                            );
+                          }}
+                        />
+                        {outcome && (
+                          <span
+                            className={`brief__checkResult brief__checkResult--${outcome.passed ? 'pass' : 'fail'}`}
+                            data-testid={`check-result-${String(index)}`}
+                          >
+                            {outcome.passed
+                              ? 'passed'
+                              : outcome.runProblem !== ''
+                                ? `failed — ${outcome.runProblem}`
+                                : `failed — got "${outcome.results[0]?.actual ?? ''}"`}
+                          </span>
+                        )}
+                        <button
+                          type="button"
+                          className="button"
+                          data-testid={`check-remove-${String(index)}`}
+                          onClick={() => {
+                            setEvals((current) => current.filter((_, at) => at !== index));
+                          }}
                         >
-                          {outcome.passed
-                            ? 'passed'
-                            : outcome.runProblem !== ''
-                              ? `failed — ${outcome.runProblem}`
-                              : `failed — got "${outcome.results[0]?.actual ?? ''}"`}
+                          Remove
+                        </button>
+                      </div>
+                    );
+                  })}
+
+                  <div className="brief__left">
+                    <button
+                      type="button"
+                      className="button"
+                      data-testid="check-add"
+                      onClick={() => {
+                        setEvals((current) => [
+                          ...current,
+                          {
+                            id: `check-${String(Date.now())}`,
+                            name: 'It answers',
+                            input: brief,
+                            scriptedAnswer: '',
+                            assertions: [{ path: '', op: 'contains', value: '' }],
+                          },
+                        ]);
+                      }}
+                    >
+                      Add a check
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      data-testid="check-run"
+                      disabled={checking || evals.length === 0}
+                      onClick={() => void runChecks()}
+                    >
+                      {checking ? 'Checking' : 'Run checks'}
+                    </button>
+                    <button
+                      type="button"
+                      className="button"
+                      data-testid="check-tag"
+                      onClick={() => void tagProduction()}
+                    >
+                      Mark as trusted
+                    </button>
+                  </div>
+                </section>
+
+                <section className="brief__triggers" data-testid="brief-triggers">
+                  <p className="canvas__section">Runs when</p>
+                  {triggers.length === 0 && <p className="brief__note">Only when you press Run.</p>}
+                  {triggers.map((trigger, index) => (
+                    <div key={`${trigger.kind}-${String(index)}`} className="brief__trigger">
+                      <span className="brief__triggerKind">{TRIGGER_LABEL[trigger.kind]}</span>
+                      {trigger.kind === 'schedule' && (
+                        <input
+                          className="control"
+                          data-testid={`trigger-cron-${String(index)}`}
+                          aria-label="Schedule"
+                          value={trigger.cron}
+                          onChange={(event) => {
+                            const cron = event.target.value;
+                            setTriggers((current) =>
+                              current.map((one, at) =>
+                                at === index && one.kind === 'schedule' ? { ...one, cron } : one,
+                              ),
+                            );
+                          }}
+                        />
+                      )}
+                      {(trigger.kind === 'fileWatch' || trigger.kind === 'folderDrop') && (
+                        <span className="brief__triggerDetail">{trigger.path}</span>
+                      )}
+                      {trigger.kind === 'webhook' && (
+                        <span
+                          className="brief__triggerDetail"
+                          data-testid={`trigger-url-${String(index)}`}
+                        >
+                          {webhookPort === 0
+                            ? 'Save to get the URL'
+                            : `http://127.0.0.1:${String(webhookPort)}/hook/${trigger.token}`}
                         </span>
                       )}
                       <button
                         type="button"
                         className="button"
-                        data-testid={`check-remove-${String(index)}`}
+                        data-testid={`trigger-remove-${String(index)}`}
                         onClick={() => {
-                          setEvals((current) => current.filter((_, at) => at !== index));
+                          setTriggers((current) => current.filter((_, at) => at !== index));
                         }}
                       >
                         Remove
                       </button>
                     </div>
-                  );
-                })}
+                  ))}
 
-                <div className="brief__left">
-                  <button
-                    type="button"
-                    className="button"
-                    data-testid="check-add"
-                    onClick={() => {
-                      setEvals((current) => [
-                        ...current,
-                        {
-                          id: `check-${String(Date.now())}`,
-                          name: 'It answers',
-                          input: brief,
-                          scriptedAnswer: '',
-                          assertions: [{ path: '', op: 'contains', value: '' }],
-                        },
-                      ]);
+                  <select
+                    className="control"
+                    data-testid="trigger-add"
+                    aria-label="Add a trigger"
+                    value=""
+                    onChange={(event) => {
+                      void addTrigger(event.target.value as TriggerWire['kind']);
+                      event.target.value = '';
                     }}
                   >
-                    Add a check
-                  </button>
-                  <button
-                    type="button"
-                    className="button"
-                    data-testid="check-run"
-                    disabled={checking || evals.length === 0}
-                    onClick={() => void runChecks()}
-                  >
-                    {checking ? 'Checking' : 'Run checks'}
-                  </button>
-                  <button
-                    type="button"
-                    className="button"
-                    data-testid="check-tag"
-                    onClick={() => void tagProduction()}
-                  >
-                    Mark as trusted
-                  </button>
-                </div>
-              </section>
-
-              <section className="brief__triggers" data-testid="brief-triggers">
-                <p className="canvas__section">Runs when</p>
-                {triggers.length === 0 && <p className="brief__note">Only when you press Run.</p>}
-                {triggers.map((trigger, index) => (
-                  <div key={`${trigger.kind}-${String(index)}`} className="brief__trigger">
-                    <span className="brief__triggerKind">{TRIGGER_LABEL[trigger.kind]}</span>
-                    {trigger.kind === 'schedule' && (
-                      <input
-                        className="control"
-                        data-testid={`trigger-cron-${String(index)}`}
-                        aria-label="Schedule"
-                        value={trigger.cron}
-                        onChange={(event) => {
-                          const cron = event.target.value;
-                          setTriggers((current) =>
-                            current.map((one, at) =>
-                              at === index && one.kind === 'schedule' ? { ...one, cron } : one,
-                            ),
-                          );
-                        }}
-                      />
-                    )}
-                    {(trigger.kind === 'fileWatch' || trigger.kind === 'folderDrop') && (
-                      <span className="brief__triggerDetail">{trigger.path}</span>
-                    )}
-                    {trigger.kind === 'webhook' && (
-                      <span
-                        className="brief__triggerDetail"
-                        data-testid={`trigger-url-${String(index)}`}
-                      >
-                        {webhookPort === 0
-                          ? 'Save to get the URL'
-                          : `http://127.0.0.1:${String(webhookPort)}/hook/${trigger.token}`}
-                      </span>
-                    )}
-                    <button
-                      type="button"
-                      className="button"
-                      data-testid={`trigger-remove-${String(index)}`}
-                      onClick={() => {
-                        setTriggers((current) => current.filter((_, at) => at !== index));
-                      }}
-                    >
-                      Remove
-                    </button>
-                  </div>
-                ))}
-
-                <select
-                  className="control"
-                  data-testid="trigger-add"
-                  aria-label="Add a trigger"
-                  value=""
-                  onChange={(event) => {
-                    void addTrigger(event.target.value as TriggerWire['kind']);
-                    event.target.value = '';
-                  }}
-                >
-                  <option value="">Add a trigger</option>
-                  <option value="schedule">On a schedule</option>
-                  <option value="folderDrop">When a file lands in a folder</option>
-                  <option value="fileWatch">When anything in a folder changes</option>
-                  <option value="webhook">When something posts to a URL</option>
-                </select>
-                <p className="brief__note">
-                  A trigger is armed when the automation is saved, and stays armed while CHIMERA is
-                  open.
-                </p>
-              </section>
-
-              <input
-                className="control brief__sites"
-                data-testid="brief-sites"
-                aria-label="Sites this automation may use"
-                placeholder="Sites it may use, comma separated — nothing else is reachable"
-                value={sites}
-                onChange={(event) => {
-                  setSites(event.target.value);
-                }}
-              />
-
-              <div className="brief__actions">
-                <div className="brief__left">
-                  <button
-                    type="button"
-                    className="button"
-                    data-testid="brief-attach-files"
-                    onClick={() => void attach('files')}
-                  >
-                    Attach files
-                  </button>
-                  <button
-                    type="button"
-                    className="button"
-                    data-testid="brief-attach-folder"
-                    onClick={() => void attach('folder')}
-                  >
-                    Attach folder
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  className="button button--primary"
-                  data-testid="brief-run"
-                  disabled={blocked !== '' || runId !== null}
-                  title={blocked}
-                  onClick={() => void start()}
-                >
-                  {runId === null ? 'Run' : 'Running'}
-                </button>
+                    <option value="">Add a trigger</option>
+                    <option value="schedule">On a schedule</option>
+                    <option value="folderDrop">When a file lands in a folder</option>
+                    <option value="fileWatch">When anything in a folder changes</option>
+                    <option value="webhook">When something posts to a URL</option>
+                  </select>
+                  <p className="brief__note">
+                    A trigger is armed when the automation is saved, and stays armed while CHIMERA
+                    is open.
+                  </p>
+                </section>
               </div>
-              {blocked !== '' && (
-                <p className="brief__note" data-testid="brief-blocked">
-                  {blocked}
-                </p>
-              )}
-              {runNote !== '' && (
-                <p className="brief__note" data-testid="run-note">
-                  {runNote}
-                </p>
-              )}
-              {runOutput !== '' && !resultOpen && (
-                <button
-                  type="button"
-                  className="button"
-                  data-testid="brief-show-result"
-                  onClick={() => {
-                    setResultOpen(true);
-                  }}
-                >
-                  Show what it produced
-                </button>
-              )}
             </div>
           )}
         </section>
@@ -1797,7 +1973,11 @@ function CanvasInner({
         {selected ? (
           selected.data.kind === 'agent' ? (
             <>
-              <p className="canvas__section">{selected.data.role?.name ?? 'Agent'}</p>
+              {/* The step's name is the subject of this panel, not another
+                  field label in it. Set in the same uppercase micro-type as
+                  "Model" and "Limits", it read as one more heading in a stack
+                  of headings. */}
+              <h3 className="canvas__stepName">{selected.data.role?.name ?? 'Agent'}</h3>
               <p className="canvas__prompt">{selected.data.role?.systemPrompt}</p>
 
               <p className="canvas__section">Instruction for this step</p>
@@ -2008,7 +2188,7 @@ function ShapingInspector({
 
   return (
     <>
-      <p className="canvas__section">{KIND_LABEL[data.kind]}</p>
+      <h3 className="canvas__stepName">{KIND_LABEL[data.kind]}</h3>
       <p className="canvas__prompt">
         {data.kind === 'agent' ? '' : KIND_BLURB[data.kind as Exclude<StepKind, 'agent'>]}
       </p>

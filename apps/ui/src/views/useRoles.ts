@@ -24,7 +24,7 @@ export const AGENT_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Planning', ids: ['planner'] },
   { label: 'Working', ids: ['coder', 'researcher', 'browser-operator', 'data-extractor'] },
   { label: 'Review', ids: ['reviewer', 'qa'] },
-  { label: 'Swarm', ids: ['summariser'] },
+  { label: 'Combining', ids: ['summariser'] },
 ];
 
 export function useRoles(refreshToken = 0): AgentRole[] {
