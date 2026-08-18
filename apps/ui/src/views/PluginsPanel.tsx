@@ -134,7 +134,7 @@ export function PluginsPanel({ refreshToken }: { refreshToken: number }): JSX.El
             {plugin.kind === 'http' ? plugin.url : plugin.command} ·{' '}
             {plugin.tools.length === 0
               ? 'no tools yet'
-              : `${String(plugin.tools.length)} tools: ${plugin.tools
+              : `${String(plugin.tools.length)} tool${plugin.tools.length === 1 ? '' : 's'}: ${plugin.tools
                   .slice(0, 4)
                   .map((tool) => tool.name)
                   .join(', ')}`}

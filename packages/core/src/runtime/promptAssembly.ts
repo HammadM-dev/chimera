@@ -36,6 +36,24 @@ export interface ToolObservation {
   /** Verbatim tool output. Attacker-controllable. Never interpreted here. */
   output: string;
   isError: boolean;
+  /**
+   * True when nothing the agent did produced this — the brief's attachments,
+   * seeded before the first turn.
+   *
+   * It changes the message role and nothing else. A `tool` message is only
+   * well-formed as the answer to a call the assistant actually made, and an
+   * OpenAI-compatible provider given one that answers no call **drops it,
+   * silently and without an error**: measured against a real gateway, the same
+   * request counted 21 prompt tokens with the text in a `tool` message and 94
+   * with it in a `user` message. Every attached file was discarded on its way
+   * to every real provider, and the suite missed it because a stub answers from
+   * a script and never looks at message shape.
+   *
+   * Explicit on the observation rather than inferred from the history: the
+   * inferring version quietly reclassified every fixture that did not thread a
+   * matching call through, which was most of the injection corpus.
+   */
+  unrequested?: boolean;
 }
 
 export interface AssembledPrompt {
@@ -130,15 +148,25 @@ export function assemblePrompt(options: AssembleOptions): AssembledPrompt {
   const messages: Message[] = [
     { role: 'user', content: instructions.task },
     ...(options.history ?? []),
-    ...(options.observations ?? []).map<Message>((observation) => ({
-      // The `tool` role, not `user`: the model's own chat template renders it
-      // as a result rather than as something a person said. A tool result
-      // arriving as a user turn is the single most common way injected text
-      // ends up being read as an instruction.
-      role: 'tool',
-      content: renderObservation(observation, nonce),
-      toolCallId: observation.callId,
-    })),
+    ...(options.observations ?? []).map<Message>((observation) => {
+      const content = renderObservation(observation, nonce);
+
+      // Material nobody asked for — the brief's attachments — goes back as a
+      // user turn, because a `tool` turn answering no call is thrown away
+      // before the model ever sees it. See `ToolObservation.unrequested`.
+      //
+      // The envelope and the system message's standing instruction about it are
+      // what make this safe, and both are identical either way: the role was
+      // the belt to the envelope's braces, and a belt that deletes the trousers
+      // is not an improvement.
+      if (observation.unrequested === true) return { role: 'user', content };
+
+      // A real tool result goes back as `tool`: the model's own chat template
+      // renders it as a result rather than as something a person said. A tool
+      // result arriving as a user turn is the single most common way injected
+      // text ends up being read as an instruction.
+      return { role: 'tool', content, toolCallId: observation.callId };
+    }),
   ];
 
   return { system: assembleSystemMessage(instructions), messages, nonce };

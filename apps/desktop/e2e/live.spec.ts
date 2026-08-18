@@ -45,8 +45,15 @@ test('a real provider is connected, catalogued, and runs an automation', async (
     const options = await models.locator('option').allTextContents();
     expect(options.length).toBeGreaterThan(1);
 
-    // A small, fast model from the real catalogue.
-    const pick = options.find((option) => option.includes('gpt-oss:20b')) ?? options[1] ?? '';
+    // A model that is actually in the catalogue. `gpt-oss:20b` was not, so
+    // this silently fell through to whatever happened to be second — which is
+    // a live test whose subject is chosen by list order.
+    const preferred = ['gemma4:31b', 'deepseek-v4-flash', 'nemotron-3-nano'];
+    const pick =
+      preferred.map((want) => options.find((option) => option.includes(want))).find(Boolean) ??
+      options[1] ??
+      '';
+    expect(pick).not.toBe('');
     await models.selectOption({ label: pick });
 
     await page.getByTestId('node-instruction').fill('Reply with exactly: ready');

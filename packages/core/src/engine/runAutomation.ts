@@ -189,6 +189,10 @@ function attachmentObservations(brief: RunBrief): ToolObservation[] {
         ? `${attachment.name}: not read (${attachment.note})`
         : `${attachment.name}:\n${attachment.content}`,
     isError: attachment.content === '',
+    // Seeded before the agent has called anything, so it cannot go back as a
+    // `tool` message answering a call that was never made — see
+    // ToolObservation.unrequested.
+    unrequested: true,
   }));
 }
 

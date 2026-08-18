@@ -24,6 +24,11 @@ async function reachable(): Promise<boolean> {
 test.describe.configure({ timeout: 300_000 });
 
 test('a local model catalogue is read, bound, and actually run', async () => {
+  // Opt-in, because reachable is not the same as usable: on a machine with no
+  // GPU this Ollama answers a ten-token prompt in about eighty seconds, and an
+  // agent step is three calls. Run it where local inference is real:
+  //   CHIMERA_OLLAMA_LIVE=1 npx playwright test e2e/liveOllama.spec.ts
+  test.skip(process.env['CHIMERA_OLLAMA_LIVE'] !== '1', 'set CHIMERA_OLLAMA_LIVE=1');
   test.skip(!(await reachable()), `no Ollama at ${BASE}`);
 
   const profile = freshProfile();

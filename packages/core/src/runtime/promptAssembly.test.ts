@@ -87,6 +87,44 @@ test('tool results are tool-role messages, not user turns', () => {
   assert.ok((toolMessage.content as string).includes('status: error'));
 });
 
+test('material the agent never asked for is a user turn, still inside the envelope', () => {
+  // The brief's attachments are seeded before the agent has called anything.
+  // Sent as a `tool` message they answer no call, and an OpenAI-compatible
+  // provider drops such a message without an error — measured against a real
+  // gateway, the same request counted 21 prompt tokens as a `tool` message and
+  // 94 as a `user` one. Every attached file was silently discarded on its way
+  // to every real provider, and the suite missed it because a stub answers
+  // from a script and never looks at message shape.
+  const assembled = assemblePrompt({
+    instructions,
+    observations: [
+      {
+        callId: 'attachment-0',
+        toolId: 'brief.attachment',
+        output: 'contract text',
+        isError: false,
+        unrequested: true,
+      },
+    ],
+  });
+
+  assert.equal(
+    assembled.messages.filter((message) => message.role === 'tool').length,
+    0,
+    'nothing answered a call that was never made',
+  );
+
+  const carried = assembled.messages.filter(
+    (message) => typeof message.content === 'string' && message.content.includes('contract text'),
+  );
+  assert.equal(carried.length, 1, 'the attachment reaches the model exactly once');
+  assert.equal(carried[0]?.role, 'user');
+  // Still labelled untrusted, which is what actually makes it safe — the role
+  // was the belt to the envelope's braces.
+  assert.ok((carried[0]?.content as string).includes(`BEGIN UNTRUSTED DATA ${assembled.nonce}`));
+  assert.ok((carried[0]?.content as string).includes(`END UNTRUSTED DATA ${assembled.nonce}`));
+});
+
 test('the system message names the tools the role actually has, and no others', () => {
   const system = assembleSystemMessage(instructions);
   for (const tool of researcher.toolAllowlist) assert.ok(system.includes(tool), tool);

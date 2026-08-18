@@ -277,7 +277,12 @@ test('a plugin brings tools an agent can be granted, and they really run', async
     const row = page.locator('[data-testid^="plugin-"][data-testid$="-mailer"]');
     await expect(page.getByTestId('plugins-panel')).toContainText('mailer', { timeout: 20_000 });
     await page.locator('[data-testid^="plugin-test-"]').first().click();
-    await expect(page.getByTestId('plugins-panel')).toContainText('1 tools', { timeout: 30_000 });
+    // A count, not a bare "tools" — that word is in the panel's own
+    // description and matches before the plugin has connected at all. Not the
+    // exact number, so adding a tool to the fixture does not break this test.
+    await expect(page.getByTestId('plugins-panel')).toContainText(/[1-9]\d* tools?:/, {
+      timeout: 30_000,
+    });
     expect(row).toBeDefined();
 
     // An agent built around that tool.
