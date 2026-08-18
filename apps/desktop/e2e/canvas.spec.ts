@@ -123,8 +123,8 @@ test('agents are placed on the canvas, joined, and bound to a model', async () =
     );
 
     // Joining two steps: dragging the source port onto the target's.
-    const source = page.locator('[data-testid="node-planner"] .react-flow__handle-bottom');
-    const target = page.locator('[data-testid="node-coder"] .react-flow__handle-top');
+    const source = page.locator('[data-testid="node-planner"] .react-flow__handle-right');
+    const target = page.locator('[data-testid="node-coder"] .react-flow__handle-left');
     await source.dragTo(target);
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 

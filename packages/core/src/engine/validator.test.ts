@@ -114,3 +114,60 @@ test('a model nothing is known about is not refused', () => {
 
   assert.deepEqual(problems, []);
 });
+
+test('four of the same agent into one step is refused, and three is not', () => {
+  const feed = (nodeId: string) => step(nodeId, 'researcher');
+  const target = step('write', 'coder');
+
+  const three = validateForSave(
+    brief({
+      steps: [feed('a'), feed('b'), feed('c'), target],
+      edges: [
+        ['a', 'write'],
+        ['b', 'write'],
+        ['c', 'write'],
+      ],
+    }),
+    { roles: STARTER_ROLES, preauthorised: ['write'] },
+  );
+  assert.deepEqual(
+    three.filter((problem) => problem.message.includes('same agent')),
+    [],
+  );
+
+  const four = validateForSave(
+    brief({
+      steps: [feed('a'), feed('b'), feed('c'), feed('d'), target],
+      edges: [
+        ['a', 'write'],
+        ['b', 'write'],
+        ['c', 'write'],
+        ['d', 'write'],
+      ],
+    }),
+    { roles: STARTER_ROLES, preauthorised: ['write'] },
+  );
+  const refusal = four.find((problem) => problem.nodeId === 'write');
+  assert.ok(refusal);
+  assert.match(refusal.message, /Three of the same agent/);
+});
+
+test('an agent that exists to combine may be fed by as many as you like', () => {
+  // The exception the rule is written for: pointing six researchers at a
+  // summariser is a summariser being used correctly.
+  const problems = validateForSave(
+    brief({
+      steps: [
+        ...['a', 'b', 'c', 'd', 'e', 'f'].map((id) => step(id, 'researcher')),
+        step('combine', 'summariser'),
+      ],
+      edges: ['a', 'b', 'c', 'd', 'e', 'f'].map((id) => [id, 'combine'] as [string, string]),
+    }),
+    { roles: STARTER_ROLES },
+  );
+
+  assert.deepEqual(
+    problems.filter((problem) => problem.message.includes('same agent')),
+    [],
+  );
+});

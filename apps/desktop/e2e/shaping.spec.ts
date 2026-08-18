@@ -86,9 +86,9 @@ async function join(
 ): Promise<void> {
   const source =
     handle === undefined
-      ? page.locator(`[data-testid="${from}"] .react-flow__handle-bottom`)
+      ? page.locator(`[data-testid="${from}"] .react-flow__handle-right`)
       : page.locator(`[data-testid="${from}"] [data-handleid="${handle}"]`);
-  await source.dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-top`));
+  await source.dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
 }
 
 test('a branch sends the run down one path and leaves the other alone', async () => {

@@ -585,3 +585,45 @@ test('a dropped connection is retried; the work is not thrown away', async () =>
     await h.cleanup();
   }
 });
+
+test('a tool the model invented is answered, not treated as a dangerous one', async () => {
+  // Found against a real model on the first live run: it called
+  // "filesystem.findData", which does not exist. The reversibility rule treats
+  // an unknown tool as irreversible by construction, so the Governor refused
+  // it and the whole run halted "needs a human approval" — over a name the
+  // model made up. The right answer is to tell it the tool is not there.
+  const h = await harness();
+  const provider = new MockProvider({
+    script: {
+      queue: [
+        { kind: 'text', content: 'Plan: look it up.' },
+        {
+          kind: 'toolCall',
+          toolId: 'filesystem__findData',
+          toolName: 'filesystem__findData',
+          params: { query: 'purchase orders' },
+        },
+        VERIFIED,
+      ],
+    },
+  });
+
+  try {
+    const result = await runAgentLoop(taskFor(), {
+      governor: new Governor('enforcing'),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    // The run carried on rather than halting.
+    assert.notEqual(result.status, 'denied');
+    assert.equal(result.observations.length, 1);
+    assert.equal(result.observations[0]?.isError, true);
+    assert.match(result.observations[0]?.output ?? '', /no tool called "filesystem\.findData"/);
+    // And it is told what it *can* call, so the next turn can be right.
+    assert.match(result.observations[0]?.output ?? '', /filesystem\.readFile/);
+  } finally {
+    await h.cleanup();
+  }
+});

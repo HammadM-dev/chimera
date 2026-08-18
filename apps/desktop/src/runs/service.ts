@@ -21,6 +21,7 @@ import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
 import { cacheHookFor } from './cache.ts';
+import { registerPlugins } from '../plugins/service.ts';
 import { exportRun } from './otel.ts';
 import { screenshotSinkFor } from './screenshots.ts';
 
@@ -208,6 +209,12 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
     'memory',
     await connectInProcess(createMemoryServer(localBackend(runId, 'agent'))),
   );
+  // Whatever the user has plugged in. Registered after CHIMERA's own servers
+  // so a plugin cannot shadow `filesystem` or `shell` by claiming the name —
+  // the registry refuses a duplicate server id, and the built-ins get there
+  // first.
+  await registerPlugins(tools);
+
   // The browser. Registered every run, launched on the first call that needs
   // it: most automations never open one, and paying Chromium's startup for a
   // run that reads files would be a second and 200MB nobody asked for.

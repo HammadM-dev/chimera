@@ -35,6 +35,8 @@ module.exports = [
       // definition, and the executable specification of what the Rust binary
       // has to do.
       'packages/control/src/sidecar/*.mjs',
+      // A real MCP server, run as a Node process by the plugin test.
+      'apps/desktop/e2e/fixtures/*.mjs',
     ],
     languageOptions: {
       globals: {

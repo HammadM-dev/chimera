@@ -332,6 +332,24 @@ implemented feature reads yet.
 | `aggregate` | `{ "type": "aggregate", "aggregate": { "source", "strategy", "separator", "template", "roleId", "chunkSize", "instruction" } }` | `concat`, `json_merge`, `vote`, `template`, `reduce_with_agent`. Only the last makes a model call; it folds a chunk at a time and folds the results again. |
 | `swarm` | `{ "type": "swarm", "swarm": { "goal", "orchestratorRoleId", "agents": [], "maxRounds", "maxConcurrentAgents", "stallRounds", "goalPredicate" } }` | An orchestrator and specialists on one goal, through the blackboard. Concurrency is hard-capped at 20 by the engine. Three ways to stop: the goal predicate, the round limit, and rounds that change nothing. |
 
+### How steps are joined
+
+Inputs enter a node on its left, outputs leave on its right, and a node may
+have as many of each as the graph needs. A node with several inputs is given
+**all** of them, each labelled with the agent that produced it — a model handed
+three answers with no idea which came from where cannot use them.
+
+Two rules the editor enforces:
+
+- **At most three of the same agent may feed one node**, unless that node's
+  agent is marked `combinesMany` — a summariser with six inputs is a summariser
+  being used correctly, while six copies of the same reviewer cost six times as
+  much and mostly repeat each other.
+- **The brief reaches every step nothing feeds**, in addition to that step's
+  own instruction, along with the brief's attachments. That is where the
+  material enters. A step *with* inputs is given those instead: it has already
+  been told everything the material could tell it, through the steps before it.
+
 ### Checks (golden cases)
 
 `evals` on the brief is what the automation has to keep producing:

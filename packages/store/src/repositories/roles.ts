@@ -13,6 +13,8 @@ export interface RoleRecord {
   budgetJson: string;
   outputContractJson: string;
   maxIterations: number;
+  /** True for an agent several others are meant to feed at once. */
+  combinesMany: boolean;
   isBuiltin: boolean;
   updatedAt: string;
 }
@@ -28,6 +30,7 @@ interface RoleRow {
   budget_json: string;
   output_contract_json: string;
   max_iterations: number;
+  combines_many: number;
   is_builtin: number;
   updated_at: string;
 }
@@ -42,6 +45,7 @@ function toRecord(row: RoleRow): RoleRecord {
     budgetJson: row.budget_json,
     outputContractJson: row.output_contract_json,
     maxIterations: row.max_iterations,
+    combinesMany: row.combines_many === 1,
     isBuiltin: row.is_builtin === 1,
     updatedAt: row.updated_at,
   };
@@ -66,8 +70,8 @@ export function upsert(db: Database.Database, input: UpsertRoleInput): RoleRecor
   db.prepare(
     `INSERT INTO roles (
        id, name, system_prompt, tool_allowlist_json, model_binding_json,
-       budget_json, output_contract_json, max_iterations, is_builtin, updated_at
-     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
+       budget_json, output_contract_json, max_iterations, combines_many, is_builtin, updated_at
+     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))
      ON CONFLICT(id) DO UPDATE SET
        name = excluded.name,
        system_prompt = excluded.system_prompt,
@@ -76,6 +80,7 @@ export function upsert(db: Database.Database, input: UpsertRoleInput): RoleRecor
        budget_json = excluded.budget_json,
        output_contract_json = excluded.output_contract_json,
        max_iterations = excluded.max_iterations,
+       combines_many = excluded.combines_many,
        is_builtin = excluded.is_builtin,
        updated_at = datetime('now')`,
   ).run(
@@ -87,6 +92,7 @@ export function upsert(db: Database.Database, input: UpsertRoleInput): RoleRecor
     input.budgetJson,
     input.outputContractJson,
     input.maxIterations,
+    input.combinesMany ? 1 : 0,
     input.isBuiltin ? 1 : 0,
   );
 
@@ -95,6 +101,12 @@ export function upsert(db: Database.Database, input: UpsertRoleInput): RoleRecor
     throw new Error(`Role "${input.id}" vanished immediately after being written`);
   }
   return stored;
+}
+
+/** Removes a role a user made. Built-in roles are not deletable. */
+export function remove(db: Database.Database, id: string): { removed: boolean } {
+  const info = db.prepare('DELETE FROM roles WHERE id = ? AND is_builtin = 0').run(id);
+  return { removed: info.changes > 0 };
 }
 
 /** True when the table has never been seeded. */

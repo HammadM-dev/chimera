@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
 import { ConnectionForm } from '../connections/ConnectionForm.tsx';
 import { AnswerCache, ModelTiers, TelemetryPanel } from './ModelTiers.tsx';
+import { PluginsPanel } from './PluginsPanel.tsx';
 import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './views.css';
 
@@ -70,6 +71,14 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
         <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
           <h3 className="panel__title">OmniRoute</h3>
           <OmniRouteSetup onImported={onChanged} />
+        </div>
+        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+          <h3 className="panel__title">Plugins</h3>
+          <p className="agent-card__prompt">
+            Tool servers your agents can be granted — email, calendars, issue trackers, anything
+            that speaks MCP.
+          </p>
+          <PluginsPanel refreshToken={refreshToken} />
         </div>
         <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
           <h3 className="panel__title">Reusing answers</h3>

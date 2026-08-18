@@ -274,8 +274,18 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
 
   const { governor, provider, tools, callOptions } = deps;
   const trace = deps.trace ?? NULL_TRACE_SINK;
-  const available = tools.listFor(task.role);
-  const definitions = toolDefinitions(available);
+  const grantedTools = tools.listFor(task.role);
+  const definitions = toolDefinitions(grantedTools);
+  /** The ids this role may actually call. */
+  const available = new Set(grantedTools.map((tool) => tool.id));
+  /**
+   * Every id that exists at all, which is a different question.
+   *
+   * A tool this role may not call is a permission answer — the registry gives
+   * it, and the model is told it is not allowed. A tool that does not exist is
+   * a mistake the model made, and it needs a different sentence.
+   */
+  const known = new Set(tools.list().map((tool) => tool.id));
 
   // Resumed state, or a fresh checkpoint. `resumed` distinguishes "we already
   // planned" from "we have not started" — without it a resumed run would replan
@@ -487,7 +497,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       instructions: {
         role: task.role,
         task: task.task,
-        availableTools: available.map((tool) => tool.id),
+        availableTools: [...available],
       },
       history: [...history, ...extraMessages],
       observations,
@@ -703,6 +713,27 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
           idempotencyKey: key,
         },
       });
+
+      // A tool the model invented is not a tool. Checked before the Governor
+      // is asked anything, because the Governor's questions — is this
+      // irreversible, has anybody approved it — are meaningless about a name
+      // that does not exist, and an unknown name is treated as irreversible by
+      // construction. Answering the model with "there is no such tool" lets it
+      // pick a real one; refusing the *run* over a typo does not.
+      if (!known.has(toolId)) {
+        const message =
+          available.size === 0
+            ? `There is no tool called "${toolId}", and this agent has none available.`
+            : `There is no tool called "${toolId}". The ones you can use are: ${[...available].join(', ')}.`;
+        completedToolCalls[key] = { output: message, isError: true };
+        observations.push({ callId: call.id, toolId, output: message, isError: true });
+        trace.append({
+          nodeId: task.nodeId,
+          eventType: 'tool_result',
+          payload: { toolId, callId: call.id, output: message, isError: true, unknownTool: true },
+        });
+        continue;
+      }
 
       const alreadyDone = completedToolCalls[key];
       if (alreadyDone) {

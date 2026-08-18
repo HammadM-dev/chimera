@@ -131,6 +131,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   const [goal, setGoal] = useState('');
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
   const [canvasKey, setCanvasKey] = useState(0);
+  const [buildingAgent, setBuildingAgent] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string }[]>([]);
   // Bumped whenever the set of connections changes, so every view reading it
@@ -270,6 +271,11 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
             {view === 'build' && (
               <CanvasView
                 key={`${openId ?? 'new'}-${String(canvasKey)}`}
+                rolesToken={refreshToken}
+                onBuildAgent={() => {
+                  setBuildingAgent(true);
+                  setView('agents');
+                }}
                 goal={goal}
                 template={template}
                 openId={openId}
@@ -281,7 +287,13 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
             {view === 'memory' && <MemoryView />}
             {view === 'agents' && (
               <div className="view__body scroll">
-                <AgentsView />
+                <AgentsView
+                  onChanged={onChanged}
+                  startBuilding={buildingAgent}
+                  onStartedBuilding={() => {
+                    setBuildingAgent(false);
+                  }}
+                />
               </div>
             )}
             {view === 'providers' && (

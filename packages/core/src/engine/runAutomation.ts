@@ -812,6 +812,45 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
     };
   };
 
+  /**
+   * Everything joined into a step, labelled.
+   *
+   * A node can have any number of inputs, and when it has several the answer to
+   * "what did the previous step produce" is wrong twice over: there is no
+   * single previous step, and a model handed three answers with no idea which
+   * came from where cannot use them. Each is named by the agent that produced
+   * it.
+   *
+   * With no inputs at all it falls back to what the run is carrying, which is
+   * what a straight line has always meant.
+   */
+  const inputsFor = (nodeId: string): string => {
+    const feeders = (sources.get(nodeId) ?? []).filter(
+      (from) => !skipped.has(from) && outputs.has(from),
+    );
+
+    if (feeders.length === 0) {
+      return carried === '' ? '' : `What the previous step produced:\n${carried}`;
+    }
+
+    if (feeders.length === 1) {
+      const only = feeders[0] ?? '';
+      return `What the previous step produced:\n${outputs.get(only) ?? ''}`;
+    }
+
+    const labelOf = (from: string): string => {
+      const feeder = byId.get(from);
+      if (!feeder) return from;
+      const kind = feeder.type ?? 'agent';
+      return kind === 'agent' && feeder.roleId !== '' ? `${feeder.roleId} (${from})` : from;
+    };
+
+    return [
+      `This step has ${String(feeders.length)} inputs.`,
+      ...feeders.map((from) => `--- from ${labelOf(from)} ---\n${outputs.get(from) ?? ''}`),
+    ].join('\n\n');
+  };
+
   /** Runs one agent step: a real model call, through the Governor. */
   const runAgentStep = async (step: BriefStep, seedAttachments: boolean): Promise<StepOutcome> => {
     const role = roles.find((candidate) => candidate.id === step.roleId);
@@ -872,12 +911,29 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
 
     const { adapter, options } = deps.providerFor(binding.connectionId);
 
-    // What this step is told: its own instruction, or the brief's when it has
-    // none. The previous step's answer is carried as context rather than as an
-    // instruction — it is output, and output is data.
+    // What this step is told, and what it is given, are two different things.
+    //
+    // Told: its own instruction, or the brief's when it has none.
+    //
+    // Given: every input joined to it — and, for a step nothing feeds, the
+    // brief itself. That last part was missing, and it was the bug that made
+    // the product look broken: a brief holding the actual material (a pasted
+    // contract, a list of invoices) was *replaced* by a step's own instruction
+    // rather than added to it, so the first agent was asked to review a
+    // contract it had never been shown. It answered, correctly, that no such
+    // clause was in the text it had.
+    const incoming = inputsFor(step.nodeId);
+    const entryStep = (sources.get(step.nodeId) ?? []).length === 0;
+    const ownInstruction = step.instruction.trim() !== '';
+
     const task = [
-      step.instruction.trim() === '' ? brief.instruction : step.instruction,
-      carried === '' ? '' : `\n\nWhat the previous step produced:\n${carried}`,
+      ownInstruction ? step.instruction : brief.instruction,
+      // The material, for the steps where material enters. A step with inputs
+      // has already been given what it needs by the steps before it.
+      entryStep && ownInstruction && brief.instruction.trim() !== ''
+        ? `\n\nWhat this automation is working on:\n${brief.instruction}`
+        : '',
+      incoming === '' ? '' : `\n\n${incoming}`,
     ]
       .join('')
       .trim();
@@ -905,8 +961,13 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         trace,
         meter,
         ...(deps.cache ? { cache: deps.cache } : {}),
-        // The files reach the first step only. Re-attaching them to every step
-        // would re-pay for the same tokens at every hop.
+        // The files reach the steps where material enters — the ones nothing
+        // feeds — rather than only the first in topological order. A graph with
+        // three parallel first steps used to give the files to whichever
+        // happened to sort first, and the other two worked blind. They are not
+        // re-attached further downstream: those steps get the answers, and
+        // re-paying for the same tokens at every hop is what a graph is for
+        // avoiding.
         ...(seedAttachments ? { seedObservations: attachmentObservations(brief) } : {}),
         ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
       },
@@ -940,7 +1001,7 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
     return outcome;
   };
 
-  for (const [index, step] of order.entries()) {
+  for (const step of order) {
     if (deps.cancellation?.cancelled === true) break;
     if (skipped.has(step.nodeId) || ownedByLoop.has(step.nodeId)) continue;
 
@@ -953,7 +1014,9 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
       continue;
     }
 
-    const outcome = await runOne(step, index === 0);
+    // Every entry point gets the brief's files, not just the first one.
+    const isEntry = (sources.get(step.nodeId) ?? []).length === 0;
+    const outcome = await runOne(step, isEntry);
 
     // A halted step halts the run. Carrying on would spend the next step's
     // budget on input the halted one never finished producing.

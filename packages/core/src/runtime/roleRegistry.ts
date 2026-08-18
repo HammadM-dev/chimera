@@ -55,6 +55,16 @@ export interface Role {
    * value is the default a node inherits when it does not state its own.
    */
   onInvalid?: 'repair_once' | 'repair_until_attempts' | 'fail';
+  /**
+   * True for an agent several others are meant to feed at once.
+   *
+   * The canvas refuses more than three of the same agent into one node — five
+   * copies of the same reviewer cost five times as much and usually say the
+   * same thing five times. An agent whose whole job is to take many things and
+   * return one is the exception, and it says so here rather than being guessed
+   * at from its name, because a user's own agent can be one too.
+   */
+  combinesMany: boolean;
   isBuiltin: boolean;
 }
 
@@ -85,6 +95,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: { ...DEFAULT_BUDGET, maxTokens: 100_000 },
     outputContract: { format: 'json', schemaId: 'plan' },
     maxIterations: 3,
+    combinesMany: true,
     isBuiltin: true,
   },
   {
@@ -97,6 +108,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'text', schemaId: null },
     maxIterations: 12,
+    combinesMany: false,
     isBuiltin: true,
   },
   {
@@ -109,6 +121,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: { ...DEFAULT_BUDGET, maxTokens: 400_000, maxWallClockMs: 20 * 60_000 },
     outputContract: { format: 'text', schemaId: null },
     maxIterations: 25,
+    combinesMany: false,
     isBuiltin: true,
   },
   {
@@ -123,6 +136,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'json', schemaId: 'review' },
     maxIterations: 8,
+    combinesMany: true,
     isBuiltin: true,
   },
   {
@@ -135,6 +149,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'json', schemaId: 'verification' },
     maxIterations: 15,
+    combinesMany: true,
     isBuiltin: true,
   },
   {
@@ -147,6 +162,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: { ...DEFAULT_BUDGET, maxCostUsd: 0.5 },
     outputContract: { format: 'json', schemaId: 'extraction' },
     maxIterations: 5,
+    combinesMany: false,
     isBuiltin: true,
   },
   {
@@ -160,6 +176,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: { ...DEFAULT_BUDGET, maxWallClockMs: 15 * 60_000 },
     outputContract: { format: 'text', schemaId: null },
     maxIterations: 20,
+    combinesMany: false,
     isBuiltin: true,
   },
   {
@@ -172,6 +189,7 @@ export const STARTER_ROLES: readonly Role[] = [
     budget: { ...DEFAULT_BUDGET, maxTokens: 100_000, maxCostUsd: 0.5 },
     outputContract: { format: 'text', schemaId: null },
     maxIterations: 2,
+    combinesMany: true,
     isBuiltin: true,
   },
 ];
@@ -186,6 +204,7 @@ function toRole(record: RoleRecord): Role {
     budget: JSON.parse(record.budgetJson) as RoleBudget,
     outputContract: JSON.parse(record.outputContractJson) as OutputContract,
     maxIterations: record.maxIterations,
+    combinesMany: record.combinesMany,
     isBuiltin: record.isBuiltin,
   };
 }
@@ -200,6 +219,7 @@ function toRecord(role: Role): Omit<RoleRecord, 'updatedAt'> {
     budgetJson: JSON.stringify(role.budget),
     outputContractJson: JSON.stringify(role.outputContract),
     maxIterations: role.maxIterations,
+    combinesMany: role.combinesMany,
     isBuiltin: role.isBuiltin,
   };
 }
@@ -246,6 +266,14 @@ export interface RoleRegistry {
   save: (role: Role) => Role;
   /** Narrower entry point for the common edit. Returns the updated role. */
   setToolAllowlist: (id: string, toolAllowlist: readonly string[]) => Role;
+  /**
+   * Deletes an agent the user made.
+   *
+   * A shipped one cannot be deleted — an automation somebody saved refers to it
+   * by id, and a roster that could lose `summariser` would break files that
+   * were working. Editing a shipped one is allowed; removing it is not.
+   */
+  remove: (id: string) => { removed: boolean; reason: string };
 }
 
 /**
@@ -275,6 +303,18 @@ export function createRoleRegistry(db: Database.Database): RoleRegistry {
     save: (role) => {
       validate(role);
       return toRole(rolesRepository.upsert(db, toRecord(role)));
+    },
+
+    remove: (id) => {
+      const existing = registry.get(id);
+      if (!existing) return { removed: false, reason: `No agent called "${id}".` };
+      if (existing.isBuiltin) {
+        return {
+          removed: false,
+          reason: `${existing.name} is one of the agents CHIMERA ships. You can change it, but automations refer to it by name, so it cannot be deleted.`,
+        };
+      }
+      return { ...rolesRepository.remove(db, id), reason: '' };
     },
 
     setToolAllowlist: (id, toolAllowlist) => {

@@ -40,6 +40,8 @@ export * as deadLetterRepository from './repositories/deadLetter.ts';
 export * as cacheRepository from './repositories/cache.ts';
 export type { CacheEntry } from './repositories/cache.ts';
 export * as evalsRepository from './repositories/evals.ts';
+export * as pluginsRepository from './repositories/plugins.ts';
+export type { PluginRecord } from './repositories/plugins.ts';
 export type { EvalRunRecord } from './repositories/evals.ts';
 export type { DeadLetterRecord } from './repositories/deadLetter.ts';
 export * as memoriesRepository from './repositories/memories.ts';

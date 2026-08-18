@@ -239,8 +239,8 @@ test('M6 exit: an agent signs in, reads the table, and the send waits for a pers
 
     const join = async (from: string, to: string) => {
       await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-bottom`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-top`));
+        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
+        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
     };
     await join('node-browser-operator', 'node-approval');
     await join('node-approval', 'node-summariser');

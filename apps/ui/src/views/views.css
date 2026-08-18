@@ -380,3 +380,51 @@
   color: var(--text-primary);
   font-weight: var(--font-weight-medium);
 }
+
+/* Making an agent, and the card that starts it. A card rather than a button in
+ * a corner: building one is the same kind of act as picking one, and it belongs
+ * in the same row. */
+.agent-card--new {
+  border-style: dashed;
+}
+
+.agent-card {
+  text-align: left;
+  font: inherit;
+  width: 100%;
+  cursor: pointer;
+}
+
+.agent-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-6);
+  max-width: 720px;
+  overflow-y: auto;
+}
+
+.agent-editor__tools {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 320px;
+  overflow-y: auto;
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.agent-editor__server {
+  margin: var(--space-2) 0 var(--space-1);
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.agent-editor__toolNote {
+  display: block;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}

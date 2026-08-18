@@ -689,3 +689,102 @@ test('an aggregate folds many answers into one, a chunk per model call', async (
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('a step joined to three others is given all three, each named', async () => {
+  const { db, dir } = open('run-12');
+  const tools = await toolsFor(dir, 'run-12');
+
+  // The shape the one-in-one-out canvas could not express: three agents
+  // working in parallel and one combining what they found.
+  const brief: RunBrief = {
+    name: 'joined',
+    instruction: 'look at it three ways, then combine',
+    attachments: [],
+    steps: [
+      // Roles with text contracts: the mock answers one fixed string, and a
+      // role demanding JSON would fail on its contract rather than on what
+      // this test is about.
+      agent('legal', 'researcher', 'The legal view.'),
+      agent('money', 'coder', 'The financial view.'),
+      agent('risk', 'summariser', 'The risk view.'),
+      agent('combine', 'summariser', 'Combine the three views into one answer.'),
+    ],
+    edges: [
+      ['legal', 'combine'],
+      ['money', 'combine'],
+      ['risk', 'combine'],
+    ],
+  };
+
+  try {
+    const outcome = await runAutomation(deps(db, 'run-12', brief, tools));
+    assert.equal(outcome.status, 'succeeded');
+
+    // What the combining step was actually sent: every input, each labelled
+    // with the agent it came from. Read from the trace, because the prompt is
+    // the thing under test.
+    const prompt = tracesRepository
+      .listForRun(db, 'run-12')
+      .filter((event) => event.nodeId === 'combine' && event.eventType === 'prompt')
+      .map((event) => event.payloadJson)
+      .join('\n');
+
+    assert.match(prompt, /This step has 3 inputs/);
+    assert.match(prompt, /from researcher \(legal\)/);
+    assert.match(prompt, /from coder \(money\)/);
+    assert.match(prompt, /from summariser \(risk\)/);
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('the brief reaches every step nothing feeds, even when the step has its own instruction', async () => {
+  const { db, dir } = open('run-13');
+  const tools = await toolsFor(dir, 'run-13');
+
+  // The bug this is here for: a brief holding the material — a pasted
+  // contract, a list of invoices — was *replaced* by a step's own instruction
+  // rather than added to it. Against a real model the first agent answered
+  // that the contract contained no such clause, because it had never been
+  // shown the contract.
+  const brief: RunBrief = {
+    name: 'material',
+    instruction: 'Here is the contract: clause 2 says it renews automatically.',
+    attachments: [],
+    steps: [
+      agent('left', 'researcher', 'What happens at the end of the term?'),
+      agent('right', 'summariser', 'What does it cost?'),
+      agent('join', 'summariser', 'Combine them.'),
+    ],
+    edges: [
+      ['left', 'join'],
+      ['right', 'join'],
+    ],
+  };
+
+  try {
+    await runAutomation(deps(db, 'run-13', brief, tools));
+
+    const promptsFor = (nodeId: string) =>
+      tracesRepository
+        .listForRun(db, 'run-13')
+        .filter((event) => event.nodeId === nodeId && event.eventType === 'prompt')
+        .map((event) => event.payloadJson)
+        .join('\n');
+
+    // Both entry steps were given the material, not just whichever sorted first.
+    assert.match(promptsFor('left'), /renews automatically/);
+    assert.match(promptsFor('left'), /What happens at the end of the term/);
+    assert.match(promptsFor('right'), /renews automatically/);
+
+    // The joining step gets what the others produced instead: it has already
+    // been told everything the material could tell it, through them.
+    assert.match(promptsFor('join'), /This step has 2 inputs/);
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

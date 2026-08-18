@@ -815,6 +815,116 @@ export const roleList = defineInvokeChannel({
         tier: z.string(),
         maxIterations: z.number(),
         maxCostUsd: z.number().nullable(),
+        maxTokens: z.number().nullable(),
+        combinesMany: z.boolean(),
+        outputFormat: z.string(),
+        isBuiltin: z.boolean(),
+      }),
+    ),
+  }),
+});
+
+// M-custom agents: the user's own roster entries, saved and removed like
+// anything else they own.
+export const roleSave = defineInvokeChannel({
+  channel: 'role:save',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    id: z.string(),
+    name: z.string(),
+    systemPrompt: z.string(),
+    toolAllowlist: z.array(z.string()),
+    tier: z.string(),
+    maxIterations: z.number(),
+    maxCostUsd: z.number().nullable(),
+    maxTokens: z.number().nullable(),
+    combinesMany: z.boolean(),
+    outputFormat: z.string(),
+  }),
+  responseSchema: z.object({ id: z.string() }),
+});
+
+export const roleRemove = defineInvokeChannel({
+  channel: 'role:remove',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ removed: z.boolean(), reason: z.string() }),
+});
+
+// Plugins: MCP servers the user added. The same protocol CHIMERA's own tool
+// servers speak, which is how a user reaches email, calendars and issue
+// trackers without an integration written per service.
+const pluginSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  kind: z.string(),
+  enabled: z.boolean(),
+  command: z.string(),
+  url: z.string(),
+  lastError: z.string(),
+  tools: z.array(z.object({ name: z.string(), description: z.string() })),
+});
+
+export const pluginList = defineInvokeChannel({
+  channel: 'plugin:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ plugins: z.array(pluginSchema) }),
+});
+
+export const pluginSave = defineInvokeChannel({
+  channel: 'plugin:save',
+  // Carries credentials on the way in, so it is marked sensitive: the IPC log
+  // records that this channel was called and never what was on it.
+  v: 1,
+  sensitive: true,
+  requestSchema: z.object({
+    id: z.string().optional(),
+    name: z.string(),
+    kind: z.enum(['stdio', 'http']),
+    command: z.string(),
+    args: z.array(z.string()),
+    url: z.string(),
+    enabled: z.boolean(),
+    secrets: z.record(z.string(), z.string()),
+    headers: z.record(z.string(), z.string()),
+  }),
+  responseSchema: z.object({ id: z.string() }),
+});
+
+export const pluginRemove = defineInvokeChannel({
+  channel: 'plugin:remove',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ removed: z.boolean() }),
+});
+
+export const pluginTest = defineInvokeChannel({
+  channel: 'plugin:test',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ ok: z.boolean(), detail: z.string(), tools: z.number() }),
+});
+
+// Every tool that exists right now, so an agent's grants are picked rather
+// than typed. Includes anything a plugin brought with it.
+export const toolList = defineInvokeChannel({
+  channel: 'tool:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    tools: z.array(
+      z.object({
+        id: z.string(),
+        serverId: z.string(),
+        description: z.string(),
+        irreversible: z.boolean(),
       }),
     ),
   }),
@@ -1096,6 +1206,13 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   connectionList,
   healthSweep,
   roleList,
+  roleSave,
+  roleRemove,
+  toolList,
+  pluginList,
+  pluginSave,
+  pluginRemove,
+  pluginTest,
   filesPick,
   automationPlan,
   automationCheck,

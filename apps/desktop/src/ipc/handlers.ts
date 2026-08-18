@@ -38,7 +38,14 @@ import { controlSession, grantControl, panic, revokeControl } from '../control/s
 import { panicKeyAccelerator } from '../control/panicKey.ts';
 import { runEvals, tagProduction } from '../evals/service.ts';
 import { listTriggers } from '../triggers/service.ts';
-import { listRoles } from '../roles/service.ts';
+import { listRoles, removeRole, saveRole } from '../roles/service.ts';
+import {
+  listPlugins,
+  listTools,
+  removePlugin,
+  savePlugin,
+  testPlugin,
+} from '../plugins/service.ts';
 import { pickAttachments, pickDirectory } from '../files/service.ts';
 import { planAutomation } from '../automations/planner.ts';
 import {
@@ -163,6 +170,13 @@ registerHandler(channels.workflowList, () => listAutomations());
 registerHandler(channels.workflowGet, (payload) => getAutomation(payload.id));
 
 registerHandler(channels.roleList, () => listRoles());
+registerHandler(channels.roleSave, (payload) => saveRole(payload));
+registerHandler(channels.roleRemove, (payload) => removeRole(payload.id));
+registerHandler(channels.toolList, () => listTools());
+registerHandler(channels.pluginList, () => listPlugins());
+registerHandler(channels.pluginSave, (payload) => savePlugin(payload));
+registerHandler(channels.pluginRemove, (payload) => removePlugin(payload.id));
+registerHandler(channels.pluginTest, (payload) => testPlugin(payload.id));
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
 registerHandler(channels.filesPickDirectory, () => pickDirectory());
 registerHandler(channels.triggerList, () => listTriggers());

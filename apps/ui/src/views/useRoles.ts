@@ -13,6 +13,11 @@ export interface AgentRole {
   tier: string;
   maxIterations: number;
   maxCostUsd: number | null;
+  maxTokens?: number | null;
+  /** True for an agent several others are meant to feed at once. */
+  combinesMany?: boolean;
+  outputFormat?: string;
+  isBuiltin?: boolean;
 }
 
 export const AGENT_GROUPS: { label: string; ids: string[] }[] = [
@@ -22,7 +27,7 @@ export const AGENT_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Swarm', ids: ['summariser'] },
 ];
 
-export function useRoles(): AgentRole[] {
+export function useRoles(refreshToken = 0): AgentRole[] {
   const [roles, setRoles] = useState<AgentRole[]>([]);
 
   useEffect(() => {
@@ -36,7 +41,7 @@ export function useRoles(): AgentRole[] {
         // here would blank the whole builder.
       }
     })();
-  }, []);
+  }, [refreshToken]);
 
   return roles;
 }

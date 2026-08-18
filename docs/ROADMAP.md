@@ -24,6 +24,84 @@ So the order has changed. Everything that makes the product usable — the canva
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time); **the first vertical**, which decides M4-10's shipped templates; and **a Rust toolchain**, which M8's sidecar binary needs and this machine does not have (`cargo` is not installed). M8's TypeScript half — the protocol, the bridge, the panic key, the grant — is built and tested against a stand-in process. 
 
+## Reshaped again, after the founder used the M9 build
+
+Four faults, reported plainly: automations were too simple to express real
+work, a run said "succeeded" and showed no output, agents could not be created,
+and there was no way to reach the tools a business actually uses.
+
+### M11-1: The result of a run is visible
+
+STATUS: **done.** A panel over the canvas opens when a run finishes — the final
+answer, a copy button, and every step's own output underneath. The node
+inspector shows what that step produced.
+
+DECISION: **it opens on failure too.** A run that stopped is exactly when
+somebody needs to see what the steps before it produced, and the first version
+showed them nothing.
+
+The reported bug was real and was not the engine: the output was rendered as the
+last element inside a scrolling panel, underneath the settings. Nobody scrolled,
+so "it succeeded and there is no output" was an accurate description of what a
+person could see.
+
+### M11-2: Inputs left, outputs right, as many as the graph needs
+
+STATUS: **done.** A node takes any number of inputs on its left and sends to any
+number of nodes on its right. A step with several inputs is given all of them,
+each labelled with the agent that produced it.
+
+DECISION: **at most three of the same agent may feed one node**, unless the
+agent is marked as one that combines. Six copies of the same reviewer cost six
+times as much and mostly repeat each other; a summariser with six inputs is
+correct. The flag is on the role, not guessed from its name, because a user's
+own agent can be a combiner too.
+
+BUG, found against a live model: **the brief was replaced by a step's own
+instruction rather than added to it.** An automation whose brief held the
+material — a pasted contract — asked its first agent to review a contract it had
+never been shown, and the model correctly answered that no such clause existed
+in the text it had. The brief and its attachments now reach every step nothing
+feeds, which is where material enters.
+
+BUG, found on the first live run: **a tool the model invented halted the run.**
+An unknown tool is irreversible by construction, so the Governor refused it and
+the run stopped "needs a human approval" — over a name the model made up. It is
+now answered with "there is no such tool, here is what you can use", and the
+agent carries on.
+
+### M11-3: Agents the user builds
+
+STATUS: **done.** "Build an agent" at the top of the palette and on the roster:
+name, what it is for, which tools it may use, model tier, turn and spend limits,
+and whether several agents may feed it. Saved agents appear in the palette
+immediately and can be used in the same session. A shipped agent can be edited
+but not deleted — automations refer to agents by id, and a roster that could
+lose `summariser` would break files that were working.
+
+### M11-4: Plugins
+
+STATUS: **done.** An MCP server the user adds, by command or by URL — the same
+protocol Claude Code's plugins speak, and the same one the community's email,
+calendar, issue-tracker and database servers already use. Its tools appear in
+the agent editor, are granted per agent, and run under every rule CHIMERA's own
+tools do.
+
+DECISION: **a plugin gets `PATH` and what the user set for it, and nothing
+else.** The ambient environment of a desktop app holds tokens, keys and session
+variables that have nothing to do with the plugin, and handing all of it over is
+the easiest credential leak in the product.
+
+DECISION: **plugin keys go to the OS keychain like any other secret**, by name,
+resolved at connect time.
+
+BUG, found by the test that checked the *effect*: the `plugin` vault scope was
+added to the type and not to the handle pattern, so every plugin secret was
+written happily and refused on read. The plugin then ran with none of its
+environment and its tools did nothing — and the failure was swallowed by a
+`catch` that dropped the variable silently. Both fixed: the pattern covers every
+scope, and a key that cannot be read is reported on the plugin's own row.
+
 ## How this plan is followed
 
 Each ticket keeps its original acceptance criteria unless it says otherwise. `DECISION:` blocks record choices made while building, including the ones that turned out wrong; they are not edited after the fact. A ticket is done when a stranger can verify it from the outside — for anything with a screen, that means an end-to-end test that drives the app the way a person would, because that is the standard three shipped defects failed to meet.

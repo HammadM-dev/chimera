@@ -231,7 +231,11 @@ function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
       className={`node ${selected === true ? 'node--selected' : ''}`}
       data-testid={`node-${role?.id ?? 'agent'}`}
     >
-      <Handle type="target" position={Position.Top} className="node__port" />
+      {/* Inputs on the left, outputs on the right. A node can take as many of
+          each as the graph needs — the old one-in-one-out arrangement could
+          only express a line, and the shapes real automations take are joins
+          and splits. */}
+      <Handle type="target" position={Position.Left} className="node__port node__port--in" />
       <p className="node__name">{role?.name ?? 'Agent'}</p>
       <p
         className={`node__model ${binding === null && data.tier === undefined ? 'node__model--unset' : ''}`}
@@ -250,7 +254,7 @@ function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
           ? 'No tools'
           : `${String(role.toolAllowlist.length)} tools`}
       </p>
-      <Handle type="source" position={Position.Bottom} className="node__port" />
+      <Handle type="source" position={Position.Right} className="node__port node__port--out" />
     </div>
   );
 }
@@ -270,7 +274,7 @@ function ShapingNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
       className={`node node--shaping node--${kind} ${selected === true ? 'node--selected' : ''}`}
       data-testid={`node-${kind}`}
     >
-      <Handle type="target" position={Position.Top} className="node__port" />
+      <Handle type="target" position={Position.Left} className="node__port node__port--in" />
       <p className="node__name">{KIND_LABEL[kind]}</p>
       <p className="node__model">{summarise(data)}</p>
       {typeof status === 'string' && status !== '' && (
@@ -283,20 +287,20 @@ function ShapingNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
           <Handle
             id="true"
             type="source"
-            position={Position.Bottom}
-            className="node__port node__port--true"
-            style={{ left: '28%' }}
+            position={Position.Right}
+            className="node__port node__port--out node__port--true"
+            style={{ top: '35%' }}
           />
           <Handle
             id="false"
             type="source"
-            position={Position.Bottom}
-            className="node__port node__port--false"
-            style={{ left: '72%' }}
+            position={Position.Right}
+            className="node__port node__port--out node__port--false"
+            style={{ top: '70%' }}
           />
         </>
       ) : (
-        <Handle type="source" position={Position.Bottom} className="node__port" />
+        <Handle type="source" position={Position.Right} className="node__port node__port--out" />
       )}
     </div>
   );
@@ -386,8 +390,15 @@ interface AwaitingApproval extends PendingApproval {
   runId: string;
 }
 
-function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): JSX.Element {
-  const roles = useRoles();
+function CanvasInner({
+  goal,
+  template,
+  openId = null,
+  onSaved,
+  onBuildAgent,
+  rolesToken = 0,
+}: CanvasProps): JSX.Element {
+  const roles = useRoles(rolesToken);
   const { choices, loaded } = useConnections();
   const [nodes, setNodes, onNodesChange] = useNodesState<StepNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
@@ -405,6 +416,8 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const appliedTemplate = useRef<AutomationTemplate | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
+  const [stepOutput, setStepOutput] = useState<Record<string, string>>({});
+  const [resultOpen, setResultOpen] = useState(false);
   const [runNote, setRunNote] = useState('');
   const [runOutput, setRunOutput] = useState('');
   const [pending, setPending] = useState<PendingApproval | null>(null);
@@ -665,13 +678,22 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         const detail = event.data as {
           nodeId: string;
           phase: string;
-          outcome?: { status: string };
+          outcome?: { status: string; output: string };
         };
         setStepStatus((current) => ({
           ...current,
           [detail.nodeId]:
             detail.phase === 'started' ? 'running' : (detail.outcome?.status ?? 'done'),
         }));
+        // Kept as they arrive, not just at the end: a run that halts at step
+        // four still did three steps of work, and the user should be able to
+        // read it.
+        if (detail.outcome && detail.outcome.output !== '') {
+          setStepOutput((current) => ({
+            ...current,
+            [detail.nodeId]: detail.outcome?.output ?? '',
+          }));
+        }
       } else if (event.type === 'approval:requested') {
         setPending(event.data as PendingApproval);
         setApprovalNote('');
@@ -679,12 +701,20 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         const detail = event.data as { status: string; summary: string | null; output: string };
         setRunNote(detail.summary ?? `Run ${detail.status}.`);
         setRunOutput(detail.output);
+        // Opened, not tucked away. The commonest complaint about the first
+        // version of this was "it says succeeded and there is no output" — and
+        // there was: at the bottom of a panel that scrolls, under the settings.
+        setResultOpen(true);
         setPending(null);
         setRunId(null);
       } else if (event.type === 'failed') {
         setRunNote((event.data as { message: string }).message);
         setPending(null);
         setRunId(null);
+        // Opened on failure too, and this is the important half: a run that
+        // stopped is exactly when somebody needs to see what the steps before
+        // it produced, and the first version showed them nothing at all.
+        setResultOpen(true);
       }
     });
   }, [runId]);
@@ -1023,6 +1053,8 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
     setRunNote('');
     setRunOutput('');
     setStepStatus({});
+    setStepOutput({});
+    setResultOpen(false);
     setPending(null);
     try {
       const started = await bridge().invoke<{ runId: string }>('run:start', {
@@ -1175,20 +1207,36 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
     [selectedId, setNodes],
   );
 
-  const grouped = useMemo(
-    () =>
-      AGENT_GROUPS.map((group) => ({
-        label: group.label,
-        members: group.ids
-          .map((id) => roles.find((role) => role.id === id))
-          .filter((role): role is AgentRole => role !== undefined),
-      })).filter((group) => group.members.length > 0),
-    [roles],
-  );
+  const grouped = useMemo(() => {
+    const placed = new Set(AGENT_GROUPS.flatMap((group) => group.ids));
+    const groups = AGENT_GROUPS.map((group) => ({
+      label: group.label,
+      members: group.ids
+        .map((id) => roles.find((role) => role.id === id))
+        .filter((role): role is AgentRole => role !== undefined),
+    }));
+
+    // Anything not in a shipped group — which is every agent the user builds.
+    // A palette that only showed the eight CHIMERA ships would make the "build
+    // an agent" button a place to send work that never comes back.
+    const mine = roles.filter((role) => !placed.has(role.id));
+    if (mine.length > 0) groups.push({ label: 'Yours', members: mine });
+
+    return groups.filter((group) => group.members.length > 0);
+  }, [roles]);
 
   return (
     <div className="canvas" data-testid="canvas-view">
       <aside className="canvas__palette scroll" aria-label="Agents">
+        <button
+          type="button"
+          className="palette__agent palette__agent--new"
+          data-testid="palette-add-agent"
+          onClick={onBuildAgent}
+        >
+          <span className="palette__name">Build an agent</span>
+          <span className="palette__meta">One you write yourself</span>
+        </button>
         <p className="canvas__hint">Drag an agent onto the canvas, or click to place one.</p>
         {grouped.map((group) => (
           <div key={group.label}>
@@ -1287,6 +1335,72 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 ? 'Drag an agent here to start. Join one to the next to say what runs after what.'
                 : `${goal} — drag the first agent here.`}
             </p>
+          )}
+
+          {resultOpen && (
+            <section className="result" data-testid="run-result" aria-label="What the run produced">
+              <header className="result__head">
+                <p className="result__title">What it produced</p>
+                <div className="brief__left">
+                  <button
+                    type="button"
+                    className="button"
+                    data-testid="result-copy"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(runOutput);
+                      setRunNote('Copied.');
+                    }}
+                  >
+                    Copy
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    data-testid="result-close"
+                    onClick={() => {
+                      setResultOpen(false);
+                    }}
+                  >
+                    Close
+                  </button>
+                </div>
+              </header>
+
+              {runOutput === '' ? (
+                <p className="canvas__prompt">
+                  The run finished without producing any text. Open it in Runs to see what each step
+                  did.
+                </p>
+              ) : (
+                <pre className="result__answer" data-testid="run-output">
+                  {runOutput}
+                </pre>
+              )}
+
+              {/* Every step, not just the last. A run that halted at step four
+                  still did three steps of work, and the answer to "what went
+                  wrong" is usually in one of them. */}
+              {nodes.some((node) => (stepOutput[node.id] ?? '') !== '') && (
+                <div className="result__steps" data-testid="result-steps">
+                  <p className="canvas__section">Step by step</p>
+                  {nodes
+                    .filter((node) => (stepOutput[node.id] ?? '') !== '')
+                    .map((node) => (
+                      <details key={node.id} className="result__step">
+                        <summary>
+                          {node.data.role?.name ?? KIND_LABEL[node.data.kind]}
+                          <span
+                            className={`node__status node__status--${stepStatus[node.id] ?? ''}`}
+                          >
+                            {stepStatus[node.id] ?? ''}
+                          </span>
+                        </summary>
+                        <pre className="result__answer">{stepOutput[node.id]}</pre>
+                      </details>
+                    ))}
+                </div>
+              )}
+            </section>
           )}
 
           {pending !== null && (
@@ -1662,10 +1776,17 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                   {runNote}
                 </p>
               )}
-              {runOutput !== '' && (
-                <pre className="brief__output" data-testid="run-output">
-                  {runOutput}
-                </pre>
+              {runOutput !== '' && !resultOpen && (
+                <button
+                  type="button"
+                  className="button"
+                  data-testid="brief-show-result"
+                  onClick={() => {
+                    setResultOpen(true);
+                  }}
+                >
+                  Show what it produced
+                </button>
               )}
             </div>
           )}
@@ -1708,6 +1829,15 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
                 }
                 onChange={bind}
               />
+
+              {(stepOutput[selected.id] ?? '') !== '' && (
+                <>
+                  <p className="canvas__section">What it produced</p>
+                  <pre className="result__answer" data-testid="node-output">
+                    {stepOutput[selected.id]}
+                  </pre>
+                </>
+              )}
 
               <p className="canvas__section">Allowed tools</p>
               <div className="canvas__tags">
@@ -2388,12 +2518,16 @@ function ShapingInspector({
 
 export interface CanvasProps {
   goal: string;
+  /** Opens the agent editor. The palette is where somebody realises they need one. */
+  onBuildAgent?: () => void;
   /** A draft from the Home planner, turned into nodes on arrival. */
   template?: AutomationTemplate | null;
   /** A saved automation to open. */
   openId?: string | null;
   /** Called after a save, so the sidebar's list refreshes. */
   onSaved?: () => void;
+  /** Bumped when the roster changes, so a new agent shows up without a restart. */
+  rolesToken?: number;
 }
 
 export function CanvasView({
@@ -2401,12 +2535,21 @@ export function CanvasView({
   template = null,
   openId = null,
   onSaved,
+  onBuildAgent,
+  rolesToken = 0,
 }: CanvasProps): JSX.Element {
   // The provider owns the viewport, so `screenToFlowPosition` can turn a drop
   // at a screen coordinate into the right place on a panned or zoomed canvas.
   return (
     <ReactFlowProvider>
-      <CanvasInner goal={goal} template={template} openId={openId} onSaved={onSaved} />
+      <CanvasInner
+        goal={goal}
+        template={template}
+        openId={openId}
+        onSaved={onSaved}
+        rolesToken={rolesToken}
+        {...(onBuildAgent ? { onBuildAgent } : {})}
+      />
     </ReactFlowProvider>
   );
 }

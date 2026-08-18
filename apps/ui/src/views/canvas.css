@@ -427,12 +427,18 @@
   color: var(--text-muted);
 }
 
+.node__portLabel {
+  right: 14px;
+}
+
 .node__portLabel--true {
-  left: 18%;
+  top: 30%;
+  bottom: auto;
 }
 
 .node__portLabel--false {
-  left: 62%;
+  top: 65%;
+  bottom: auto;
 }
 
 .palette__agent--flow .palette__meta {
@@ -565,4 +571,78 @@
 
 .brief__checkResult--fail {
   color: var(--semantic-danger);
+}
+
+/* What the run produced.
+ *
+ * Over the canvas, opened when the run finishes, because the first version put
+ * it at the bottom of a scrolling panel underneath the settings — and the
+ * commonest report about that version was "it says succeeded and there is no
+ * output". There was: nobody could see it. */
+.result {
+  position: absolute;
+  right: var(--space-4);
+  top: var(--space-4);
+  bottom: var(--space-4);
+  z-index: 5;
+  width: min(460px, 45%);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-popover);
+  overflow-y: auto;
+}
+
+.result__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.result__title {
+  margin: 0;
+  font-size: var(--type-body);
+  color: var(--text-primary);
+}
+
+.result__answer {
+  margin: 0;
+  padding: var(--space-3);
+  border-radius: var(--radius-control);
+  background: var(--surface-canvas);
+  font-family: var(--font-mono);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.result__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.result__step summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  cursor: pointer;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  padding: var(--space-1) 0;
+}
+
+/* "Build an agent" at the top of the palette: the moment somebody realises the
+ * roster does not have what they need is the moment they are looking at it. */
+.palette__agent--new {
+  border-style: dashed;
+  margin-bottom: var(--space-2);
 }

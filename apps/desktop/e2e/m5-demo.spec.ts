@@ -131,8 +131,8 @@ test('M5 exit: a batch through fan-out on tiers, with a failure report and the s
 
     const join = async (from: string, to: string) => {
       await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-bottom`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-top`));
+        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
+        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
     };
     await join('node-transform', 'node-fanout');
     await join('node-fanout', 'node-summariser');

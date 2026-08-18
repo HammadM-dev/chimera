@@ -136,6 +136,20 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'role_id',
     'model',
   ],
+  plugins: [
+    'id',
+    'name',
+    'kind',
+    'command',
+    'args_json',
+    'url',
+    'env_json',
+    'headers_json',
+    'enabled',
+    'tools_json',
+    'last_error',
+    'created_at',
+  ],
   cache: ['key_hash', 'kind', 'embedding', 'response_json', 'created_at', 'hits', 'workflow_id'],
   connections: [
     'id',
@@ -205,6 +219,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'max_iterations',
     'is_builtin',
     'updated_at',
+    'combines_many',
   ],
 };
 

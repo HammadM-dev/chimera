@@ -98,3 +98,66 @@ export async function connectInProcess(server: McpServer): Promise<McpToolClient
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)]);
   return wrap(client);
 }
+
+/**
+ * Connects to an MCP server running as a separate process.
+ *
+ * This is how a plugin arrives: the same protocol CHIMERA's own servers speak,
+ * over a pipe to something the user installed. The community's servers — email,
+ * calendars, issue trackers, databases — are all this shape, which is why
+ * CHIMERA does not need an integration written per service.
+ *
+ * The environment is not inherited wholesale. A plugin gets `PATH` and what the
+ * user explicitly set for it, and nothing else: the ambient environment of a
+ * desktop app holds tokens, keys and session variables that have nothing to do
+ * with the plugin, and handing all of it over is the easiest credential leak in
+ * the product.
+ */
+export async function connectStdio(input: {
+  command: string;
+  args?: readonly string[];
+  env?: Record<string, string>;
+  cwd?: string;
+}): Promise<McpToolClient> {
+  const { StdioClientTransport } = await import('@modelcontextprotocol/sdk/client/stdio.js');
+
+  const transport = new StdioClientTransport({
+    command: input.command,
+    args: [...(input.args ?? [])],
+    env: {
+      PATH: process.env.PATH ?? '',
+      ...(input.env ?? {}),
+    },
+    ...(input.cwd === undefined ? {} : { cwd: input.cwd }),
+    // A plugin's own diagnostics go to our stderr, not into the protocol.
+    stderr: 'inherit',
+  });
+
+  const client = new Client(CLIENT_INFO);
+  await client.connect(transport);
+  return wrap(client);
+}
+
+/**
+ * Connects to an MCP server over HTTP.
+ *
+ * The other shape a plugin comes in: something already running, local or
+ * hosted. Headers carry whatever it needs to authenticate — they come from the
+ * plugin's own configuration, which is stored beside it rather than in a
+ * prompt or a workflow file.
+ */
+export async function connectHttp(input: {
+  url: string;
+  headers?: Record<string, string>;
+}): Promise<McpToolClient> {
+  const { StreamableHTTPClientTransport } =
+    await import('@modelcontextprotocol/sdk/client/streamableHttp.js');
+
+  const transport = new StreamableHTTPClientTransport(new URL(input.url), {
+    ...(input.headers ? { requestInit: { headers: input.headers } } : {}),
+  });
+
+  const client = new Client(CLIENT_INFO);
+  await client.connect(transport);
+  return wrap(client);
+}
