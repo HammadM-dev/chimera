@@ -11,11 +11,26 @@ import type { SidecarEvent } from './protocol.ts';
 
 const fake = path.join(path.dirname(fileURLToPath(import.meta.url)), 'fakeSidecar.mjs');
 
-function bridgeFor(mode: string, onEvent?: (event: SidecarEvent) => void) {
+/**
+ * A bridge onto the stand-in helper.
+ *
+ * The timeout is generous by default and short only where a test is waiting
+ * for it to fire. It was 2s for every test, which is a race against `node`
+ * starting the stand-in at all: run on its own the file passed every time, and
+ * run by `node --test` alongside the other files in this package — each of
+ * them spawning processes of their own — a different test failed on almost
+ * every run. A timeout a test does not care about should never be tight
+ * enough to be a clock.
+ */
+function bridgeFor(
+  mode: string,
+  onEvent?: (event: SidecarEvent) => void,
+  timeoutMs = 15_000,
+): ReturnType<typeof createSidecarBridge> {
   return createSidecarBridge({
     path: process.execPath,
     args: [fake, mode],
-    timeoutMs: 2_000,
+    timeoutMs,
     ...(onEvent ? { onEvent } : {}),
   });
 }
@@ -86,7 +101,8 @@ test('a helper that dies mid-command fails the command rather than hanging', asy
 });
 
 test('a helper that never answers times out', async () => {
-  const bridge = bridgeFor('silent');
+  // The one test that wants a short one: it is waiting for the timeout.
+  const bridge = bridgeFor('silent', undefined, 500);
   try {
     bridge.start();
     await assert.rejects(
