@@ -8,6 +8,7 @@ import { adapterFor } from '@chimera/providers';
 import {
   connectInProcess,
   createBrowserServer,
+  createHttpServer,
   createFilesystemServer,
   createSandbox,
   createMemoryServer,
@@ -209,6 +210,21 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
     'memory',
     await connectInProcess(createMemoryServer(localBackend(runId, 'agent'))),
   );
+  // The web tool, bounded by the automation's own allowlist.
+  //
+  // It was built, tested and exported, and then registered nowhere — so an
+  // agent granted `http.request` did not get a tool that failed, it got no
+  // tools at all, and was told "you have no tools" in its own system prompt.
+  // The shipped Researcher carries that grant, which made the one agent whose
+  // job is reading sources unable to reach any.
+  //
+  // Absent means empty, and empty means nothing is reachable: the same
+  // default-closed rule the browser server gets, for the same reason.
+  await tools.registerServer(
+    'http',
+    await connectInProcess(createHttpServer({ egressAllowlist: brief.egressAllowlist ?? [] })),
+  );
+
   // Whatever the user has plugged in. Registered after CHIMERA's own servers
   // so a plugin cannot shadow `filesystem` or `shell` by claiming the name —
   // the registry refuses a duplicate server id, and the built-ins get there

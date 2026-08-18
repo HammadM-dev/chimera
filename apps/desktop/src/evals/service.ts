@@ -22,6 +22,7 @@ import type {
 import { evalsRepository, runsRepository, workflowsRepository } from '@chimera/store';
 import {
   connectInProcess,
+  createHttpServer,
   createFilesystemServer,
   createMemoryServer,
   createSandbox,
@@ -157,6 +158,16 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
     await tools.registerServer(
       'memory',
       await connectInProcess(createMemoryServer(localBackend(runId, 'agent'))),
+    );
+
+    // The same servers a real run gets, including the web tool: an eval that
+    // ran an automation without the tools it declares is an eval that passes
+    // on a different automation.
+    await tools.registerServer(
+      'http',
+      await connectInProcess(
+        createHttpServer({ egressAllowlist: definition.egressAllowlist ?? [] }),
+      ),
     );
 
     const provider = standInFor(evalCase.scriptedAnswer);
