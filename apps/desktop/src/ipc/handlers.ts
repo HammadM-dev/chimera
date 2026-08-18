@@ -29,6 +29,7 @@ import { answerApproval, awaitingApprovals, cancelRun, startRun } from '../runs/
 import { exportTrace, listFailures, listRuns, listTrace } from '../runs/history.ts';
 import { readScreenshot } from '../runs/screenshots.ts';
 import { costSummary } from '../runs/costs.ts';
+import { runEvals, tagProduction } from '../evals/service.ts';
 import { listTriggers } from '../triggers/service.ts';
 import { listRoles } from '../roles/service.ts';
 import { pickAttachments, pickDirectory } from '../files/service.ts';
@@ -120,6 +121,8 @@ registerHandler(channels.runList, (payload) => listRuns(payload.limit));
 registerHandler(channels.traceList, (payload) => listTrace(payload.runId));
 registerHandler(channels.runFailures, (payload) => listFailures(payload.runId));
 registerHandler(channels.runCosts, (payload) => costSummary(payload.days));
+registerHandler(channels.evalsRun, (payload) => runEvals(payload.workflowId));
+registerHandler(channels.evalsTagProduction, (payload) => tagProduction(payload.workflowId));
 registerHandler(channels.traceScreenshot, (payload) => readScreenshot(payload.runId, payload.name));
 registerHandler(channels.tiersGet, () => getTiers());
 registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));

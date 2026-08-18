@@ -156,6 +156,25 @@ const briefSchema = z.object({
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),
+  // Golden cases this automation has to keep passing. They travel with the
+  // file, so an automation somebody sends you arrives with its tests.
+  evals: z
+    .array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        input: z.string(),
+        scriptedAnswer: z.string(),
+        assertions: z.array(
+          z.object({
+            path: z.string(),
+            op: z.enum(['exists', 'equals', 'contains', 'matches', 'gte', 'lte', 'length']),
+            value: z.string(),
+          }),
+        ),
+      }),
+    )
+    .optional(),
   // What starts this automation when nobody presses Run.
   triggers: z
     .array(
@@ -381,6 +400,42 @@ export const runCosts = defineInvokeChannel({
     byModel: z.array(costSliceSchema),
     byDay: z.array(costSliceSchema),
   }),
+});
+
+// M9-2: run an automation's golden cases, and tag a version as trusted.
+export const evalsRun = defineInvokeChannel({
+  channel: 'evals:run',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ workflowId: z.string() }),
+  responseSchema: z.object({
+    workflowId: z.string(),
+    passed: z.boolean(),
+    untested: z.boolean(),
+    outcomes: z.array(
+      z.object({
+        caseId: z.string(),
+        name: z.string(),
+        passed: z.boolean(),
+        runProblem: z.string(),
+        results: z.array(
+          z.object({
+            passed: z.boolean(),
+            actual: z.string(),
+            assertion: z.object({ path: z.string(), op: z.string(), value: z.string() }),
+          }),
+        ),
+      }),
+    ),
+  }),
+});
+
+export const evalsTagProduction = defineInvokeChannel({
+  channel: 'evals:tagProduction',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ workflowId: z.string() }),
+  responseSchema: z.object({ tagged: z.boolean(), reason: z.string() }),
 });
 
 export const traceScreenshot = defineInvokeChannel({
@@ -906,6 +961,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   traceList,
   runFailures,
   runCosts,
+  evalsRun,
+  evalsTagProduction,
   triggerList,
   filesPickDirectory,
   traceScreenshot,

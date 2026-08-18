@@ -257,6 +257,13 @@
   flex-direction: column;
   gap: var(--space-2);
   padding: 0 var(--space-3) var(--space-3);
+  /* Bounded, and it has to be. The brief holds the instruction, the
+   * attachments, the checks, the triggers and the allowlist, and every one of
+   * those grows with use — unbounded, it squeezes the canvas until the nodes
+   * at the bottom cannot be reached. Found by an E2E that could no longer drag
+   * a line between two steps. */
+  max-height: 42vh;
+  overflow-y: auto;
 }
 
 .brief__input {
@@ -536,4 +543,26 @@
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* A golden check. Four fields on one row, because a check that took a modal to
+ * write is a check nobody writes. */
+.brief__check {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr)) auto;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.brief__checkResult {
+  grid-column: 1 / -1;
+  font-size: var(--type-meta);
+}
+
+.brief__checkResult--pass {
+  color: var(--semantic-success);
+}
+
+.brief__checkResult--fail {
+  color: var(--semantic-danger);
 }

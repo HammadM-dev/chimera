@@ -138,6 +138,14 @@ export { validateForSave } from './engine/validator.ts';
 export { parseCron, nextFireAfter, firedInLastMinute, describeCron } from './triggers/cron.ts';
 export type { CronFields } from './triggers/cron.ts';
 export { validateTrigger, describeTrigger } from './triggers/types.ts';
+export { checkCase, checkAssertion, readPath, parseOutput } from './evals/assertions.ts';
+export type {
+  Assertion,
+  AssertOp,
+  AssertionResult,
+  EvalCase,
+  EvalOutcome,
+} from './evals/assertions.ts';
 export type { Trigger, TriggerProblem } from './triggers/types.ts';
 export type { SaveContext, StepCapabilities } from './engine/validator.ts';
 export type { RunBrief, BriefStep, BriefAttachment, BriefProblem } from './engine/runBrief.ts';

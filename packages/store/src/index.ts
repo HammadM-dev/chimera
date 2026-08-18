@@ -33,6 +33,8 @@ export type { ModelTier, ModelTiers, TierBinding } from './repositories/settings
 export * as blackboardRepository from './repositories/blackboard.ts';
 export type { BlackboardEntry } from './repositories/blackboard.ts';
 export * as deadLetterRepository from './repositories/deadLetter.ts';
+export * as evalsRepository from './repositories/evals.ts';
+export type { EvalRunRecord } from './repositories/evals.ts';
 export type { DeadLetterRecord } from './repositories/deadLetter.ts';
 export * as memoriesRepository from './repositories/memories.ts';
 export { MEMORY_KINDS } from './repositories/memories.ts';

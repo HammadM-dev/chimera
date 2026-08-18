@@ -17,10 +17,10 @@ So the order has changed. Everything that makes the product usable — the canva
 | M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
-| M9 Triggers and observability | 2 / 6 | Automations run unattended and prove they worked |
+| M9 Triggers and observability | 3 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**61 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**62 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1473,6 +1473,18 @@ Acceptance criteria:
 Dependencies: M8-6.
 
 ### M9-2: Workflow evals runner
+
+STATUS: **done.** Cases live on the automation's definition and travel with the file; `packages/core/src/evals/assertions.ts` holds the assertion vocabulary; `apps/desktop/src/evals/service.ts` runs each case as a real run through the real engine with only the provider replaced. The brief has a Checks panel — name, input, what the stand-in answers, what the output has to contain — and a "Mark as trusted" button that is refused until every case passes on *this* version.
+
+DECISION: **assertions are a declared vocabulary, not an expression language.** `exists`, `equals`, `contains`, `matches`, `gte`, `lte`, `length`, over a dotted path. Third time in this codebase, same reason: an eval is data in a file that gets shared.
+
+DECISION: **a missing value fails every op.** `lte 1` against an absent field reads the empty string as zero and passes, and an assertion that passes because the field is not there is worse than no assertion. Caught by the test that runs every op against a missing path.
+
+DECISION: **the stand-in answers the work question and the verification question differently.** The agent loop asks the model to do the work and then asks whether the work was done; a stand-in that said the same thing to both failed every case on verification rather than on its assertion — which is exactly what the first version did, reporting "incomplete" instead of what it actually found.
+
+DECISION: **an approval node in an eval is answered no.** A golden test that waited for a person would hang the suite; one that answered yes would be testing a gate that never gates.
+
+DECISION: **the trusted tag is scoped to a version.** A workflow trusted on the strength of tests that passed two edits ago is a workflow whose tag means nothing.
 
 Description: F7.8: golden test cases attached to a workflow (inputs + expected output property assertions), run on demand or on every save, against the mock provider by default (so CI costs nothing). `packages/store/src/repositories/evals.ts` backs the `evals`/`eval_runs` tables. This is also where M4-8's deferred production-tagging gate (which was a no-op until now) gets its real check: a workflow with failing evals cannot be tagged production.
 

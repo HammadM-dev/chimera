@@ -195,3 +195,61 @@ test('the run history can be searched, and the costs add up by automation, agent
     await gateway.close();
   }
 });
+
+test('a check runs against a stand-in model, and a failing one blocks the trusted tag', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 15_000,
+    });
+
+    await goTo(page, 'build');
+    await page.getByTestId('palette-summariser').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Summarise the order.');
+    await page.getByTestId('brief-input').fill('Summarise the order.');
+    await page.getByTestId('brief-name').fill('Order summary');
+
+    // A check that cannot pass: the stand-in answers one thing and the check
+    // demands another.
+    await page.getByTestId('check-add').click();
+    await page.getByTestId('check-name-0').fill('Says the order number');
+    await page.getByTestId('check-input-0').fill('Summarise order 812.');
+    await page.getByTestId('check-answer-0').fill('I could not read the order.');
+    await page.getByTestId('check-contains-0').fill('812');
+
+    await page.getByTestId('brief-save').click();
+    await expect(page.getByTestId('run-note')).toContainText('Saved as version 1');
+
+    await page.getByTestId('check-run').click();
+    await expect(page.getByTestId('check-result-0')).toContainText('failed', { timeout: 60_000 });
+
+    // No real provider was touched: the check ran against the mock, so this
+    // works on a machine with no keys at all.
+    await page.getByTestId('check-tag').click();
+    await expect(page.getByTestId('run-note')).toContainText('not all passed');
+
+    // Make it pass, save again, re-check, and the tag is allowed.
+    await page.getByTestId('check-answer-0').fill('Order 812 is for two widgets.');
+    await page.getByTestId('brief-save').click();
+    await page.getByTestId('check-run').click();
+    await expect(page.getByTestId('check-result-0')).toContainText('passed', { timeout: 60_000 });
+
+    await page.getByTestId('check-tag').click();
+    await expect(page.getByTestId('run-note')).toContainText('trusted one');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});

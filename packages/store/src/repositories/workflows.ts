@@ -11,6 +11,14 @@ export interface WorkflowSummary {
   name: string;
   updatedAt: string;
   latestVersionId: string | null;
+  /**
+   * The version this workflow is trusted at, if any.
+   *
+   * Null until somebody tags one, and only tagged when its golden cases pass —
+   * that gate lives above this repository, where the cases and their results
+   * are both in scope.
+   */
+  productionVersionId: string | null;
 }
 
 export interface WorkflowVersion {
@@ -26,6 +34,7 @@ interface WorkflowRow {
   name: string;
   updated_at: string;
   latest_version_id: string | null;
+  production_version_id: string | null;
 }
 
 interface VersionRow {
@@ -43,7 +52,7 @@ export function list(db: Database.Database): WorkflowSummary[] {
   return (
     db
       .prepare(
-        `SELECT id, name, updated_at, latest_version_id FROM workflows
+        `SELECT id, name, updated_at, latest_version_id, production_version_id FROM workflows
          WHERE id != ? AND archived_at IS NULL ORDER BY updated_at DESC`,
       )
       .all(AD_HOC) as WorkflowRow[]
@@ -52,7 +61,26 @@ export function list(db: Database.Database): WorkflowSummary[] {
     name: row.name,
     updatedAt: row.updated_at,
     latestVersionId: row.latest_version_id,
+    productionVersionId: row.production_version_id,
   }));
+}
+
+/**
+ * Marks which version of a workflow is the trusted one.
+ *
+ * Null untags it. The caller decides whether it may tag — the eval gate lives
+ * above this, where the cases and their results are both in scope; this writes
+ * what was decided.
+ */
+export function setProductionVersion(
+  db: Database.Database,
+  workflowId: string,
+  versionId: string | null,
+): void {
+  db.prepare('UPDATE workflows SET production_version_id = ? WHERE id = ?').run(
+    versionId,
+    workflowId,
+  );
 }
 
 /**

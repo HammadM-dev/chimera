@@ -332,6 +332,35 @@ implemented feature reads yet.
 | `aggregate` | `{ "type": "aggregate", "aggregate": { "source", "strategy", "separator", "template", "roleId", "chunkSize", "instruction" } }` | `concat`, `json_merge`, `vote`, `template`, `reduce_with_agent`. Only the last makes a model call; it folds a chunk at a time and folds the results again. |
 | `swarm` | `{ "type": "swarm", "swarm": { "goal", "orchestratorRoleId", "agents": [], "maxRounds", "maxConcurrentAgents", "stallRounds", "goalPredicate" } }` | An orchestrator and specialists on one goal, through the blackboard. Concurrency is hard-capped at 20 by the engine. Three ways to stop: the goal predicate, the round limit, and rounds that change nothing. |
 
+### Checks (golden cases)
+
+`evals` on the brief is what the automation has to keep producing:
+
+```jsonc
+"evals": [
+  {
+    "id": "check-1",
+    "name": "Names the order",
+    "input": "Summarise order 812.",
+    "scriptedAnswer": "Order 812 is for two widgets.",
+    "assertions": [{ "path": "", "op": "contains", "value": "812" }]
+  }
+]
+```
+
+`path` is dotted into the output when the output is JSON (`total`,
+`exceptions[0].reason`) and empty for the whole thing. `op` is one of `exists`,
+`equals`, `contains`, `matches`, `gte`, `lte`, `length` — a declared
+vocabulary, never an expression. A missing value fails every op.
+
+Cases run against a stand-in model, so they cost nothing and work on a machine
+with no keys; `scriptedAnswer` is what that stand-in says, which is how a case
+tests the automation rather than the weather. An approval node in a case is
+answered *no*.
+
+A version can be tagged as the trusted one only when every case passes on that
+exact version.
+
 ### Triggers
 
 `triggers` on the brief is what starts the automation when nobody presses Run:

@@ -359,6 +359,23 @@ const TRIGGER_LABEL: Record<TriggerWire['kind'], string> = {
   folderDrop: 'When a file lands in a folder',
 };
 
+/** One golden case: what the automation is told, and what has to come back. */
+interface EvalCaseWire {
+  id: string;
+  name: string;
+  input: string;
+  scriptedAnswer: string;
+  assertions: { path: string; op: string; value: string }[];
+}
+
+interface EvalOutcomeWire {
+  caseId: string;
+  name: string;
+  passed: boolean;
+  runProblem: string;
+  results: { passed: boolean; actual: string; assertion: { path: string; value: string } }[];
+}
+
 interface PendingApproval {
   nodeId: string;
   prompt: string;
@@ -381,6 +398,9 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
   const [attachNote, setAttachNote] = useState('');
   const [sites, setSites] = useState('');
   const [triggers, setTriggers] = useState<TriggerWire[]>([]);
+  const [evals, setEvals] = useState<EvalCaseWire[]>([]);
+  const [evalOutcomes, setEvalOutcomes] = useState<EvalOutcomeWire[]>([]);
+  const [checking, setChecking] = useState(false);
   const [webhookPort, setWebhookPort] = useState(0);
   const appliedTemplate = useRef<AutomationTemplate | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
@@ -486,6 +506,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
             edges: [string, string][];
             egressAllowlist?: string[];
             triggers?: TriggerWire[];
+            evals?: EvalCaseWire[];
             layout?: { nodeId: string; x: number; y: number }[];
           };
         }>('workflow:get', { id: openId });
@@ -610,6 +631,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
         setBrief(loaded.definition.instruction);
         setSites((loaded.definition.egressAllowlist ?? []).join(', '));
         setTriggers(loaded.definition.triggers ?? []);
+        setEvals(loaded.definition.evals ?? []);
         setAttachments(loaded.definition.attachments);
         setName(loaded.name);
         setSavedId(loaded.id);
@@ -870,6 +892,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       edges: edges.map((edge) => [edge.source, edge.target] as [string, string]),
       preauthorised,
       triggers,
+      evals,
       // Hosts, not URLs. Empty means the browser and the HTTP tool reach
       // nothing, which is the right default for an automation nobody has
       // granted the network to.
@@ -882,7 +905,7 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       // it half-worked.
       layout: nodes.map((node) => ({ nodeId: node.id, x: node.position.x, y: node.position.y })),
     };
-  }, [name, brief, attachments, nodes, edges, preauthorised, sites, triggers]);
+  }, [name, brief, attachments, nodes, edges, preauthorised, sites, triggers, evals]);
 
   // The rules that decide whether this can run, asked of the one place that
   // implements them. Duplicating them in the renderer would mean two rule sets
@@ -962,6 +985,39 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
       setRunNote(describeError(err).message);
     }
   }, [savedId, name, currentBrief, onSaved]);
+
+  const runChecks = useCallback(async () => {
+    if (savedId === null) {
+      setRunNote('Save the automation first — a check runs against a saved version.');
+      return;
+    }
+    setChecking(true);
+    try {
+      const report = await bridge().invoke<{ outcomes: EvalOutcomeWire[]; untested: boolean }>(
+        'evals:run',
+        { workflowId: savedId },
+      );
+      setEvalOutcomes(report.outcomes);
+      if (report.untested) setRunNote('This automation has no checks yet.');
+    } catch (err) {
+      setRunNote(describeError(err).message);
+    } finally {
+      setChecking(false);
+    }
+  }, [savedId]);
+
+  const tagProduction = useCallback(async () => {
+    if (savedId === null) return;
+    try {
+      const result = await bridge().invoke<{ tagged: boolean; reason: string }>(
+        'evals:tagProduction',
+        { workflowId: savedId },
+      );
+      setRunNote(result.reason);
+    } catch (err) {
+      setRunNote(describeError(err).message);
+    }
+  }, [savedId]);
 
   const start = useCallback(async () => {
     setRunNote('');
@@ -1340,6 +1396,150 @@ function CanvasInner({ goal, template, openId = null, onSaved }: CanvasProps): J
               )}
 
               {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
+
+              <section className="brief__triggers" data-testid="brief-checks">
+                <p className="canvas__section">Checks</p>
+                {evals.length === 0 && (
+                  <p className="brief__note">
+                    Nothing is checked. A check runs this automation against a stand-in model and
+                    says whether the answer still holds.
+                  </p>
+                )}
+                {evals.map((evalCase, index) => {
+                  const outcome = evalOutcomes.find((one) => one.caseId === evalCase.id);
+                  return (
+                    <div
+                      key={evalCase.id}
+                      className="brief__check"
+                      data-testid={`check-${String(index)}`}
+                    >
+                      <input
+                        className="control"
+                        data-testid={`check-name-${String(index)}`}
+                        aria-label="What this check is called"
+                        placeholder="What this check is called"
+                        value={evalCase.name}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setEvals((current) =>
+                            current.map((one, at) =>
+                              at === index ? { ...one, name: value } : one,
+                            ),
+                          );
+                        }}
+                      />
+                      <input
+                        className="control"
+                        data-testid={`check-input-${String(index)}`}
+                        aria-label="What the automation is told"
+                        placeholder="What the automation is told"
+                        value={evalCase.input}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setEvals((current) =>
+                            current.map((one, at) =>
+                              at === index ? { ...one, input: value } : one,
+                            ),
+                          );
+                        }}
+                      />
+                      <input
+                        className="control"
+                        data-testid={`check-answer-${String(index)}`}
+                        aria-label="What the stand-in model answers"
+                        placeholder="What the stand-in model answers"
+                        value={evalCase.scriptedAnswer}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setEvals((current) =>
+                            current.map((one, at) =>
+                              at === index ? { ...one, scriptedAnswer: value } : one,
+                            ),
+                          );
+                        }}
+                      />
+                      <input
+                        className="control"
+                        data-testid={`check-contains-${String(index)}`}
+                        aria-label="The answer has to contain"
+                        placeholder="The answer has to contain…"
+                        value={evalCase.assertions[0]?.value ?? ''}
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          setEvals((current) =>
+                            current.map((one, at) =>
+                              at === index
+                                ? { ...one, assertions: [{ path: '', op: 'contains', value }] }
+                                : one,
+                            ),
+                          );
+                        }}
+                      />
+                      {outcome && (
+                        <span
+                          className={`brief__checkResult brief__checkResult--${outcome.passed ? 'pass' : 'fail'}`}
+                          data-testid={`check-result-${String(index)}`}
+                        >
+                          {outcome.passed
+                            ? 'passed'
+                            : outcome.runProblem !== ''
+                              ? `failed — ${outcome.runProblem}`
+                              : `failed — got "${outcome.results[0]?.actual ?? ''}"`}
+                        </span>
+                      )}
+                      <button
+                        type="button"
+                        className="button"
+                        data-testid={`check-remove-${String(index)}`}
+                        onClick={() => {
+                          setEvals((current) => current.filter((_, at) => at !== index));
+                        }}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  );
+                })}
+
+                <div className="brief__left">
+                  <button
+                    type="button"
+                    className="button"
+                    data-testid="check-add"
+                    onClick={() => {
+                      setEvals((current) => [
+                        ...current,
+                        {
+                          id: `check-${String(Date.now())}`,
+                          name: 'It answers',
+                          input: brief,
+                          scriptedAnswer: '',
+                          assertions: [{ path: '', op: 'contains', value: '' }],
+                        },
+                      ]);
+                    }}
+                  >
+                    Add a check
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    data-testid="check-run"
+                    disabled={checking || evals.length === 0}
+                    onClick={() => void runChecks()}
+                  >
+                    {checking ? 'Checking' : 'Run checks'}
+                  </button>
+                  <button
+                    type="button"
+                    className="button"
+                    data-testid="check-tag"
+                    onClick={() => void tagProduction()}
+                  >
+                    Mark as trusted
+                  </button>
+                </div>
+              </section>
 
               <section className="brief__triggers" data-testid="brief-triggers">
                 <p className="canvas__section">Runs when</p>

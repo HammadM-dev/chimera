@@ -1,5 +1,6 @@
 import type { NodeConfig, NodeType } from './nodeTypes.ts';
 import type { Trigger } from '../triggers/types.ts';
+import type { EvalCase } from '../evals/assertions.ts';
 
 // What a run starts from: the instruction, the files, and the ordered steps.
 // The canvas produces this and the executor consumes it — one shape, so a
@@ -71,6 +72,14 @@ export interface RunBrief {
    * the moment the file was sent to somebody else.
    */
   triggers?: Trigger[];
+  /**
+   * Golden cases this automation has to keep passing.
+   *
+   * On the definition rather than in a side table, so they travel with the file
+   * — a shared automation whose tests stayed behind is a shared automation
+   * nobody can check.
+   */
+  evals?: EvalCase[];
   /** Where each node sits on the canvas. Not part of the run. */
   layout?: { nodeId: string; x: number; y: number }[];
 }
