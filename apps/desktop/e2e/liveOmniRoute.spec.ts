@@ -194,12 +194,13 @@ test('a real contract, four real agents, one real answer', async () => {
     await expect(page.getByTestId('run-result')).toBeVisible({ timeout: 840_000 });
 
     const panel = (await page.getByTestId('run-result').textContent()) ?? '';
-    if (!panel.includes('2027')) process.stdout.write(`\nDIAGNOSTIC\n${await diagnose(page)}\n`);
+    process.stdout.write(`\n===== RESULT PANEL =====\n${panel.slice(0, 2000)}\n=====\n`);
     const answer =
       (await page
         .getByTestId('run-output')
         .textContent()
         .catch(() => '')) ?? '';
+    if (answer.length === 0) process.stdout.write(`\nDIAGNOSTIC\n${await diagnose(page)}\n`);
     process.stdout.write(
       `\n===== WHAT IT PRODUCED =====\n${answer}\n============================\n`,
     );

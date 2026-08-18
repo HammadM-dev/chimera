@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { BUILTIN_SCHEMAS } from './outputContract.ts';
 import type { Message } from '@chimera/providers';
 import type { Role } from './roleRegistry.ts';
 
@@ -128,7 +129,41 @@ export function assembleSystemMessage(instructions: InstructionSource): string {
       ? 'You have no tools. Answer from what you are given.'
       : `You may call these tools, and no others: ${instructions.availableTools.join(', ')}.`;
 
-  return [instructions.role.systemPrompt, '', toolLine, '', ENVELOPE_EXPLANATION].join('\n');
+  return [
+    instructions.role.systemPrompt,
+    '',
+    toolLine,
+    ...(outputContractLine(instructions.role) === ''
+      ? []
+      : ['', outputContractLine(instructions.role)]),
+    '',
+    ENVELOPE_EXPLANATION,
+  ].join('\n');
+}
+
+/**
+ * States the shape the answer is required to take, when one is required.
+ *
+ * The contract was enforced and never asked for. A role with
+ * `outputContract.format: 'json'` had its answer validated against a schema the
+ * model was never shown, so the shipped data extractor — prose in, prose out,
+ * schema expected — failed every real run it was ever part of with "the output
+ * contract was not satisfied after 2 attempt(s)", having done the work
+ * correctly first. It survived because a scripted stub answer is never asked to
+ * satisfy a schema either, so nothing in the suite noticed.
+ *
+ * A requirement worth failing a run over is a requirement worth stating.
+ */
+function outputContractLine(role: Role): string {
+  const contract = role.outputContract;
+  if (contract.format !== 'json' || contract.schemaId === null) return '';
+  const schema = BUILTIN_SCHEMAS[contract.schemaId];
+  if (!schema) return '';
+  return [
+    'Answer with JSON and nothing else: no prose before or after it, no code fences.',
+    'It must match this shape:',
+    JSON.stringify(schema),
+  ].join('\n');
 }
 
 export interface AssembleOptions {
