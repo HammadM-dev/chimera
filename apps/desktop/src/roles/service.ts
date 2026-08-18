@@ -1,4 +1,5 @@
 import { createRoleRegistry, type RoleRegistry } from '@chimera/core';
+import { ValidationError } from '@chimera/errors';
 import { getStore } from '../store/lifecycle.ts';
 
 // The roster the automation builder draws from. Reads the real role registry,
@@ -61,20 +62,37 @@ export interface SaveRoleInput {
  * An id is derived from the name for a new one and never changed afterwards:
  * saved automations refer to agents by id, and an id that followed a rename
  * would break every automation using it the moment somebody fixed a typo.
+ *
+ * Deriving it from the name means two agents named the same thing want the
+ * same id, and the registry's write is an upsert — so making a second "Invoice
+ * checker" silently replaced the first, and every automation using it changed
+ * behaviour with no sign that anything had happened. Naming one "Researcher"
+ * replaced a shipped agent the same way. A new agent whose id is already taken
+ * is refused, by name, with the two things the person can do about it.
  */
 export function saveRole(input: SaveRoleInput) {
   const registry = roles();
   const existing = input.id === '' ? undefined : registry.get(input.id);
 
-  const id =
-    existing?.id ??
-    (input.id !== ''
-      ? input.id
-      : input.name
-          .toLowerCase()
-          .replace(/[^a-z0-9]+/g, '-')
-          .replace(/^-+|-+$/g, '')
-          .slice(0, 40) || `agent-${String(Date.now())}`);
+  const derived =
+    input.name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || `agent-${String(Date.now())}`;
+
+  if (existing === undefined && input.id === '') {
+    const taken = registry.get(derived);
+    if (taken !== undefined) {
+      throw new ValidationError(
+        'ROLE_NAME_TAKEN',
+        `An agent called "${taken.name}" already exists. Choose another name, or open that one to edit it.`,
+        { roleId: derived },
+      );
+    }
+  }
+
+  const id = existing?.id ?? (input.id !== '' ? input.id : derived);
 
   const saved = registry.save({
     id,
