@@ -192,3 +192,45 @@ test('a new agent cannot quietly take over a shipped one by using its name', asy
     await stub.close();
   }
 });
+
+test('a spend cap stops the run and says which cap and how much', async () => {
+  const stub = await startStub();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: stub.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+    await connect(page);
+
+    // An agent that may spend a hundredth of a cent. The first call costs more
+    // than that, so the cap is reached before any money is spent rather than
+    // after — which is the only version of a cap worth having.
+    await goTo(page, 'agents');
+    await page.getByTestId('agent-add').click();
+    await page.getByTestId('agent-name').fill('Tightwad');
+    await page.getByTestId('agent-prompt').fill('You answer in one short sentence.');
+    await page.getByTestId('agent-cost').fill('0.0000001');
+    await page.getByTestId('agent-save').click();
+    await expect(page.getByTestId('agent-card-tightwad')).toBeVisible({ timeout: 20_000 });
+
+    await goTo(page, 'build');
+    await place(page, 'tightwad', 'Answer the question.');
+    await page.getByTestId('brief-input').fill('What does the contract say?');
+    await expect(page.getByTestId('brief-run')).toBeEnabled({ timeout: 20_000 });
+    await page.getByTestId('brief-run').click();
+
+    // It stops, and the message names the limit rather than saying "error".
+    const note = page.getByTestId('run-note');
+    await expect(note).toBeVisible({ timeout: 120_000 });
+    const said = (await note.textContent()) ?? '';
+    process.stdout.write(`\nspend cap note: ${said}\n`);
+    expect(said.toLowerCase()).toContain('budget');
+
+    // And the button comes back, so the person can raise the cap and retry.
+    await expect(page.getByTestId('brief-run')).toBeEnabled({ timeout: 30_000 });
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await stub.close();
+  }
+});
