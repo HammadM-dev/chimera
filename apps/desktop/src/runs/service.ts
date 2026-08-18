@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import type { WebContents } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 import { Governor, createRoleRegistry, runAutomation, type RunBrief } from '@chimera/core';
@@ -15,7 +16,7 @@ import {
 } from '@chimera/tools';
 import { getStore } from '../store/lifecycle.ts';
 import { connectionFor } from '../providers/service.ts';
-import { emitRunEvent } from './subscriptions.ts';
+import { emitRunEvent, subscribe } from './subscriptions.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
@@ -37,6 +38,25 @@ const pendingApprovals = new Map<
 
 /** The status a run holds while a person is being asked. */
 const AWAITING = 'awaiting_approval';
+
+/**
+ * Cancels every run in flight, and reports how many there were.
+ *
+ * The panic key's half of M8-3. Cancellation is cooperative — the executor
+ * checks the flag between steps and the agent loop between iterations — which
+ * is why this returns a count rather than a promise: what a person needs to see
+ * immediately is that the stop was heard.
+ */
+export function cancelEveryRun(): number {
+  let stopped = 0;
+  for (const flag of cancellations.values()) {
+    if (!flag.cancelled) {
+      flag.cancelled = true;
+      stopped += 1;
+    }
+  }
+  return stopped;
+}
 
 export function cancelRun(runId: string): { accepted: boolean } {
   const flag = cancellations.get(runId);
@@ -297,7 +317,19 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   }
 }
 
-export function startRun(brief: RunBrief, triggerType = 'manual'): { runId: string } {
+export function startRun(
+  brief: RunBrief,
+  triggerType = 'manual',
+  /**
+   * Subscribed before the first event, not after.
+   *
+   * The window that asked for the run cannot subscribe until it knows the run
+   * id, and by then `started` has already been emitted to nobody. Everything
+   * downstream of that — the status bar's count of what is running, and so the
+   * control indicator — was silently missing its first event.
+   */
+  watcher?: WebContents,
+): { runId: string } {
   // The same rules the save path applies. A run started from an unsaved canvas
   // must not be the way around them.
   assertRunnable(brief);
@@ -310,6 +342,7 @@ export function startRun(brief: RunBrief, triggerType = 'manual'): { runId: stri
     // an automation that ran at three in the morning.
     triggerType,
   });
+  if (watcher) subscribe(run.id, watcher);
   void execute(run.id, brief, false);
   return { runId: run.id };
 }

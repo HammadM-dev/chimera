@@ -587,6 +587,59 @@ export const telemetryTest = defineInvokeChannel({
   responseSchema: z.object({ sent: z.boolean(), detail: z.string() }),
 });
 
+// M8-3: the grant, the indicator, and the stop.
+const controlSessionSchema = z.object({
+  granted: z.boolean(),
+  reason: z.string(),
+  grantedAt: z.string(),
+  dryRun: z.boolean(),
+});
+
+export const controlGet = defineInvokeChannel({
+  channel: 'control:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    session: controlSessionSchema,
+    panicKey: z.string(),
+  }),
+});
+
+export const controlGrant = defineInvokeChannel({
+  channel: 'control:grant',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ reason: z.string(), dryRun: z.boolean() }),
+  responseSchema: z.object({ session: controlSessionSchema }),
+});
+
+export const controlRevoke = defineInvokeChannel({
+  channel: 'control:revoke',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ session: controlSessionSchema }),
+});
+
+export const controlPanic = defineInvokeChannel({
+  channel: 'control:panic',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ cancelledRuns: z.number(), controlRevoked: z.boolean() }),
+});
+
+export const controlEvent = defineEventChannel({
+  channel: 'control:event',
+  v: 1,
+  sensitive: false,
+  payloadSchema: z.object({
+    session: controlSessionSchema,
+    cancelledRuns: z.number().optional(),
+  }),
+});
+
 export const providerTestConnection = defineInvokeChannel({
   channel: 'provider:testConnection',
   v: 2,
@@ -1031,6 +1084,11 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   telemetryGet,
   telemetrySet,
   telemetryTest,
+  controlGet,
+  controlGrant,
+  controlRevoke,
+  controlPanic,
+  controlEvent,
   traceExport,
   runEvent,
   providerTestConnection,

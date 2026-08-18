@@ -16,13 +16,13 @@ So the order has changed. Everything that makes the product usable — the canva
 | M5 Swarm | 6 / 6 | Point a team of agents at a batch |
 | M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
-| M8 Native control | 0 / 6 | Agents drive desktop applications |
+| M8 Native control | 1 / 6 | Agents drive desktop applications |
 | M9 Triggers and observability | 6 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**65 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**66 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
-Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
+Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time); **the first vertical**, which decides M4-10's shipped templates; and **a Rust toolchain**, which M8's sidecar binary needs and this machine does not have (`cargo` is not installed). M8's TypeScript half — the protocol, the bridge, the panic key, the grant — is built and tested against a stand-in process. 
 
 ## How this plan is followed
 
@@ -1373,6 +1373,14 @@ Master plan deliverables: Rust sidecar (first Rust in the project), screen captu
 
 ### M8-1: Rust sidecar skeleton and stdio protocol
 
+STATUS: **TypeScript half done; the Rust binary is blocked on a toolchain.** `packages/control/src/sidecar/` holds the protocol types and the bridge — spawning, request/response matching by id, timeouts, crash handling, clean shutdown — tested against `fakeSidecar.mjs`, a stand-in process that speaks the same line-delimited JSON. What is left is `sidecar/` itself, and it needs `cargo`, which is not installed on this machine.
+
+DECISION: **the stand-in is the executable specification.** It lives beside the bridge rather than inside a test file because it is what the Rust binary has to replace, line for line: read a line, do one thing, answer on one line. Its modes — silent, crashing, refusing, noisy — are the failure shapes the bridge has to survive, and each is a test.
+
+DECISION: **line-delimited JSON over stdio, not a socket.** A socket needs a port, a permission and a story about who else on the machine can connect. A pipe to a child process starts when the app starts it and dies when the app dies.
+
+DECISION: **noise on stdout costs a line, not the session.** A binary that prints a warning where the protocol lives should not take the run down with it.
+
 Description: `sidecar/` — the first and only Rust code in the project, confined here per CLAUDE.md. A small binary speaking line-delimited JSON over stdio. `packages/control/src/sidecar/` holds the bridge client and protocol types (TypeScript side); the sidecar itself takes commands and returns results, holding no product logic, per the master-plan risk register's explicit constraint ("if it grows past ~1500 lines, something belongs in TypeScript"). `apps/desktop/src/workerPool.ts` (or a dedicated sidecar-lifecycle module alongside it) spawns and supervises the process.
 
 Acceptance criteria:
@@ -1394,6 +1402,16 @@ Acceptance criteria:
 Dependencies: M8-1.
 
 ### M8-3: Per-session grant, control indicator, global panic hotkey
+
+STATUS: **done.** `apps/desktop/src/control/` — a grant that lasts a session and not a minute longer, an indicator in the status bar for as long as anything is running, and `Control+Alt+Escape` registered at the OS level.
+
+DECISION: **the panic key is registered whether or not native control was ever granted, and stops everything.** A browser agent filling in the wrong form is exactly as urgent as a mouse moving on its own, and a panic key that covered only one of them is one people learn not to trust. It cancels every run, closes the browser, and revokes the grant.
+
+DECISION: **the grant does not survive a restart and is not a setting.** A permission that persists is a permission nobody remembers giving.
+
+DECISION: **`scripts/check-no-global-hotkey.mjs` narrowed rather than went away.** One file may register an OS-level hotkey. A second registration is either a duplicate fighting the first for the combination, or a feature quietly giving itself an OS-wide keyboard hook.
+
+BUG, found by this ticket's own E2E: **the `started` run event was emitted to nobody.** The window that asks for a run cannot subscribe until it knows the run id, and by then the first event had already been sent to an empty subscriber list. Everything downstream of it — the count of what is running, and so the indicator — was silently missing its first event. `run:start` now subscribes the calling window before it emits anything.
 
 Description: F6.0's global principles, now meaningful for the first time since Tier 2 exists: explicit per-session grant before any native control begins, an always-visible control indicator while active, and the OS-level global panic hotkey (default Ctrl+Alt+Esc, remappable, registered at the OS level so it works even if the app window doesn't have focus) hard-stopping every agent — this is the ticket, deferred from M3-6's decision, where OS-level hotkey registration actually belongs.
 
@@ -1417,6 +1435,8 @@ Acceptance criteria:
 Dependencies: M8-2.
 
 ### M8-5: Dry-run mode for native control
+
+STATUS: **the switch exists; there is nothing yet to dry-run.** The control session carries `dryRun`, it defaults on, and the indicator says "Watching this machine" rather than "Controlling" while it is set. What it gates — describing an action instead of performing it — belongs to the sidecar commands, which wait on M8-2.
 
 Description: F6.0: dry-run mode logs intended native-control actions without executing them, letting a nervous ops manager see what an agent *would* do before granting real control.
 

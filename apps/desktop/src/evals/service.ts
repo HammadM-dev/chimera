@@ -85,7 +85,6 @@ function standInFor(answer: string): ProviderAdapter {
     // this — the eval runner hands the adapter straight to the engine.
     kind: 'openai-compatible',
     chat: (request: NormalisedRequest) => Promise.resolve(reply(request)),
-    // eslint-disable-next-line @typescript-eslint/require-await -- an async generator is the interface's shape
     async *streamChat(request: NormalisedRequest): AsyncIterable<StreamEvent> {
       const response = reply(request);
       yield { type: 'start', id: 'stand-in', model: response.model };

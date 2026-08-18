@@ -5,6 +5,8 @@ import { openStore, closeStore } from './store/lifecycle.ts';
 import { setScreenshotRoot } from './runs/screenshots.ts';
 import { closeBrowsers, setBrowserRoot } from './runs/browser.ts';
 import { reloadTriggers, stopTriggers } from './triggers/service.ts';
+import { registerPanicKey, unregisterPanicKey } from './control/panicKey.ts';
+import { startControlBroadcast } from './control/broadcast.ts';
 
 // Electron derives `userData` from the app name, and unpackaged it reads that
 // from package.json — which here is the scoped npm name `@chimera/desktop`,
@@ -28,6 +30,12 @@ void app.whenReady().then(() => {
   // Armed before the window exists: an automation on a schedule belongs to the
   // workspace, not to whether somebody is looking at it.
   reloadTriggers();
+  // Registered whether or not native control is ever granted: a browser agent
+  // filling in the wrong form is exactly as urgent as a mouse moving on its
+  // own, and a panic key that covered only one of them is one people learn not
+  // to trust.
+  void registerPanicKey();
+  startControlBroadcast();
   createWindow();
 
   app.on('activate', () => {
@@ -53,4 +61,5 @@ app.on('will-quit', () => {
   // process list, and the user has no idea it is ours.
   void closeBrowsers();
   stopTriggers();
+  unregisterPanicKey();
 });

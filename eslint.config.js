@@ -27,7 +27,15 @@ module.exports = [
     // explicitly rather than a bare '*.js'/'*.cjs' glob, which minimatch
     // matches at any depth — that would also catch renderer-context fixture
     // .js files elsewhere in the tree and wrongly hand them Node globals.
-    files: ['eslint.config.js', 'scripts/**/*.mjs', 'apps/desktop/scripts/**/*.mjs'],
+    files: [
+      'eslint.config.js',
+      'scripts/**/*.mjs',
+      'apps/desktop/scripts/**/*.mjs',
+      // The stand-in for the native-control binary: a Node process by
+      // definition, and the executable specification of what the Rust binary
+      // has to do.
+      'packages/control/src/sidecar/*.mjs',
+    ],
     languageOptions: {
       globals: {
         ...globals.node,

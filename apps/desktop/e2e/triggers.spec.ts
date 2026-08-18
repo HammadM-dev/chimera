@@ -413,3 +413,114 @@ test('a finished run is exported to a collector, without the prompts unless aske
     await gateway.close();
   }
 });
+
+/** The same stub, answering slowly, so there is still a run to stop when the click lands. */
+async function startSlowGateway(delayMs: number): Promise<{
+  baseUrl: string;
+  close: () => Promise<void>;
+}> {
+  const server: Server = createServer((req, res) => {
+    if (req.url?.startsWith('/v1/models') === true) {
+      res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
+      res.end(JSON.stringify({ data: [{ id: 'claude-haiku-4-5' }] }));
+      return;
+    }
+
+    let body = '';
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      const asksForVerdict = body.includes('Has the task been achieved');
+      setTimeout(() => {
+        res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
+        res.end(
+          JSON.stringify({
+            id: 'slow-1',
+            model: 'claude-haiku-4-5',
+            choices: [
+              {
+                index: 0,
+                message: {
+                  role: 'assistant',
+                  content: asksForVerdict
+                    ? '{"verified": true, "evidence": "done"}'
+                    : 'Pass complete.',
+                },
+                finish_reason: 'stop',
+              },
+            ],
+            usage: { prompt_tokens: 100, completion_tokens: 20 },
+          }),
+        );
+      }, delayMs);
+    });
+  });
+
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    baseUrl: `http://127.0.0.1:${String(port)}/v1`,
+    close: () => new Promise<void>((resolve) => server.close(() => resolve())),
+  };
+}
+
+test('the stop control halts a run in flight and says what it stopped', async () => {
+  const gateway = await startSlowGateway(3_000);
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 15_000,
+    });
+
+    await goTo(page, 'build');
+    // Enough steps that there is still something to stop when the click lands.
+    for (const instruction of ['First pass.', 'Second pass.', 'Third pass.', 'Fourth pass.']) {
+      await page.getByTestId('palette-summariser').click();
+      await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+      await page.getByTestId('node-instruction').fill(instruction);
+    }
+    await page.getByTestId('brief-input').fill('Work through the passes.');
+    await page.getByTestId('brief-name').fill('Long one');
+    await page.getByTestId('brief-run').click();
+
+    // The indicator appears while it runs: a machine doing something on its own
+    // should never be a thing you have to go and check.
+    await expect(page.getByTestId('status-control')).toBeVisible({ timeout: 60_000 });
+
+    await page.getByTestId('status-panic').click();
+    await expect(page.getByTestId('status-stopped')).toContainText('Stopped', { timeout: 30_000 });
+
+    // And the run really ended rather than carrying on quietly.
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(async () => {
+            const chimera = (
+              window as unknown as {
+                chimera: { invoke: (c: string, p: unknown) => Promise<unknown> };
+              }
+            ).chimera;
+            const result = (await chimera.invoke('run:list', {})) as {
+              runs: { status: string }[];
+            };
+            return result.runs.every((run) => run.status !== 'running');
+          }),
+        { timeout: 60_000, intervals: [1000] },
+      )
+      .toBe(true);
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});

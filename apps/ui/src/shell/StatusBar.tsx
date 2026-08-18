@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
 import {
@@ -14,9 +14,19 @@ import {
 
 const SWEEP_INTERVAL_MS = 15_000;
 
+interface ControlSession {
+  granted: boolean;
+  reason: string;
+  dryRun: boolean;
+}
+
 export function StatusBar(): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [totals, setTotals] = useState<SessionTotals>(sessionTotals());
+  const [control, setControl] = useState<ControlSession | null>(null);
+  const [panicKey, setPanicKey] = useState('');
+  const [stopped, setStopped] = useState('');
+  const [runsInFlight, setRunsInFlight] = useState(0);
 
   useEffect(() => subscribeToSession(setTotals), []);
 
@@ -32,6 +42,65 @@ export function StatusBar(): JSX.Element {
         unpriced: snapshot.hasUnpricedCalls,
       });
     });
+  }, []);
+
+  // M8-3's indicator. Always visible while anything is running or control is
+  // granted — a machine being driven by something other than the person at it
+  // should never be a thing you have to go and check.
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ session: ControlSession; panicKey: string }>(
+          'control:get',
+          {},
+        );
+        setControl(result.session);
+        setPanicKey(result.panicKey);
+      } catch {
+        setControl(null);
+      }
+    })();
+
+    return bridge().on<{ session: ControlSession; cancelledRuns?: number }>(
+      'control:event',
+      (event) => {
+        setControl(event.session);
+        if (event.cancelledRuns !== undefined) {
+          setRunsInFlight(0);
+          setStopped(
+            event.cancelledRuns === 0
+              ? 'Stopped. Nothing was running.'
+              : `Stopped ${String(event.cancelledRuns)} ${event.cancelledRuns === 1 ? 'run' : 'runs'}.`,
+          );
+        }
+      },
+    );
+  }, []);
+
+  // How many runs are live, counted from the same events the canvas watches.
+  useEffect(() => {
+    return bridge().on<{ runId: string; type: string }>('run:event', (event) => {
+      if (event.type === 'started' || event.type === 'resumed') {
+        setRunsInFlight((current) => current + 1);
+        setStopped('');
+      }
+      if (event.type === 'finished' || event.type === 'failed') {
+        setRunsInFlight((current) => Math.max(0, current - 1));
+      }
+    });
+  }, []);
+
+  const stopEverything = useCallback(async () => {
+    try {
+      const result = await bridge().invoke<{ cancelledRuns: number }>('control:panic', {});
+      setStopped(
+        result.cancelledRuns === 0
+          ? 'Stopped. Nothing was running.'
+          : `Stopped ${String(result.cancelledRuns)} ${result.cancelledRuns === 1 ? 'run' : 'runs'}.`,
+      );
+    } catch {
+      setStopped('Could not stop everything.');
+    }
   }, []);
 
   useEffect(() => {
@@ -75,6 +144,25 @@ export function StatusBar(): JSX.Element {
               .join(' · ')}
       </span>
       <span data-testid="status-cost">{costLabel}</span>
+
+      {(runsInFlight > 0 || control?.granted === true) && (
+        <span className="status__control" data-testid="status-control">
+          <span className="status__pulse" aria-hidden="true" />
+          {control?.granted === true
+            ? `${control.dryRun ? 'Watching' : 'Controlling'} this machine — ${control.reason}`
+            : `${String(runsInFlight)} running`}
+          <button
+            type="button"
+            className="button"
+            data-testid="status-panic"
+            onClick={() => void stopEverything()}
+          >
+            Stop everything{panicKey === '' ? '' : ` (${panicKey})`}
+          </button>
+        </span>
+      )}
+
+      {stopped !== '' && <span data-testid="status-stopped">{stopped}</span>}
     </footer>
   );
 }

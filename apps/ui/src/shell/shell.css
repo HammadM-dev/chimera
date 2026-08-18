@@ -341,3 +341,38 @@
   padding: 1px var(--space-2);
   font-variant-numeric: tabular-nums;
 }
+
+/* M8-3's control indicator. In the status bar, visible the whole time anything
+ * is running: a machine being driven by something other than the person at it
+ * should never be something you have to go and check. */
+.status__control {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-primary);
+}
+
+.status__pulse {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--semantic-warning);
+  animation: status-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes status-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* Reduced motion means no pulse — the dot stays, and stays visible. */
+@media (prefers-reduced-motion: reduce) {
+  .status__pulse {
+    animation: none;
+  }
+}

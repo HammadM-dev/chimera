@@ -1,14 +1,15 @@
 #!/usr/bin/env node
-// M3-6's third criterion: no OS-level global hotkey registration exists yet.
+// One file may register an OS-level global hotkey, and it is the panic key.
 //
-// The master plan's global panic hotkey (F6.0) is an M8-3 feature — it only
-// becomes meaningful once there is native input to interrupt. This check keeps
-// that boundary honest: it is easy to reach for `globalShortcut` while building
-// a "kill switch" and quietly pull two milestones of work forward, and easier
-// still for a half-registered hotkey to sit in the codebase doing nothing while
-// looking like a safety feature.
+// Until M8-3 this check forbade the APIs outright: it is easy to reach for
+// `globalShortcut` while building a "kill switch" and quietly pull two
+// milestones of work forward, and easier still for a half-registered hotkey to
+// sit in the codebase doing nothing while looking like a safety feature.
 //
-// Delete this check at M8-3, in the commit that registers the real hotkey.
+// M8-3 registered the real one, so the check narrowed rather than went away.
+// The panic key belongs in exactly one place — a second registration is either
+// a duplicate that fights the first for the combination, or a feature quietly
+// giving itself an OS-wide keyboard hook.
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
@@ -42,11 +43,18 @@ function* walk(dir) {
   }
 }
 
+// The one file allowed to register it, and its test.
+const ALLOWED = [
+  'apps/desktop/src/control/panicKey.ts',
+  'apps/desktop/src/control/panicKey.test.ts',
+];
+
 const findings = [];
 for (const root of SEARCH_ROOTS) {
   for (const file of walk(path.join(repoRoot, root))) {
     // This file names the APIs it forbids, and so does the roadmap entry.
     if (file.endsWith('check-no-global-hotkey.mjs')) continue;
+    if (ALLOWED.includes(path.relative(repoRoot, file))) continue;
     const contents = readFileSync(file, 'utf8');
     for (const { pattern, what } of FORBIDDEN) {
       if (pattern.test(contents)) {
@@ -57,10 +65,12 @@ for (const root of SEARCH_ROOTS) {
 }
 
 if (findings.length > 0) {
-  console.error('OS-level global hotkey registration found, which is M8-3 work:');
+  console.error('OS-level global hotkey registration outside the panic key:');
   for (const finding of findings) console.error(`  ${finding}`);
-  console.error('\nM3-6 defines the kill switch as run-level. See docs/ROADMAP.md M3-6.');
+  console.error(
+    `\nOnly ${ALLOWED[0]} may register one. See docs/ROADMAP.md M8-3 for why there is exactly one.`,
+  );
   process.exit(1);
 }
 
-console.log('No OS-level global hotkey registration — correct until M8-3.');
+console.log("The panic key is the only OS-level hotkey registration, which is M8-3's rule.");

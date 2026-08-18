@@ -34,6 +34,8 @@ import { exportTrace, listFailures, listRuns, listTrace } from '../runs/history.
 import { readScreenshot } from '../runs/screenshots.ts';
 import { costSummary } from '../runs/costs.ts';
 import { exportRun } from '../runs/otel.ts';
+import { controlSession, grantControl, panic, revokeControl } from '../control/session.ts';
+import { panicKeyAccelerator } from '../control/panicKey.ts';
 import { runEvals, tagProduction } from '../evals/service.ts';
 import { listTriggers } from '../triggers/service.ts';
 import { listRoles } from '../roles/service.ts';
@@ -118,7 +120,9 @@ registerHandler(channels.runSubscribe, (payload, context) =>
   subscribe(payload.runId, context.webContents),
 );
 
-registerHandler(channels.runStart, (payload) => startRun(payload.brief));
+registerHandler(channels.runStart, (payload, context) =>
+  startRun(payload.brief, 'manual', context.webContents),
+);
 registerHandler(channels.runCancel, (payload) => cancelRun(payload.runId));
 registerHandler(channels.runApprove, (payload) => answerApproval(payload));
 registerHandler(channels.runAwaiting, () => awaitingApprovals());
@@ -136,6 +140,16 @@ registerHandler(channels.cacheSet, (payload) => setCachePolicy(payload.policy));
 registerHandler(channels.telemetryGet, () => getTelemetry());
 registerHandler(channels.telemetrySet, (payload) => setTelemetry(payload.telemetry));
 registerHandler(channels.telemetryTest, (payload) => exportRun(payload.runId));
+
+registerHandler(channels.controlGet, () => ({
+  session: controlSession(),
+  panicKey: panicKeyAccelerator(),
+}));
+registerHandler(channels.controlGrant, (payload) => ({
+  session: grantControl({ reason: payload.reason, dryRun: payload.dryRun }),
+}));
+registerHandler(channels.controlRevoke, () => ({ session: revokeControl() }));
+registerHandler(channels.controlPanic, () => panic());
 registerHandler(channels.traceExport, (payload) => exportTrace(payload.runId));
 
 registerHandler(channels.workflowSave, (payload) =>
