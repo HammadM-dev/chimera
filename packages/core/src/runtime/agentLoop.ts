@@ -684,7 +684,19 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       ),
     });
     if (actText !== '') output = actText;
-    history.push({ role: 'assistant', content: actText, toolCalls: acted.response.toolCalls });
+    // Two assistant turns saying the same thing are one assistant turn saying
+    // it twice, as far as the next model call is concerned. On a task simple
+    // enough that the plan and the act are the same sentence, the verifier read
+    // the pair as one run-on string — "readyready" — judged the answer wrong,
+    // and the loop went round until the stall detector stopped it. A live run
+    // against a hosted model failed "reply with exactly: ready" this way.
+    const repeatsLastTurn =
+      acted.response.toolCalls.length === 0 &&
+      history.at(-1)?.role === 'assistant' &&
+      history.at(-1)?.content === actText;
+    if (!repeatsLastTurn) {
+      history.push({ role: 'assistant', content: actText, toolCalls: acted.response.toolCalls });
+    }
     checkpoint('running');
 
     // ---- observe ----------------------------------------------------------
