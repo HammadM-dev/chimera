@@ -15,7 +15,11 @@ export { onConnectionsChanged } from './repositories/connections.ts';
 export type { ConnectionRecord, CreateConnectionInput } from './repositories/connections.ts';
 export * as settingsRepository from './repositories/settings.ts';
 export { onSettingsChanged } from './repositories/settings.ts';
-export type { WorkspaceSettings, CachePolicySettings } from './repositories/settings.ts';
+export type {
+  WorkspaceSettings,
+  CachePolicySettings,
+  TelemetrySettings,
+} from './repositories/settings.ts';
 export * as rolesRepository from './repositories/roles.ts';
 export type { RoleRecord, UpsertRoleInput } from './repositories/roles.ts';
 export * as nodeStatesRepository from './repositories/nodeStates.ts';

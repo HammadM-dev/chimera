@@ -555,6 +555,38 @@ export const cacheSet = defineInvokeChannel({
   responseSchema: z.object({ policy: cachePolicySchema }),
 });
 
+// M9-5: where runs are exported, if anywhere.
+const telemetrySchema = z.object({
+  enabled: z.boolean(),
+  endpoint: z.string(),
+  headersJson: z.string(),
+  includePayloads: z.boolean(),
+});
+
+export const telemetryGet = defineInvokeChannel({
+  channel: 'telemetry:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ telemetry: telemetrySchema }),
+});
+
+export const telemetrySet = defineInvokeChannel({
+  channel: 'telemetry:set',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ telemetry: telemetrySchema }),
+  responseSchema: z.object({ telemetry: telemetrySchema }),
+});
+
+export const telemetryTest = defineInvokeChannel({
+  channel: 'telemetry:test',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string() }),
+  responseSchema: z.object({ sent: z.boolean(), detail: z.string() }),
+});
+
 export const providerTestConnection = defineInvokeChannel({
   channel: 'provider:testConnection',
   v: 2,
@@ -996,6 +1028,9 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   tiersSet,
   cacheGet,
   cacheSet,
+  telemetryGet,
+  telemetrySet,
+  telemetryTest,
   traceExport,
   runEvent,
   providerTestConnection,

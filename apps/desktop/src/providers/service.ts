@@ -8,6 +8,7 @@ import {
   type AuthRef,
   type CachePolicySettings,
   type ModelTiers,
+  type TelemetrySettings,
 } from '@chimera/store';
 import {
   HealthMonitor,
@@ -358,4 +359,13 @@ export function getCachePolicy(): { policy: CachePolicySettings } {
 export function setCachePolicy(policy: CachePolicySettings): { policy: CachePolicySettings } {
   settingsRepository.setCachePolicy(getStore(), policy);
   return getCachePolicy();
+}
+
+export function getTelemetry(): { telemetry: TelemetrySettings } {
+  return { telemetry: settingsRepository.read(getStore()).telemetry };
+}
+
+export function setTelemetry(telemetry: TelemetrySettings): { telemetry: TelemetrySettings } {
+  settingsRepository.setTelemetry(getStore(), telemetry);
+  return getTelemetry();
 }

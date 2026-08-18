@@ -17,10 +17,10 @@ So the order has changed. Everything that makes the product usable — the canva
 | M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
-| M9 Triggers and observability | 4 / 6 | Automations run unattended and prove they worked |
+| M9 Triggers and observability | 6 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**63 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**65 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1541,6 +1541,16 @@ Dependencies: M9-1.
 
 ### M9-5: OpenTelemetry export
 
+STATUS: **done.** `apps/desktop/src/runs/otel.ts` writes each finished run as OTLP spans — one for the run, one per node, trace events as span events — and POSTs them to a collector the workspace names. Off until switched on.
+
+DECISION: **OTLP/HTTP with a JSON body, written out here rather than through the OpenTelemetry SDK.** What this needs is one POST of a documented envelope; the SDK brings exporters, context propagation and auto-instrumentation this app has no use for. Same reasoning as the cron parser and the JSON-schema validator, and CLAUDE.md requires asking before a dependency.
+
+DECISION: **prompts and answers are not sent unless separately agreed to.** A run's trace holds what the user asked and what the model said — their business, their customers' names, the contents of their files. Timings, token counts and costs are observability; the text is the business, and it is a second switch.
+
+DECISION: **a span per node, not per trace event.** A fan-out over a thousand items writes tens of thousands of events, and a collector handed one span each is being used as a log store.
+
+DECISION: **export never throws, never retries and is never awaited.** A run that could fail because a collector was unreachable would have the dependency the wrong way round.
+
 Description: F9.3 (SHOULD): export run/trace telemetry in OTel format for external observability tooling, completing the pipeline M7-6's opt-in toggle was built ahead of.
 
 Acceptance criteria:
@@ -1551,6 +1561,8 @@ Acceptance criteria:
 Dependencies: M9-4, M7-6.
 
 ### M9-6: M9 demo — Triggers, evals, observability exit criteria
+
+STATUS: **done.** `apps/desktop/e2e/m9-demo.spec.ts` covers all four criteria in one run: an automation on a cron schedule and another on a folder drop both start with nobody pressing anything, an automation with a deliberately failing check is refused the trusted tag, and the cost view attributes those runs by automation, agent and model.
 
 DECISION: The condensed master plan gives an explicit "Exit:" line for every milestone from M0 through M8, but not for M9 or M10. Define M9's exit criterion here, since it is not stated in the source: **"a workflow fires automatically from both a cron schedule and a file-drop with no manual start; a workflow with failing evals cannot be tagged production; the cost dashboard correctly attributes spend across workflow, role, and provider for a trailing period."** Rationale: this is composed directly from M9's own named deliverables (scheduler, evals, cost dashboard) rather than invented from nothing, and preserves the roadmap's "every milestone independently demoable" discipline for a milestone the plan itself left unspecified on this one point.
 

@@ -15,6 +15,8 @@ import {
   setTiers,
   getCachePolicy,
   setCachePolicy,
+  getTelemetry,
+  setTelemetry,
 } from '../providers/service.ts';
 import { detect, importCatalogue } from '../providers/omniroute.ts';
 import {
@@ -31,6 +33,7 @@ import { answerApproval, awaitingApprovals, cancelRun, startRun } from '../runs/
 import { exportTrace, listFailures, listRuns, listTrace } from '../runs/history.ts';
 import { readScreenshot } from '../runs/screenshots.ts';
 import { costSummary } from '../runs/costs.ts';
+import { exportRun } from '../runs/otel.ts';
 import { runEvals, tagProduction } from '../evals/service.ts';
 import { listTriggers } from '../triggers/service.ts';
 import { listRoles } from '../roles/service.ts';
@@ -130,6 +133,9 @@ registerHandler(channels.tiersGet, () => getTiers());
 registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));
 registerHandler(channels.cacheGet, () => getCachePolicy());
 registerHandler(channels.cacheSet, (payload) => setCachePolicy(payload.policy));
+registerHandler(channels.telemetryGet, () => getTelemetry());
+registerHandler(channels.telemetrySet, (payload) => setTelemetry(payload.telemetry));
+registerHandler(channels.telemetryTest, (payload) => exportRun(payload.runId));
 registerHandler(channels.traceExport, (payload) => exportTrace(payload.runId));
 
 registerHandler(channels.workflowSave, (payload) =>

@@ -148,6 +148,101 @@ export function AnswerCache({ refreshToken }: { refreshToken: number }): JSX.Ele
   );
 }
 
+interface Telemetry {
+  enabled: boolean;
+  endpoint: string;
+  headersJson: string;
+  includePayloads: boolean;
+}
+
+/**
+ * Where runs are exported, if anywhere.
+ *
+ * Two switches again, and the second one matters more than it looks: timings
+ * and token counts are observability, and the prompts and answers are the
+ * user's business. Sending the second is a separate thing to agree to.
+ */
+export function TelemetryPanel({ refreshToken }: { refreshToken: number }): JSX.Element {
+  const [telemetry, setTelemetry] = useState<Telemetry | null>(null);
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{ telemetry: Telemetry }>('telemetry:get', {});
+        setTelemetry(result.telemetry);
+      } catch (err) {
+        setNote(describeError(err).message);
+      }
+    })();
+  }, [refreshToken]);
+
+  const save = useCallback(async (next: Telemetry) => {
+    setTelemetry(next);
+    try {
+      await bridge().invoke('telemetry:set', { telemetry: next });
+      setNote('Saved.');
+    } catch (err) {
+      setNote(describeError(err).message);
+    }
+  }, []);
+
+  if (telemetry === null) return <p className="agent-card__prompt">Loading.</p>;
+
+  return (
+    <div data-testid="telemetry">
+      <label className="canvas__check">
+        <input
+          type="checkbox"
+          data-testid="telemetry-enabled"
+          checked={telemetry.enabled}
+          onChange={(event) => {
+            void save({ ...telemetry, enabled: event.target.checked });
+          }}
+        />
+        <span>Send each finished run to an OpenTelemetry collector.</span>
+      </label>
+
+      {telemetry.enabled && (
+        <>
+          <div className="field">
+            <label className="field__label" htmlFor="telemetry-endpoint">
+              Collector
+            </label>
+            <input
+              id="telemetry-endpoint"
+              className="control"
+              data-testid="telemetry-endpoint"
+              placeholder="http://localhost:4318"
+              value={telemetry.endpoint}
+              onChange={(event) => {
+                void save({ ...telemetry, endpoint: event.target.value });
+              }}
+            />
+          </div>
+
+          <label className="canvas__check">
+            <input
+              type="checkbox"
+              data-testid="telemetry-payloads"
+              checked={telemetry.includePayloads}
+              onChange={(event) => {
+                void save({ ...telemetry, includePayloads: event.target.checked });
+              }}
+            />
+            <span>
+              Include what was asked and answered. Without this, only timings, token counts and
+              costs are sent — the prompts and the outputs stay on this machine.
+            </span>
+          </label>
+        </>
+      )}
+
+      {note !== '' && <p className="agent-card__prompt">{note}</p>}
+    </div>
+  );
+}
+
 export function ModelTiers({ refreshToken }: { refreshToken: number }): JSX.Element {
   const { choices } = useConnections(refreshToken);
   const [tiers, setTiers] = useState<Tiers>(EMPTY);

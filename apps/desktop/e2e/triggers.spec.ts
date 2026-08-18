@@ -348,3 +348,68 @@ test('an answer already paid for is given again instead of asked for again', asy
     await gateway.close();
   }
 });
+
+test('a finished run is exported to a collector, without the prompts unless asked', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+
+  // A collector, near enough: it keeps what it is sent.
+  const received: unknown[] = [];
+  const collector: Server = createServer((req, res) => {
+    let body = '';
+    req.on('data', (chunk: Buffer) => {
+      body += chunk.toString();
+    });
+    req.on('end', () => {
+      received.push(JSON.parse(body));
+      res.writeHead(200, { 'content-type': 'application/json', connection: 'close' }).end('{}');
+    });
+  });
+  await new Promise<void>((resolve) => collector.listen(0, '127.0.0.1', resolve));
+  const collectorUrl = `http://127.0.0.1:${String((collector.address() as AddressInfo).port)}`;
+
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 15_000,
+    });
+
+    // Off until asked for, and the payload switch is separate.
+    await expect(page.getByTestId('telemetry-enabled')).not.toBeChecked();
+    await page.getByTestId('telemetry-enabled').check();
+    await page.getByTestId('telemetry-endpoint').fill(collectorUrl);
+    await expect(page.getByTestId('telemetry-payloads')).not.toBeChecked();
+
+    await goTo(page, 'build');
+    await page.getByTestId('palette-summariser').click();
+    await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+    await page.getByTestId('node-instruction').fill('Summarise the confidential order.');
+    await page.getByTestId('brief-input').fill('Summarise the confidential order.');
+    await page.getByTestId('brief-name').fill('Exported run');
+    await page.getByTestId('brief-run').click();
+
+    await expect
+      .poll(() => received.length, { timeout: 120_000, intervals: [1000] })
+      .toBeGreaterThan(0);
+
+    const sent = JSON.stringify(received);
+    // The run is there, with its shape and its numbers.
+    expect(sent).toContain('Exported run');
+    expect(sent).toContain('chimera.node.cost_usd');
+    // And what the user actually asked is not, because nobody said it could be.
+    expect(sent).not.toContain('confidential order');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await new Promise<void>((resolve) => collector.close(() => resolve()));
+    await gateway.close();
+  }
+});

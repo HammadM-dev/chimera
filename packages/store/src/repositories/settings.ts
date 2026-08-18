@@ -64,19 +64,43 @@ const CACHE_DEFAULT: CachePolicySettings = {
   embeddingConnectionId: '',
 };
 
+/** Where runs are exported, if anywhere. Empty and off until somebody sets it. */
+export interface TelemetrySettings {
+  enabled: boolean;
+  endpoint: string;
+  headersJson: string;
+  /** Whether prompts and answers travel too. Off, deliberately. */
+  includePayloads: boolean;
+}
+
+const TELEMETRY_DEFAULT: TelemetrySettings = {
+  enabled: false,
+  endpoint: '',
+  headersJson: '{}',
+  includePayloads: false,
+};
+
 export interface WorkspaceSettings {
   localOnlyMode: boolean;
   modelTiers: ModelTiers;
   cache: CachePolicySettings;
+  telemetry: TelemetrySettings;
 }
 
 export function read(db: Database.Database): WorkspaceSettings {
   const row = db
     .prepare(
-      'SELECT local_only_mode, model_tiers_json, cache_policy_json FROM workspace_settings WHERE id = 1',
+      `SELECT local_only_mode, model_tiers_json, cache_policy_json, telemetry_json
+       FROM workspace_settings WHERE id = 1`,
     )
     .get() as
-    { local_only_mode: number; model_tiers_json: string; cache_policy_json: string } | undefined;
+    | {
+        local_only_mode: number;
+        model_tiers_json: string;
+        cache_policy_json: string;
+        telemetry_json: string;
+      }
+    | undefined;
 
   let modelTiers = NO_TIERS;
   try {
@@ -101,13 +125,27 @@ export function read(db: Database.Database): WorkspaceSettings {
     cache = CACHE_DEFAULT;
   }
 
+  let telemetry = TELEMETRY_DEFAULT;
+  try {
+    telemetry = { ...TELEMETRY_DEFAULT, ...(JSON.parse(row?.telemetry_json ?? '{}') as object) };
+  } catch {
+    telemetry = TELEMETRY_DEFAULT;
+  }
+
   // SQLite has no boolean type; 0/1 is the storage convention.
-  return { localOnlyMode: (row?.local_only_mode ?? 0) === 1, modelTiers, cache };
+  return { localOnlyMode: (row?.local_only_mode ?? 0) === 1, modelTiers, cache, telemetry };
 }
 
 export function setCachePolicy(db: Database.Database, policy: CachePolicySettings): void {
   db.prepare('UPDATE workspace_settings SET cache_policy_json = ? WHERE id = 1').run(
     JSON.stringify(policy),
+  );
+  notifyChanged(db);
+}
+
+export function setTelemetry(db: Database.Database, telemetry: TelemetrySettings): void {
+  db.prepare('UPDATE workspace_settings SET telemetry_json = ? WHERE id = 1').run(
+    JSON.stringify(telemetry),
   );
   notifyChanged(db);
 }

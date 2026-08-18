@@ -20,6 +20,7 @@ import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
 import { cacheHookFor } from './cache.ts';
+import { exportRun } from './otel.ts';
 import { screenshotSinkFor } from './screenshots.ts';
 
 // Starting a run: the main-process half. Assembles the real pieces — the role
@@ -273,6 +274,10 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
         }),
     });
     emitRunEvent(runId, 'finished', outcome);
+    // Sent after the run is recorded, and never waited on for anything: a run
+    // that depended on an observability endpoint would have the dependency the
+    // wrong way round.
+    void exportRun(runId);
   } catch (err) {
     // Surfaced as an event rather than thrown into a void: the invoke has
     // already resolved, so a rejection here would be an unhandled one in main
