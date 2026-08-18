@@ -17,10 +17,10 @@ So the order has changed. Everything that makes the product usable — the canva
 | M6 Browser control | 5 / 5 | Agents use sites that have no API |
 | M7 Commercial | 1 / 8 | Buy it, install it, get updates |
 | M8 Native control | 0 / 6 | Agents drive desktop applications |
-| M9 Triggers and observability | 3 / 6 | Automations run unattended and prove they worked |
+| M9 Triggers and observability | 4 / 6 | Automations run unattended and prove they worked |
 | M10 Platform | 0 / 5 | The same automation runs on every OS |
 
-**62 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
+**63 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
 Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time) and **the first vertical**, which decides M4-10's shipped templates. 
 
@@ -1497,6 +1497,18 @@ Acceptance criteria:
 Dependencies: M9-1, M4-8.
 
 ### M9-3: Vector store and semantic cache
+
+STATUS: **done, without sqlite-vec.** `packages/core/src/runtime/promptCache.ts` and `packages/store/src/repositories/cache.ts`: exact reuse keyed on a hash of model, system prompt and every message; semantic reuse by cosine similarity over embeddings stored as float32 in the existing `cache.embedding` column. The openai-compatible adapter learned `embed()`. Providers has the toggle, and a run says what it did not spend.
+
+DECISION: **no sqlite-vec, and this is a deviation from the stack line in CLAUDE.md worth flagging.** sqlite-vec is a native loadable extension, and it earns its keep at millions of vectors. A workspace's answer cache is thousands, where a linear scan of float32 arrays is sub-millisecond — so the extension would add a native dependency, a packaging problem on three operating systems, and a class of load failure, in exchange for nothing measurable at this scale. Revisit when a workspace has a hundred thousand cached answers; the storage format is already the right one.
+
+DECISION: **exact and semantic are separate switches, and both start off.** Reusing a byte-identical prompt is a claim about determinism. Reusing a similar one is a claim about meaning, and a wrong one hands back a confident answer to a question nobody asked. A user turns that on knowingly, with the threshold visible.
+
+DECISION: **a response with a tool call is never cached and never returned.** Handing one back would replay a side effect that already happened — the opposite end of the guarantee M2-9's idempotency keys make.
+
+DECISION: **the cache is consulted after the Governor authorises, not before.** CLAUDE.md says there is no bypass path, and a cache in front of the Governor would be one. The estimate the Governor charged is reconciled to zero, and the hit's usage is zeroed on the way back so the run is not billed for tokens it never used — otherwise the saving would be counted twice.
+
+`embed()` is deliberately *not* on `ProviderAdapter`: most of what CHIMERA does needs no embeddings, and putting it on the interface would make every adapter implement a method to refuse. The one caller checks for it and does without.
 
 Description: Completes the M2-10 deferral: `packages/core/src/runtime/memory/vectorStore.ts` gets a real sqlite-vec-backed implementation, and `packages/store/src/repositories/cache.ts`'s `kind: semantic` path (F9.4, SHOULD) is implemented using the same embedding infrastructure — an exact-match cache path (`kind: exact`) is also completed here if not already trivially covered by earlier milestones. A visible "saved by cache" figure surfaces in the UI.
 

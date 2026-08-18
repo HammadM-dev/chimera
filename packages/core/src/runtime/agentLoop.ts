@@ -18,6 +18,7 @@ import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './output
 import { assertMemoryAvailable, type MemoryConfig } from './memory/vectorStore.ts';
 import { NULL_TRACE_SINK, type TraceSink } from './trace.ts';
 import type { SpendMeter } from '../governor/spendMeter.ts';
+import { costOf } from '../governor/budget.ts';
 import {
   EMPTY_CHECKPOINT,
   idempotencyKeyFor,
@@ -95,6 +96,23 @@ export interface Cancellation {
   readonly cancelled: boolean;
 }
 
+export interface PromptCacheHook {
+  /** A previous answer to this exact prompt, or a close-enough one. */
+  lookup: (input: {
+    model: string;
+    system: string;
+    messages: readonly Message[];
+  }) => Promise<{ response: NormalisedResponse; savedCostUsd: number; kind: string } | null>;
+  /** Remembers an answer, if the policy says to. */
+  remember: (input: {
+    model: string;
+    system: string;
+    messages: readonly Message[];
+    response: NormalisedResponse;
+    costUsd: number;
+  }) => Promise<void>;
+}
+
 export interface AgentTask {
   runId: string;
   nodeId: string;
@@ -150,6 +168,14 @@ export interface AgentLoopDeps {
    * either not fire this or fire it twice.
    */
   onHalt?: (cause: HaltCause, result: LoopResult) => void;
+  /**
+   * Answers already paid for (M9-3).
+   *
+   * Injected rather than reached for, so the loop stays testable without a
+   * database and so the policy — a workspace decision — is made above here
+   * rather than inside it.
+   */
+  cache?: PromptCacheHook;
   /**
    * The live spend meter (M3-4). Optional for the same reason the checkpoint
    * store is: an eval or a dry run has no run row to account against.
@@ -360,9 +386,51 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       ...(withTools && definitions.length > 0 ? { tools: definitions } : {}),
     };
 
+    // An answer already paid for. Checked after the Governor authorised the
+    // call, not before: a cache that skipped authorisation would be a bypass
+    // path, and CLAUDE.md says there is no bypass path. The estimate the
+    // Governor charged is reconciled to zero by the meter below.
+    if (deps.cache) {
+      const hit = await deps.cache.lookup({
+        model: approved.model,
+        system: prompt.system,
+        messages: request.messages,
+      });
+      if (hit) {
+        trace.append({
+          nodeId: task.nodeId,
+          eventType: 'decision',
+          payload: {
+            decision: `cache:${hit.kind}`,
+            model: approved.model,
+            savedCostUsd: hit.savedCostUsd,
+          },
+        });
+        // Zeroed usage, deliberately. The Governor charged an estimate before
+        // this call and the meter reconciles against what came back; handing
+        // back the original call's token counts would bill the run for tokens
+        // it never used, and then the saving figure would be counted twice.
+        return { ...hit.response, usage: { inputTokens: 0, outputTokens: 0 } };
+      }
+    }
+
     for (let attempt = 0; ; attempt += 1) {
       try {
-        return await provider.chat(request, callOptions);
+        const answer = await provider.chat(request, callOptions);
+        if (deps.cache) {
+          // Remembered against what it actually cost, so a hit can say what it
+          // saved rather than guessing.
+          const capabilities = governor.capabilitiesOf(approved.model);
+          const spent = costOf(capabilities, answer.usage.inputTokens, answer.usage.outputTokens);
+          await deps.cache.remember({
+            model: approved.model,
+            system: prompt.system,
+            messages: request.messages,
+            response: answer,
+            costUsd: spent ?? 0,
+          });
+        }
+        return answer;
       } catch (err) {
         const retryable =
           err instanceof ProviderRateLimitError ||

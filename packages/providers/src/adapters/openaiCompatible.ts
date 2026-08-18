@@ -386,6 +386,31 @@ export class OpenAiCompatibleAdapter implements ProviderAdapter {
     }
   }
 
+  /**
+   * Turns text into vectors, where the endpoint offers it.
+   *
+   * Not on `ProviderAdapter`: most of what CHIMERA does needs no embeddings at
+   * all, and putting this on the interface would make every adapter — including
+   * ones for providers with no embedding endpoint — implement a method to
+   * refuse. The one caller that wants it (M9-3's semantic cache) checks for it
+   * and does without when it is absent.
+   */
+  async embed(
+    request: { model: string; input: string[] },
+    options: AdapterCallOptions,
+  ): Promise<number[][]> {
+    const payload = await postJson<{ data?: { embedding: number[] }[] }>({
+      transport: this.deps.transport,
+      provider: this.provider,
+      url: `${options.baseUrl ?? this.defaultBaseUrl}/embeddings`,
+      headers: this.headers(options),
+      secrets: this.secrets(options),
+      body: { model: request.model, input: request.input },
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    return (payload.data ?? []).map((entry) => entry.embedding);
+  }
+
   async testConnection(options: AdapterCallOptions): Promise<ConnectionTestResult> {
     const startedAt = Date.now();
     try {

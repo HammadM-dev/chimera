@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
 import { ConnectionForm } from '../connections/ConnectionForm.tsx';
-import { ModelTiers } from './ModelTiers.tsx';
+import { AnswerCache, ModelTiers } from './ModelTiers.tsx';
 import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './views.css';
 
@@ -70,6 +70,13 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
         <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
           <h3 className="panel__title">OmniRoute</h3>
           <OmniRouteSetup onImported={onChanged} />
+        </div>
+        <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
+          <h3 className="panel__title">Reusing answers</h3>
+          <p className="agent-card__prompt">
+            An answer already paid for can be given again instead of asked for again.
+          </p>
+          <AnswerCache refreshToken={refreshToken} />
         </div>
         <div className="panel" style={{ marginTop: 'var(--space-3)' }}>
           <h3 className="panel__title">Model tiers</h3>

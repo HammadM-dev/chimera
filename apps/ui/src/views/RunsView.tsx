@@ -21,6 +21,7 @@ interface RunListItem {
   tokensUsed: number;
   costUsd: number;
   frontierCostUsd: number | null;
+  savedByCacheUsd: number;
   errorSummary: string | null;
 }
 
@@ -451,6 +452,12 @@ export function RunsView(): JSX.Element {
                 {/* Shown only when it is both known and favourable: a saving of
                     nothing is not worth a line, and an invented comparison is
                     worse than none. */}
+                {run.savedByCacheUsd > 0 && (
+                  <p className="runs__saved" data-testid="run-cache-saving">
+                    {money(run.savedByCacheUsd)} of this was not spent — the answers were already
+                    known.
+                  </p>
+                )}
                 {run.frontierCostUsd !== null && run.frontierCostUsd > run.costUsd && (
                   <p className="runs__saved" data-testid="run-blended">
                     {money(run.costUsd)} instead of {money(run.frontierCostUsd)} — the same work on

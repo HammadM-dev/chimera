@@ -15,7 +15,7 @@ export { onConnectionsChanged } from './repositories/connections.ts';
 export type { ConnectionRecord, CreateConnectionInput } from './repositories/connections.ts';
 export * as settingsRepository from './repositories/settings.ts';
 export { onSettingsChanged } from './repositories/settings.ts';
-export type { WorkspaceSettings } from './repositories/settings.ts';
+export type { WorkspaceSettings, CachePolicySettings } from './repositories/settings.ts';
 export * as rolesRepository from './repositories/roles.ts';
 export type { RoleRecord, UpsertRoleInput } from './repositories/roles.ts';
 export * as nodeStatesRepository from './repositories/nodeStates.ts';
@@ -33,6 +33,8 @@ export type { ModelTier, ModelTiers, TierBinding } from './repositories/settings
 export * as blackboardRepository from './repositories/blackboard.ts';
 export type { BlackboardEntry } from './repositories/blackboard.ts';
 export * as deadLetterRepository from './repositories/deadLetter.ts';
+export * as cacheRepository from './repositories/cache.ts';
+export type { CacheEntry } from './repositories/cache.ts';
 export * as evalsRepository from './repositories/evals.ts';
 export type { EvalRunRecord } from './repositories/evals.ts';
 export type { DeadLetterRecord } from './repositories/deadLetter.ts';

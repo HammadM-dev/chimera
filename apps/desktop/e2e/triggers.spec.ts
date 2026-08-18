@@ -253,3 +253,98 @@ test('a check runs against a stand-in model, and a failing one blocks the truste
     await gateway.close();
   }
 });
+
+test('an answer already paid for is given again instead of asked for again', async () => {
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 15_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 15_000,
+    });
+
+    // Off until asked for, which is the point of the setting.
+    await expect(page.getByTestId('cache-exact')).not.toBeChecked();
+    await page.getByTestId('cache-exact').check();
+
+    const build = async () => {
+      await goTo(page, 'build');
+      await page.getByTestId('nav-new').click();
+      await page.getByTestId('palette-summariser').click();
+      await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
+      await page.getByTestId('node-instruction').fill('Summarise the standing order.');
+      await page.getByTestId('brief-input').fill('Summarise the standing order.');
+      await page.getByTestId('brief-name').fill('Standing order');
+      await page.getByTestId('brief-run').click();
+
+      // Waited for in the workspace rather than on screen: the run finishes in
+      // the main process, and the brief is only a reader of it.
+      await expect
+        .poll(
+          async () =>
+            await page.evaluate(async () => {
+              const chimera = (
+                window as unknown as {
+                  chimera: { invoke: (c: string, p: unknown) => Promise<unknown> };
+                }
+              ).chimera;
+              const result = (await chimera.invoke('run:list', {})) as {
+                runs: { status: string }[];
+              };
+              return result.runs.filter((run) => run.status === 'succeeded').length;
+            }),
+          { timeout: 120_000, intervals: [1000] },
+        )
+        .toBeGreaterThan(0);
+    };
+
+    await build();
+    const before = await page.evaluate(async () => {
+      const chimera = (
+        window as unknown as { chimera: { invoke: (c: string, p: unknown) => Promise<unknown> } }
+      ).chimera;
+      const result = (await chimera.invoke('run:list', {})) as { runs: unknown[] };
+      return result.runs.length;
+    });
+
+    await build();
+    await expect
+      .poll(
+        async () =>
+          await page.evaluate(async () => {
+            const chimera = (
+              window as unknown as {
+                chimera: { invoke: (c: string, p: unknown) => Promise<unknown> };
+              }
+            ).chimera;
+            const result = (await chimera.invoke('run:list', {})) as {
+              runs: { savedByCacheUsd: number; costUsd: number }[];
+            };
+            // Saved something *and* spent nothing: a cached answer that still
+            // billed for its tokens would count the saving twice.
+            return result.runs.filter((run) => run.savedByCacheUsd > 0 && run.costUsd === 0).length;
+          }),
+        { timeout: 120_000, intervals: [1000] },
+      )
+      .toBeGreaterThan(0);
+    expect(before).toBeGreaterThan(0);
+
+    // The second run asked the identical question and paid nothing for it.
+    await goTo(page, 'runs');
+    await page.getByTestId('runs-refresh').click();
+    await expect(page.getByTestId('run-cache-saving')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByTestId('run-cache-saving')).toContainText('already');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});

@@ -5,7 +5,12 @@ import type { AdapterCallOptions, ProviderAdapter } from '@chimera/providers';
 import type { ToolRegistry } from '@chimera/tools';
 import { Governor } from '../governor/Governor.ts';
 import { createSpendMeter, type SpendSnapshot } from '../governor/spendMeter.ts';
-import { runAgentLoop, type HaltCause, type LoopResult } from '../runtime/agentLoop.ts';
+import {
+  runAgentLoop,
+  type HaltCause,
+  type LoopResult,
+  type PromptCacheHook,
+} from '../runtime/agentLoop.ts';
 import { createCheckpointStore } from '../runtime/checkpoint.ts';
 import { createTraceSink } from '../runtime/trace.ts';
 import { finalizeRun } from '../runtime/runOutcome.ts';
@@ -125,6 +130,14 @@ export interface RunAutomationDeps {
   };
   /** The workspace's frontier model, for the meter's comparison figure. */
   frontierModel?: string;
+  /**
+   * Answers already paid for. Absent means every call is made fresh.
+   *
+   * Built by the caller because the policy is a workspace setting and the
+   * embedding, when semantic reuse is on, needs a provider — neither of which
+   * the engine should be reaching for on its own.
+   */
+  cache?: PromptCacheHook;
 }
 
 /**
@@ -891,6 +904,7 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         checkpoints,
         trace,
         meter,
+        ...(deps.cache ? { cache: deps.cache } : {}),
         // The files reach the first step only. Re-attaching them to every step
         // would re-pay for the same tokens at every hop.
         ...(seedAttachments ? { seedObservations: attachmentObservations(brief) } : {}),

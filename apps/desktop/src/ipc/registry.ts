@@ -326,6 +326,7 @@ export const runList = defineInvokeChannel({
         tokensUsed: z.number(),
         costUsd: z.number(),
         frontierCostUsd: z.number().nullable(),
+        savedByCacheUsd: z.number(),
         errorSummary: z.string().nullable(),
       }),
     ),
@@ -527,6 +528,31 @@ export const filesPickDirectory = defineInvokeChannel({
   sensitive: false,
   requestSchema: z.object({}),
   responseSchema: z.object({ path: z.string() }),
+});
+
+// M9-3: whether this workspace reuses answers it has already paid for.
+const cachePolicySchema = z.object({
+  exact: z.boolean(),
+  semantic: z.boolean(),
+  threshold: z.number(),
+  embeddingModel: z.string(),
+  embeddingConnectionId: z.string(),
+});
+
+export const cacheGet = defineInvokeChannel({
+  channel: 'cache:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ policy: cachePolicySchema }),
+});
+
+export const cacheSet = defineInvokeChannel({
+  channel: 'cache:set',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ policy: cachePolicySchema }),
+  responseSchema: z.object({ policy: cachePolicySchema }),
 });
 
 export const providerTestConnection = defineInvokeChannel({
@@ -968,6 +994,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   traceScreenshot,
   tiersGet,
   tiersSet,
+  cacheGet,
+  cacheSet,
   traceExport,
   runEvent,
   providerTestConnection,

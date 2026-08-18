@@ -13,6 +13,8 @@ import {
   testConnection,
   getTiers,
   setTiers,
+  getCachePolicy,
+  setCachePolicy,
 } from '../providers/service.ts';
 import { detect, importCatalogue } from '../providers/omniroute.ts';
 import {
@@ -126,6 +128,8 @@ registerHandler(channels.evalsTagProduction, (payload) => tagProduction(payload.
 registerHandler(channels.traceScreenshot, (payload) => readScreenshot(payload.runId, payload.name));
 registerHandler(channels.tiersGet, () => getTiers());
 registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));
+registerHandler(channels.cacheGet, () => getCachePolicy());
+registerHandler(channels.cacheSet, (payload) => setCachePolicy(payload.policy));
 registerHandler(channels.traceExport, (payload) => exportTrace(payload.runId));
 
 registerHandler(channels.workflowSave, (payload) =>

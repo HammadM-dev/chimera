@@ -19,6 +19,7 @@ import { emitRunEvent } from './subscriptions.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
+import { cacheHookFor } from './cache.ts';
 import { screenshotSinkFor } from './screenshots.ts';
 
 // Starting a run: the main-process half. Assembles the real pieces — the role
@@ -222,6 +223,7 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   // tier that changed halfway through a run would make the trace a record of
   // two different automations.
   const tiers = settingsRepository.read(db).modelTiers;
+  const cache = cacheHookFor(db, runId);
 
   emitRunEvent(runId, resume ? 'resumed' : 'started', {
     steps: brief.steps.map((step) => step.nodeId),
@@ -249,6 +251,9 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       cancellation,
       resolveTier: (tier) => tiers[tier],
       frontierModel: tiers.frontier.model,
+      // Absent unless this workspace asked for a cache, so a run that is not
+      // reusing anything does not pay to derive a key it will never look up.
+      ...(cache ? { cache } : {}),
       onStep: (event) => {
         emitRunEvent(runId, `step:${event.phase}`, event);
       },

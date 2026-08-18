@@ -139,6 +139,9 @@ export { parseCron, nextFireAfter, firedInLastMinute, describeCron } from './tri
 export type { CronFields } from './triggers/cron.ts';
 export { validateTrigger, describeTrigger } from './triggers/types.ts';
 export { checkCase, checkAssertion, readPath, parseOutput } from './evals/assertions.ts';
+export { promptKey, cosine, lookup, remember, CACHE_OFF } from './runtime/promptCache.ts';
+export type { CachePolicy, CachedAnswer } from './runtime/promptCache.ts';
+export type { PromptCacheHook } from './runtime/agentLoop.ts';
 export type {
   Assertion,
   AssertOp,

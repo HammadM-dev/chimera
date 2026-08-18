@@ -23,6 +23,8 @@ export interface RunListItem {
   costUsd: number;
   /** What the same tokens would have cost on the frontier tier, if known. */
   frontierCostUsd: number | null;
+  /** What this run did not spend because the answer was already known. */
+  savedByCacheUsd: number;
   errorSummary: string | null;
 }
 
@@ -53,6 +55,7 @@ export function listRuns(limit = 50): { runs: RunListItem[] } {
       tokensUsed: run.tokensUsed,
       costUsd: run.costUsd,
       frontierCostUsd: run.frontierCostUsd,
+      savedByCacheUsd: run.savedByCacheUsd,
       errorSummary: run.errorSummary,
     };
   });

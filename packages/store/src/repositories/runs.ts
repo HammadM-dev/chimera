@@ -30,6 +30,7 @@ interface RunRow {
   budget_tokens_used: number;
   budget_cost_usd_used: number;
   frontier_cost_usd: number | null;
+  saved_by_cache_usd: number;
   error_summary: string | null;
 }
 
@@ -180,6 +181,8 @@ export interface RunSummary extends RunRecord {
   costUsd: number;
   /** What the same tokens would have cost on the frontier tier, if known. */
   frontierCostUsd: number | null;
+  /** What this run did not spend because an answer was already known. */
+  savedByCacheUsd: number;
 }
 
 /** The most recent runs, newest first, with what each one spent. */
@@ -192,6 +195,7 @@ export function listRecent(db: Database.Database, limit = 50): RunSummary[] {
     tokensUsed: row.budget_tokens_used,
     costUsd: row.budget_cost_usd_used,
     frontierCostUsd: row.frontier_cost_usd,
+    savedByCacheUsd: row.saved_by_cache_usd,
   }));
 }
 
@@ -213,6 +217,14 @@ export function listByStatus(db: Database.Database, status: string): RunRecord[]
  * Only called when a frontier price is actually known, so the column stays null
  * — an honest "no comparison" — rather than becoming a misleading zero.
  */
+/** Adds to what this run avoided spending. Additive, for the same reason as the rest. */
+export function addCacheSaving(db: Database.Database, id: string, costUsd: number): void {
+  db.prepare('UPDATE runs SET saved_by_cache_usd = saved_by_cache_usd + ? WHERE id = ?').run(
+    costUsd,
+    id,
+  );
+}
+
 export function addFrontierCost(db: Database.Database, id: string, costUsd: number): void {
   db.prepare(
     'UPDATE runs SET frontier_cost_usd = COALESCE(frontier_cost_usd, 0) + ? WHERE id = ?',

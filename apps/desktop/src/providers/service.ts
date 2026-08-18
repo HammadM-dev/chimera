@@ -6,6 +6,7 @@ import {
   setSecret,
   settingsRepository,
   type AuthRef,
+  type CachePolicySettings,
   type ModelTiers,
 } from '@chimera/store';
 import {
@@ -348,4 +349,13 @@ export function getTiers(): { tiers: ModelTiers } {
 export function setTiers(tiers: ModelTiers): { tiers: ModelTiers } {
   settingsRepository.setModelTiers(getStore(), tiers);
   return getTiers();
+}
+
+export function getCachePolicy(): { policy: CachePolicySettings } {
+  return { policy: settingsRepository.read(getStore()).cache };
+}
+
+export function setCachePolicy(policy: CachePolicySettings): { policy: CachePolicySettings } {
+  settingsRepository.setCachePolicy(getStore(), policy);
+  return getCachePolicy();
 }
