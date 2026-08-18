@@ -1,4 +1,4 @@
-import { ToolError } from '@chimera/errors';
+import { ToolError, redact } from '@chimera/errors';
 import { assertToolAllowed, type AllowlistedRole } from './allowlist.ts';
 import type { McpToolClient, McpToolResult, ToolDescriptor } from './mcpClient.ts';
 
@@ -38,7 +38,25 @@ export interface ToolRegistry {
   close: () => Promise<void>;
 }
 
-export function createToolRegistry(): ToolRegistry {
+export interface ToolRegistryOptions {
+  /**
+   * Secret values to remove from every tool result, resolved at call time.
+   *
+   * A function rather than an array because plugins are registered after the
+   * registry is built: a snapshot taken at construction would miss every
+   * plugin added afterwards, which is all of them.
+   *
+   * A plugin's credential is put into that plugin's environment by the layer
+   * above, and plenty of real MCP servers echo their configuration back in a
+   * result or an error. Whatever comes back is written to the run trace and
+   * sent to the model on the next turn, so without this a server saying
+   * "signed in with sk-live-..." puts that key into SQLite and then into a
+   * provider's request. Proved by a test that made a server do exactly that.
+   */
+  secrets?: () => readonly string[];
+}
+
+export function createToolRegistry(options: ToolRegistryOptions = {}): ToolRegistry {
   const tools = new Map<string, RegisteredTool>();
   const clients = new Map<string, McpToolClient>();
 
@@ -97,7 +115,14 @@ export function createToolRegistry(): ToolRegistry {
         );
       }
 
-      return client.callTool(tool.name, params);
+      const result = await client.callTool(tool.name, params);
+
+      // The one place every tool result passes through, so a caller cannot
+      // forget: the loop, the trace and the next prompt all read what this
+      // returns.
+      const secrets = options.secrets?.() ?? [];
+      if (secrets.length === 0) return result;
+      return { ...result, text: redact(result.text, secrets) };
     },
 
     async close() {

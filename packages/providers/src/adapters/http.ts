@@ -1,4 +1,4 @@
-import { ProviderAuthError, ProviderError, ProviderRateLimitError } from '@chimera/errors';
+import { ProviderAuthError, ProviderError, ProviderRateLimitError, redact } from '@chimera/errors';
 import { getSecret, type AuthRef } from '@chimera/store';
 
 // Transport plumbing shared by every real adapter: one HTTP call, one error
@@ -95,15 +95,7 @@ export function withTimeout(signal?: AbortSignal): { signal: AbortSignal; done: 
 }
 
 export function scrub(text: string, secrets: readonly string[]): string {
-  let scrubbed = text;
-  for (const secret of secrets) {
-    if (secret.length === 0) continue;
-    scrubbed = scrubbed.split(secret).join('[redacted]');
-    // Also the percent-encoded form, since a key in a URL is encoded.
-    const encoded = encodeURIComponent(secret);
-    if (encoded !== secret) scrubbed = scrubbed.split(encoded).join('[redacted]');
-  }
-  return scrubbed;
+  return redact(text, secrets);
 }
 
 /**

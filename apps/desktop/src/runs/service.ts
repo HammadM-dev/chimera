@@ -21,7 +21,7 @@ import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
 import { cacheHookFor } from './cache.ts';
-import { registerPlugins } from '../plugins/service.ts';
+import { registerPlugins, pluginSecrets } from '../plugins/service.ts';
 import { exportRun } from './otel.ts';
 import { screenshotSinkFor } from './screenshots.ts';
 
@@ -200,7 +200,7 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
 
   const roles = createRoleRegistry(db).list();
   const sandbox = createSandbox(path.join(os.tmpdir(), 'chimera-runs'), runId);
-  const tools = createToolRegistry();
+  const tools = createToolRegistry({ secrets: pluginSecrets });
   await tools.registerServer('filesystem', await connectInProcess(createFilesystemServer(sandbox)));
   await tools.registerServer('shell', await connectInProcess(createShellServer(sandbox)));
   // Memory is per-run only in its attribution: what is written is workspace-wide

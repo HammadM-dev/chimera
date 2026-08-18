@@ -126,6 +126,36 @@ function environmentFor(record: PluginRecord): {
   return { env, missing };
 }
 
+/**
+ * Every plugin credential this workspace holds, in plaintext.
+ *
+ * Handed to the tool registry so it can take these values back out of whatever
+ * a plugin returns. This is the one place in the app that assembles such a
+ * list, it is never persisted, never logged, and never crosses the preload
+ * bridge — it exists for the length of a redaction pass and no longer.
+ *
+ * HTTP plugins' header values count too: an `Authorization: Bearer …` is the
+ * same secret by a different route.
+ */
+export function pluginSecrets(): string[] {
+  const values: string[] = [];
+  for (const record of pluginsRepository.list(getStore())) {
+    const handles =
+      record.kind === 'http' ? Object.values(record.headers) : Object.values(record.env);
+    for (const handle of handles) {
+      try {
+        const value = handle.startsWith('vault:') ? getSecret(handle as never) : handle;
+        if (value !== undefined && value !== '') values.push(value);
+      } catch {
+        // A credential that cannot be read cannot leak through a tool result
+        // either. The missing-key report in `environmentFor` is where that is
+        // surfaced to the user; here it is simply nothing to redact.
+      }
+    }
+  }
+  return values;
+}
+
 async function connect(
   record: PluginRecord,
 ): Promise<{ client: McpToolClient; missing: string[] }> {

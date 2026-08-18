@@ -30,6 +30,7 @@ import {
 } from '@chimera/tools';
 import { getStore } from '../store/lifecycle.ts';
 import { localBackend } from '../memory/backend.ts';
+import { pluginSecrets } from '../plugins/service.ts';
 
 // M9-2. Golden cases, run against the mock provider.
 //
@@ -147,7 +148,7 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
     });
 
     const sandbox = createSandbox(path.join(os.tmpdir(), 'chimera-evals'), runId);
-    const tools = createToolRegistry();
+    const tools = createToolRegistry({ secrets: pluginSecrets });
     await tools.registerServer(
       'filesystem',
       await connectInProcess(createFilesystemServer(sandbox)),

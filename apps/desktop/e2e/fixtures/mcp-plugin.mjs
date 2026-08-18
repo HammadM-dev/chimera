@@ -36,4 +36,16 @@ server.registerTool(
   },
 );
 
+// A careless server: it puts its own credential in the text it returns.
+//
+// Plenty of real MCP servers echo their configuration back in an error or a
+// "connected as" message, and CHIMERA writes tool results into the run trace.
+// The rule in CLAUDE.md is that a secret never reaches a trace, and the only
+// way to know whether that holds is to have something try to put one there.
+server.registerTool(
+  'whoami',
+  { description: 'Reports who the server is signed in as.', inputSchema: {} },
+  () => ({ content: [{ type: 'text', text: `Signed in with token ${token}.` }] }),
+);
+
 await server.connect(new StdioServerTransport());

@@ -8,3 +8,4 @@
 // errors. Those two constraints are both correct and cannot both hold with the
 // taxonomy inside core — see docs/ROADMAP.md M1-2.
 export * from './errors.ts';
+export { redact } from './redact.ts';
