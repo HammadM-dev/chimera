@@ -22,6 +22,7 @@ import type {
 import { evalsRepository, runsRepository, workflowsRepository } from '@chimera/store';
 import {
   connectInProcess,
+  createBrowserServer,
   createHttpServer,
   createFilesystemServer,
   createMemoryServer,
@@ -32,6 +33,7 @@ import {
 import { getStore } from '../store/lifecycle.ts';
 import { localBackend } from '../memory/backend.ts';
 import { pluginSecrets } from '../plugins/service.ts';
+import { pageForWorkspace } from '../runs/browser.ts';
 
 // M9-2. Golden cases, run against the mock provider.
 //
@@ -160,13 +162,23 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
       await connectInProcess(createMemoryServer(localBackend(runId, 'agent'))),
     );
 
-    // The same servers a real run gets, including the web tool: an eval that
-    // ran an automation without the tools it declares is an eval that passes
-    // on a different automation.
+    // The same servers a real run gets: an eval that ran an automation without
+    // the tools it declares is an eval that passes on a different automation.
+    // The browser costs nothing to register — `pageForWorkspace` is a thunk, so
+    // no browser starts unless a browser tool is actually called.
     await tools.registerServer(
       'http',
       await connectInProcess(
         createHttpServer({ egressAllowlist: definition.egressAllowlist ?? [] }),
+      ),
+    );
+    await tools.registerServer(
+      'browser',
+      await connectInProcess(
+        createBrowserServer({
+          page: pageForWorkspace(),
+          egressAllowlist: definition.egressAllowlist ?? [],
+        }),
       ),
     );
 
