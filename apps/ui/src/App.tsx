@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { Splash } from './splash/Splash.tsx';
 import { AppShell } from './shell/AppShell.tsx';
 import { Onboarding } from './onboarding/Onboarding.tsx';
+import { RunMonitor } from './run/RunMonitor.tsx';
 
 /** Whether to play the splash is decided in the main process, which owns the
  * `hasSeenSplash` flag (apps/desktop/src/settings/localSettings.ts), and is
@@ -14,6 +15,20 @@ import { Onboarding } from './onboarding/Onboarding.tsx';
  * no presence on `window.chimera.*` at all. A query parameter also means the
  * renderer knows the answer before its first paint, with no round trip that
  * could land after the splash would already have started. */
+/**
+ * Which window this renderer is.
+ *
+ * A run opens a second, smaller window that watches it. Same bundle, same
+ * preload, told apart by the query on its own file:// URL — the pattern the
+ * splash decision already uses, and one that needs no IPC surface to answer a
+ * question settled before the first paint.
+ */
+function runWindow(): { runId: string; name: string } | null {
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('view') !== 'run') return null;
+  return { runId: params.get('runId') ?? '', name: params.get('name') ?? '' };
+}
+
 function shouldPlaySplash(): boolean {
   return new URLSearchParams(window.location.search).get('splash') === '1';
 }
@@ -53,6 +68,9 @@ function needsOnboarding(): boolean {
 }
 
 export function App(): JSX.Element {
+  // Decided before anything else: a run monitor is a different window with a
+  // different job, and it has no splash, no onboarding and no shell.
+  const [monitor] = useState(runWindow);
   const [splashDone, setSplashDone] = useState(!shouldPlaySplash());
   const [setupDone, setSetupDone] = useState(!needsOnboarding());
   // An explicit replay outranks the workspace check below. Without this, asking
@@ -84,6 +102,8 @@ export function App(): JSX.Element {
       }
     })();
   }, [setupDone, replaying]);
+
+  if (monitor !== null) return <RunMonitor runId={monitor.runId} name={monitor.name} />;
 
   return (
     <>

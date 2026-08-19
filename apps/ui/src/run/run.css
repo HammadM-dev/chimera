@@ -1,0 +1,285 @@
+/* The run monitor.
+ *
+ * One idea: a run is a sequence of moments down a spine. The spine is a
+ * hairline, the moments are marks on it, and colour says only what state a
+ * moment is in — nothing else on this surface is coloured, so the one thing
+ * colour means is unambiguous. docs/DESIGN.md section 1: the canvas gets
+ * colour, the frame gets none, and this window is all canvas.
+ */
+
+.monitor {
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  background: var(--surface-canvas);
+}
+
+/* ---- head --------------------------------------------------------------- */
+
+.monitor__head {
+  padding: var(--space-4) var(--space-5) var(--space-3);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+}
+
+.monitor__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.monitor__name {
+  margin: 0;
+  font-size: var(--type-heading-max);
+  font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-ui);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The one big state light. 8px, because at the top of a window this small it
+ * is read from across a desk. */
+.monitor__state {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-muted);
+}
+
+.monitor__state--running {
+  background: var(--accent-primary);
+  animation: monitor-pulse 1.8s var(--ease-standard) infinite;
+}
+
+.monitor__state--awaiting {
+  background: var(--semantic-warning);
+  animation: monitor-pulse 1.8s var(--ease-standard) infinite;
+}
+
+.monitor__state--succeeded {
+  background: var(--semantic-success);
+}
+
+.monitor__state--failed {
+  background: var(--semantic-danger);
+}
+
+.monitor__meta {
+  margin: var(--space-2) 0 0 calc(8px + var(--space-3));
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the spine ---------------------------------------------------------- */
+
+.monitor__steps {
+  margin: 0;
+  padding: var(--space-4) var(--space-5);
+  list-style: none;
+  min-height: 0;
+}
+
+.monitor__empty {
+  font-size: var(--type-meta);
+  color: var(--text-muted);
+}
+
+/* A moment on the spine: the mark in the gutter, the work beside it, and the
+ * line running down to the next one. */
+.moment {
+  position: relative;
+  display: grid;
+  grid-template-columns: 9px minmax(0, 1fr);
+  gap: var(--space-3);
+  padding-bottom: var(--space-4);
+}
+
+.moment::before {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 14px;
+  bottom: 0;
+  width: var(--border-width);
+  background: var(--border-hairline);
+}
+
+.moment:last-of-type::before {
+  display: none;
+}
+
+.moment__mark {
+  position: relative;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  margin-top: 5px;
+  border-radius: 50%;
+  background: var(--surface-canvas);
+  border: 1px solid var(--border-stronger);
+}
+
+.moment--running .moment__mark {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  animation: monitor-pulse 1.8s var(--ease-standard) infinite;
+}
+
+.moment--succeeded .moment__mark {
+  background: var(--semantic-success);
+  border-color: var(--semantic-success);
+}
+
+.moment--failed .moment__mark {
+  background: var(--semantic-danger);
+  border-color: var(--semantic-danger);
+}
+
+.moment--needs-approval .moment__mark {
+  background: var(--semantic-warning);
+  border-color: var(--semantic-warning);
+  animation: monitor-pulse 1.8s var(--ease-standard) infinite;
+}
+
+.moment__body {
+  min-width: 0;
+}
+
+.moment__label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+/* The state in words as well as in colour — docs/DESIGN.md section 7: no state
+ * is communicated by colour alone. */
+.moment__phase {
+  flex: none;
+  font-size: var(--type-floor);
+  font-weight: var(--font-weight-regular);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.moment--running .moment__phase {
+  color: var(--accent-primary);
+}
+
+.moment--succeeded .moment__phase {
+  color: var(--semantic-success);
+}
+
+.moment--failed .moment__phase {
+  color: var(--semantic-danger);
+}
+
+.moment--needs-approval .moment__phase {
+  color: var(--semantic-warning);
+}
+
+.moment--waiting .moment__label,
+.moment--skipped .moment__label {
+  color: var(--text-muted);
+  font-weight: var(--font-weight-regular);
+}
+
+.moment__detail {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+/* Three lines of what a step said. The whole of it is in the run's own trace;
+ * this is enough to see the shape of the answer as it lands. */
+.moment__output {
+  margin: var(--space-2) 0 0;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border-radius: var(--radius-control);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.moment__time {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- the answer --------------------------------------------------------- */
+
+.monitor__result {
+  padding: var(--space-4) var(--space-5) var(--space-5);
+  border-top: var(--border-width) solid var(--border-hairline);
+  background: var(--surface-panel);
+  max-height: 46%;
+  overflow-y: auto;
+}
+
+.monitor__resultHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.monitor__resultTitle {
+  margin: 0;
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.monitor__note {
+  margin: 0 0 var(--space-3);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+/* Prose, because it nearly always is — a note, a summary, an answer written to
+ * be read by a person. */
+.monitor__output {
+  margin: 0;
+  font-family: inherit;
+  font-size: var(--type-body);
+  line-height: var(--line-height-prose);
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+@keyframes monitor-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .monitor__state,
+  .moment__mark {
+    animation: none;
+  }
+}

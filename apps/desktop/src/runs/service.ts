@@ -271,6 +271,13 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
 
   emitRunEvent(runId, resume ? 'resumed' : 'started', {
     steps: brief.steps.map((step) => step.nodeId),
+    // Names as well as ids. The canvas already knows what its own steps are
+    // called; the run monitor is a separate window that has only ever seen
+    // this event, and "researcher-1" is not what the step is called.
+    plan: brief.steps.map((step) => ({
+      nodeId: step.nodeId,
+      label: roles.find((role) => role.id === step.roleId)?.name ?? step.type ?? 'Step',
+    })),
   });
 
   try {

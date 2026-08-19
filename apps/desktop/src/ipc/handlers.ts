@@ -127,9 +127,28 @@ registerHandler(channels.runSubscribe, (payload, context) =>
   subscribe(payload.runId, context.webContents),
 );
 
-registerHandler(channels.runStart, (payload, context) =>
-  startRun(payload.brief, 'manual', context.webContents),
-);
+registerHandler(channels.runStart, async (payload, context) => {
+  const started = await startRun(payload.brief, 'manual', context.webContents);
+  // The monitor opens once the run has an id, and subscribes itself. Opening
+  // it earlier would give it nothing to watch.
+  //
+  // Its failure is never the run's failure: the run is already going, and
+  // reporting "could not start" because a window would not open would be a
+  // lie about the thing the user actually asked for.
+  try {
+    // Imported here rather than at module scope. `windows.ts` imports
+    // `electron` at its top, and everything reachable from this file must load
+    // under plain `node --test` — the same trap `store/lifecycle.ts` hit at
+    // M1-10, `files/service.ts` at M4-11 and `control/panicKey.ts` at M8-3,
+    // documented in all three and walked into a fourth time here.
+    const { openRunWindow } = await import('../windows.ts');
+    openRunWindow(started.runId, payload.brief.name ?? '');
+  } catch {
+    // Watched from the canvas instead, which is where it was watched before
+    // this window existed.
+  }
+  return started;
+});
 registerHandler(channels.runCancel, (payload) => cancelRun(payload.runId));
 registerHandler(channels.runApprove, (payload) => answerApproval(payload));
 registerHandler(channels.runAwaiting, () => awaitingApprovals());

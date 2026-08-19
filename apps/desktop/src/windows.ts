@@ -14,6 +14,64 @@ import { consumeSplashDecision } from './settings/localSettings.ts';
 // resolution. import.meta.url is unambiguous regardless of launch style.
 const moduleDir = path.dirname(fileURLToPath(import.meta.url));
 
+/** One monitor per run, so pressing Run twice does not stack windows. */
+const runWindows = new Map<string, BrowserWindow>();
+
+/**
+ * A small window that watches one run.
+ *
+ * A run is the thing this product does, and until now watching one meant
+ * staring at the canvas you were still editing, with the answer arriving in a
+ * panel over the top of it. A run deserves its own surface: you can put it on
+ * a second screen, keep working on the automation underneath, and still see
+ * what the agents are doing while they do it.
+ *
+ * Same preload, same CSP, same navigation guard as the main window — a second
+ * window is a second renderer, and a hardened renderer that is only hardened
+ * once is not hardened.
+ */
+export function openRunWindow(runId: string, name: string): BrowserWindow | null {
+  // The E2E fixture windows load a bare HTML file with no renderer bundle;
+  // there is nothing for a monitor to attach to.
+  if (process.env['CHIMERA_E2E_FIXTURE']) return null;
+
+  const existing = runWindows.get(runId);
+  if (existing && !existing.isDestroyed()) {
+    existing.focus();
+    return existing;
+  }
+
+  const win = new BrowserWindow({
+    width: 520,
+    height: 720,
+    show: false,
+    title: name === '' ? 'Run' : name,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webSecurity: true,
+      webviewTag: false,
+      preload: path.join(moduleDir, 'preload.cjs'),
+    },
+  });
+
+  applyNavigationGuard(win);
+  void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
+    query: { view: 'run', runId, name, splash: '0', onboarding: '0' },
+  });
+
+  win.once('ready-to-show', () => {
+    win.show();
+  });
+  win.on('closed', () => {
+    runWindows.delete(runId);
+  });
+
+  runWindows.set(runId, win);
+  return win;
+}
+
 export function createWindow(): BrowserWindow {
   applyCsp(session.defaultSession);
   applyPermissionHandler(session.defaultSession);
