@@ -77,7 +77,9 @@ export function deny(
  */
 function money(value: number): string {
   if (value === 0) return '$0';
-  if (Math.abs(value) < 0.0001) return `$${value.toPrecision(2)}`;
+  // Below four places, show the figure somebody actually typed rather than
+  // rounding it away — and as a decimal, because "$1.0e-7" is not a price.
+  if (Math.abs(value) < 0.0001) return `$${value.toFixed(10).replace(/0+$/, '')}`;
   return `$${value.toFixed(4)}`;
 }
 
