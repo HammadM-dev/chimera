@@ -955,6 +955,35 @@ export const filesPick = defineInvokeChannel({
 });
 
 // "Describe what you want automated" → a draft built from the real roster.
+// Folders the user has given CHIMERA read access to. Read access only — there
+// is no channel here that makes anything writable, because there is no such
+// capability to expose.
+export const fileGrantList = defineInvokeChannel({
+  channel: 'files:grants',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    grants: z.array(z.object({ path: z.string(), grantedAt: z.string(), missing: z.boolean() })),
+  }),
+});
+
+export const fileGrantAdd = defineInvokeChannel({
+  channel: 'files:grant',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ granted: z.boolean(), reason: z.string() }),
+});
+
+export const fileGrantRevoke = defineInvokeChannel({
+  channel: 'files:revoke',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ path: z.string() }),
+  responseSchema: z.object({ revoked: z.boolean() }),
+});
+
 export const automationPlan = defineInvokeChannel({
   channel: 'automation:plan',
   v: 1,
@@ -1226,6 +1255,9 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   pluginTest,
   filesPick,
   automationPlan,
+  fileGrantList,
+  fileGrantAdd,
+  fileGrantRevoke,
   automationCheck,
   runCostPreview,
   memoryListFacts,

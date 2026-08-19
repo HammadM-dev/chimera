@@ -20,10 +20,25 @@ export interface Sandbox {
   readonly root: string;
   readonly runId: string;
   /**
+   * Folders the user has granted read access to, already realpath-resolved.
+   * Empty unless somebody has explicitly granted one.
+   */
+  readonly readable: readonly string[];
+  /**
    * Turns an agent-supplied path into an absolute one inside the sandbox, or
-   * throws. Call this before every filesystem operation, without exception.
+   * throws. Call this before every filesystem operation that writes, without
+   * exception.
    */
   resolve: (requested: string) => string;
+  /**
+   * The same, for reading, which may also reach a granted folder.
+   *
+   * Separate from `resolve` so that granting somewhere readable cannot make it
+   * writable by accident: a write calls `resolve` and there is no argument it
+   * can be given that reaches a granted folder. The two are different questions
+   * and they are different functions.
+   */
+  resolveForRead: (requested: string) => string;
 }
 
 /**
@@ -56,7 +71,18 @@ function contains(root: string, candidate: string): boolean {
  * unable to read another's files a property of the layout rather than of
  * anyone remembering to check.
  */
-export function createSandbox(baseDir: string, runId: string): Sandbox {
+export function createSandbox(
+  baseDir: string,
+  runId: string,
+  /**
+   * Folders the user has granted this workspace read access to.
+   *
+   * A grant is explicit, per folder, and readable only. One that cannot be
+   * resolved — deleted since it was granted, or a broken link — is dropped
+   * rather than throwing: a stale grant should not stop every run.
+   */
+  readableRoots: readonly string[] = [],
+): Sandbox {
   if (runId === '' || runId.includes('/') || runId.includes('\\') || runId.includes('..')) {
     // The run id becomes a directory name, so it is a path component and has to
     // be validated like one — otherwise a crafted run id is itself an escape.
@@ -69,36 +95,74 @@ export function createSandbox(baseDir: string, runId: string): Sandbox {
   // one) does not make every containment check fail for the wrong reason.
   const realRoot = fs.realpathSync(root);
 
+  const readable = readableRoots
+    .map((granted) => {
+      try {
+        return fs.realpathSync(path.resolve(granted));
+      } catch {
+        return '';
+      }
+    })
+    .filter((granted) => granted !== '');
+
+  /**
+   * The shared half of both resolvers: everything except which roots count.
+   *
+   * Kept as one function because the traversal, null-byte and symlink
+   * arguments are identical for reads and writes, and two copies of a
+   * containment check is how one of them ends up subtly weaker.
+   */
+  const resolveWithin = (requested: string, roots: readonly string[], what: string): string => {
+    if (requested.includes('\0')) {
+      throw new ToolExecutionError('A path may not contain a null byte.', { requested, runId });
+    }
+
+    // `path.resolve` handles both halves of the traversal problem: a relative
+    // '../../etc/passwd' is resolved against the root and lands outside it,
+    // and an absolute '/etc/passwd' replaces the root entirely. Both are then
+    // caught by the containment check below — one rule, not two.
+    //
+    // An absolute path is resolved as given, so a granted folder can be named
+    // outright; it still has to survive containment against the roots below.
+    const candidate = path.resolve(realRoot, requested);
+
+    // Symlink escape: a link inside a permitted root pointing out of it
+    // resolves to a path that fails containment. Checked on the longest
+    // existing ancestor, because the target of a write may not exist yet.
+    const anchor = existingAncestor(candidate);
+    const realAnchor = fs.realpathSync(anchor);
+    const remainder = path.relative(anchor, candidate);
+    const resolved = remainder === '' ? realAnchor : path.resolve(realAnchor, remainder);
+
+    if (!roots.some((root_) => contains(root_, resolved))) {
+      throw new ToolExecutionError(
+        `Path "${requested}" resolves outside ${what} and was refused.`,
+        {
+          requested,
+          runId,
+        },
+      );
+    }
+    return resolved;
+  };
+
   return {
     root: realRoot,
     runId,
+    readable,
 
     resolve(requested: string): string {
-      if (requested.includes('\0')) {
-        throw new ToolExecutionError('A path may not contain a null byte.', { requested, runId });
-      }
+      return resolveWithin(requested, [realRoot], "the run's workspace");
+    },
 
-      // `path.resolve` handles both halves of the traversal problem: a relative
-      // '../../etc/passwd' is resolved against the root and lands outside it,
-      // and an absolute '/etc/passwd' replaces the root entirely. Both are then
-      // caught by the containment check below — one rule, not two.
-      const candidate = path.resolve(realRoot, requested);
-
-      // Symlink escape: a link inside the sandbox pointing out of it resolves
-      // to a path that fails containment. Checked on the longest existing
-      // ancestor, because the target of a write may not exist yet.
-      const anchor = existingAncestor(candidate);
-      const realAnchor = fs.realpathSync(anchor);
-      const remainder = path.relative(anchor, candidate);
-      const resolved = remainder === '' ? realAnchor : path.resolve(realAnchor, remainder);
-
-      if (!contains(realRoot, resolved)) {
-        throw new ToolExecutionError(
-          `Path "${requested}" resolves outside the run's workspace and was refused.`,
-          { requested, runId },
-        );
-      }
-      return resolved;
+    resolveForRead(requested: string): string {
+      return resolveWithin(
+        requested,
+        [realRoot, ...readable],
+        readable.length === 0
+          ? "the run's workspace"
+          : "the run's workspace or a folder you have been given",
+      );
     },
   };
 }

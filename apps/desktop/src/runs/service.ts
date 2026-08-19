@@ -25,6 +25,7 @@ import { cacheHookFor } from './cache.ts';
 import { registerPlugins, pluginSecrets } from '../plugins/service.ts';
 import { exportRun } from './otel.ts';
 import { screenshotSinkFor } from './screenshots.ts';
+import { readableFolders } from '../files/grants.ts';
 
 // Starting a run: the main-process half. Assembles the real pieces — the role
 // registry, a per-run sandbox, the tool servers, an enforcing Governor — and
@@ -200,7 +201,9 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   cancellations.set(runId, cancellation);
 
   const roles = createRoleRegistry(db).list();
-  const sandbox = createSandbox(path.join(os.tmpdir(), 'chimera-runs'), runId);
+  // Whatever folders the user has granted read access to, read fresh each run
+  // so a revoke takes effect on the next one rather than the next restart.
+  const sandbox = createSandbox(path.join(os.tmpdir(), 'chimera-runs'), runId, readableFolders());
   const tools = createToolRegistry({ secrets: pluginSecrets });
   await tools.registerServer('filesystem', await connectInProcess(createFilesystemServer(sandbox)));
   await tools.registerServer('shell', await connectInProcess(createShellServer(sandbox)));

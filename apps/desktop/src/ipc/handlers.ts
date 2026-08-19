@@ -57,6 +57,7 @@ import {
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
+import { grantFolder, listGrants, revokeFolder } from '../files/grants.ts';
 
 // Most channels are still stubs: real business logic arrives with the
 // milestone that owns each domain (M1 providers, M2 runtime, M4 workflow
@@ -198,6 +199,17 @@ registerHandler(channels.pluginRemove, (payload) => removePlugin(payload.id));
 registerHandler(channels.pluginTest, (payload) => testPlugin(payload.id));
 registerHandler(channels.filesPick, (payload) => pickAttachments(payload.mode));
 registerHandler(channels.filesPickDirectory, () => pickDirectory());
+
+// Granting is one gesture: the OS folder picker, then the grant. Splitting it
+// into "choose" and "confirm" would give the user two chances to say yes to
+// the same thing, which reads as a warning rather than a permission.
+registerHandler(channels.fileGrantList, () => listGrants());
+registerHandler(channels.fileGrantAdd, async () => {
+  const picked = await pickDirectory();
+  if (picked.path === '') return { granted: false, reason: '' };
+  return grantFolder(picked.path);
+});
+registerHandler(channels.fileGrantRevoke, (payload) => revokeFolder(payload.path));
 registerHandler(channels.triggerList, () => listTriggers());
 registerHandler(channels.automationPlan, (payload) => planAutomation(payload));
 registerHandler(channels.automationCheck, (payload) => checkAutomation(payload.definition));

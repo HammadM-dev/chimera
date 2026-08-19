@@ -367,6 +367,25 @@
   font-size: var(--type-floor);
 }
 
+/* A granted folder. The path is the subject of the row, so it gets the room. */
+.grant__path {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: var(--type-floor);
+  color: var(--text-primary);
+}
+
+/* A grant that points nowhere is stated where it was given, rather than
+ * quietly doing nothing at run time. */
+.grant__path--missing {
+  color: var(--semantic-warning);
+  text-decoration: line-through;
+}
+
 /* ---- the planner's answer ------------------------------------------------ */
 
 .plan {

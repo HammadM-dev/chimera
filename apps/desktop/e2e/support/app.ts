@@ -53,40 +53,14 @@ export function removeProfile(profile: string): void {
 function purgeSecrets(dbPath: string): void {
   if (!fs.existsSync(dbPath)) return;
 
-  // Required lazily: most specs never reach this, and neither module should be
-  // loaded by a test run that has no workspace to clean.
+  // Required lazily, and the SQL lives in packages/store where CLAUDE.md
+  // requires it: "all SQLite access through packages/store — no raw queries
+  // elsewhere" applies to the test suite too, which is how this was caught.
   const require = createRequire(import.meta.url);
-  const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+  const { vaultHandlesAt } = require('@chimera/store') as typeof import('@chimera/store');
   const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring');
 
-  const handles = new Set<string>();
-  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
-  try {
-    for (const row of db.prepare('SELECT auth_ref FROM connections').all() as {
-      auth_ref: string;
-    }[]) {
-      if (row.auth_ref.startsWith('vault:')) handles.add(row.auth_ref);
-    }
-    const pluginTable = db
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='plugins'")
-      .get();
-    if (pluginTable) {
-      for (const row of db.prepare('SELECT env_json, headers_json FROM plugins').all() as {
-        env_json: string;
-        headers_json: string;
-      }[]) {
-        for (const json of [row.env_json, row.headers_json]) {
-          for (const value of Object.values(JSON.parse(json) as Record<string, string>)) {
-            if (typeof value === 'string' && value.startsWith('vault:')) handles.add(value);
-          }
-        }
-      }
-    }
-  } finally {
-    db.close();
-  }
-
-  for (const handle of handles) {
+  for (const handle of vaultHandlesAt(dbPath)) {
     try {
       new Entry('chimera', handle).deletePassword();
     } catch {

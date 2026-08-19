@@ -208,6 +208,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'created_at',
     'updated_at',
   ],
+  file_grants: ['path', 'granted_at'],
   roles: [
     'id',
     'name',
