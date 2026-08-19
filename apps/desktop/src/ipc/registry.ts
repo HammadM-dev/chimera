@@ -964,10 +964,21 @@ export const automationPlan = defineInvokeChannel({
     model: z.string(),
     description: z.string(),
   }),
+  // Still v1: every field below is added, and the shape the previous planner
+  // answered with still validates. CLAUDE.md — "adding a field is fine,
+  // changing one needs a version bump".
   responseSchema: z.object({
     name: z.string(),
     summary: z.string(),
-    steps: z.array(z.object({ roleId: z.string(), instruction: z.string() })),
+    steps: z.array(
+      z.object({
+        id: z.string().optional(),
+        kind: z.enum(['agent', 'approval']).optional(),
+        roleId: z.string(),
+        instruction: z.string(),
+      }),
+    ),
+    edges: z.array(z.tuple([z.string(), z.string()])).optional(),
   }),
 });
 

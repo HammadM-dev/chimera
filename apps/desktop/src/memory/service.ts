@@ -34,6 +34,18 @@ export function setFact(key: string, value: string) {
   return { fact: store().set(key, value, { source: 'user' }) };
 }
 
+/**
+ * A fact the planner learned, attributed to the planner.
+ *
+ * Not `user`: nobody typed it. Keyed by automation name so designing the same
+ * automation twice updates one fact rather than growing the store, and so the
+ * next plan can see what this workspace already automates instead of proposing
+ * it again.
+ */
+export function rememberDesign(key: string, value: string) {
+  return { fact: store().set(key, value, { source: 'planner' }) };
+}
+
 export function deleteFact(key: string): { removed: boolean } {
   return { removed: store().remove(key) };
 }

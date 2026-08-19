@@ -56,6 +56,59 @@
   color: var(--text-muted);
 }
 
+/* What is selected, and the way to get rid of it. */
+.canvas__stepBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+}
+
+.canvas__stepKind {
+  font-size: var(--type-floor);
+  letter-spacing: var(--letterspacing-label);
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* The cut on a join. Quiet until the pointer is near it or it is selected —
+ * a graph of twenty steps with twenty buttons on it is a graph nobody can
+ * read. */
+.edge__cut {
+  position: absolute;
+  pointer-events: all;
+  display: grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  font: inherit;
+  font-size: var(--type-floor);
+  line-height: 1;
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: 50%;
+  opacity: 0;
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.react-flow__edge:hover .edge__cut,
+.edge__cut--on,
+.edge__cut:focus-visible {
+  opacity: 1;
+}
+
+.edge__cut:hover {
+  color: var(--semantic-danger);
+  border-color: var(--semantic-danger);
+}
+
 .canvas__stepName {
   margin: 0;
   font-size: var(--type-body);

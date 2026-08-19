@@ -2,9 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { DragEvent, JSX } from 'react';
 import {
   Background,
+  BaseEdge,
   Controls,
+  EdgeLabelRenderer,
   Handle,
   Position,
+  getSmoothStepPath,
   ConnectionLineType,
   MarkerType,
   ReactFlow,
@@ -15,6 +18,7 @@ import {
   useReactFlow,
   type Connection,
   type Edge,
+  type EdgeProps,
   type Node,
   type NodeProps,
 } from '@xyflow/react';
@@ -313,6 +317,63 @@ function ShapingNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
   );
 }
 
+/**
+ * A join, with a way to undo it.
+ *
+ * There was none. A line drawn between two steps could not be removed by any
+ * means the interface offered — no click target, no key, no menu — so a graph
+ * was only ever addable-to, and one mistaken drag meant starting the
+ * automation again. The button appears on hover or when the edge is selected,
+ * so a finished graph stays quiet.
+ */
+function DeletableEdge({
+  id,
+  sourceX,
+  sourceY,
+  targetX,
+  targetY,
+  sourcePosition,
+  targetPosition,
+  markerEnd,
+  selected,
+}: EdgeProps): JSX.Element {
+  const [path, labelX, labelY] = getSmoothStepPath({
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+  });
+  const { setEdges } = useReactFlow();
+
+  return (
+    <>
+      <BaseEdge id={id} path={path} markerEnd={markerEnd} />
+      <EdgeLabelRenderer>
+        <button
+          type="button"
+          className={`edge__cut ${selected === true ? 'edge__cut--on' : ''}`}
+          style={{
+            transform: `translate(-50%, -50%) translate(${String(labelX)}px, ${String(labelY)}px)`,
+          }}
+          data-testid={`edge-remove-${id}`}
+          title="Remove this join"
+          aria-label="Remove this join"
+          onClick={(event) => {
+            event.stopPropagation();
+            setEdges((current) => current.filter((edge) => edge.id !== id));
+          }}
+        >
+          ×
+        </button>
+      </EdgeLabelRenderer>
+    </>
+  );
+}
+
+const EDGE_TYPES = { deletable: DeletableEdge };
+
 const NODE_TYPES = {
   agent: AgentNodeBody,
   condition: ShapingNodeBody,
@@ -431,7 +492,9 @@ export interface Attachment {
 export interface AutomationTemplate {
   name: string;
   summary: string;
-  steps: { roleId: string; instruction: string }[];
+  steps: { id?: string; kind?: 'agent' | 'approval'; roleId: string; instruction: string }[];
+  /** [from, to] over step ids. Absent means the steps run in the order given. */
+  edges?: [string, string][];
 }
 
 /** The wire shape of one saved or runnable step. */
@@ -572,37 +635,74 @@ function CanvasInner({
     if (!template || roles.length === 0 || appliedTemplate.current === template) return;
     appliedTemplate.current = template;
 
+    // The plan is a graph, so it is built as one. It used to be joined end to
+    // end whatever it said, which turned every design — including the ones
+    // that ran three things at once and combined them — into a straight line.
     const built: StepNode[] = [];
+    const nodeIdFor = new Map<string, string>();
+
     template.steps.forEach((step, index) => {
-      const role = roles.find((candidate) => candidate.id === step.roleId);
-      if (!role) return;
+      const approval = step.kind === 'approval';
+      const role = approval
+        ? null
+        : (roles.find((candidate) => candidate.id === step.roleId) ?? null);
+      if (!approval && role === null) return;
+
       nodeSeq += 1;
+      const nodeId = `${approval ? 'approval' : role?.id}-${String(nodeSeq)}`;
+      nodeIdFor.set(step.id ?? `step-${String(index)}`, nodeId);
       built.push({
-        id: `${role.id}-${String(nodeSeq)}`,
-        type: 'agent',
+        id: nodeId,
+        type: approval ? 'approval' : 'agent',
         position: { x: ORIGIN_X + index * COLUMN_PITCH, y: ORIGIN_Y },
         data: {
-          kind: 'agent',
+          kind: approval ? 'approval' : 'agent',
           role,
           binding: null,
-          instruction: step.instruction,
-          settings: { ...DEFAULT_SETTINGS },
+          instruction: approval ? '' : step.instruction,
+          settings: approval
+            ? { ...DEFAULT_SETTINGS, prompt: step.instruction }
+            : { ...DEFAULT_SETTINGS },
         },
       });
     });
 
+    const planned = (template.edges ?? [])
+      .map(([from, to]) => [nodeIdFor.get(from), nodeIdFor.get(to)])
+      .filter((pair): pair is [string, string] => pair[0] !== undefined && pair[1] !== undefined);
+
+    // No edges offered means the plan was written as a list, and a list runs in
+    // the order it was written.
+    const joins: [string, string][] =
+      planned.length > 0
+        ? planned
+        : built.slice(1).map((node, index) => [built[index]?.id ?? '', node.id]);
+
     setNodes(built);
     setEdges(
-      built.slice(1).map((node, index) => ({
-        id: `edge-${node.id}`,
-        source: built[index]?.id ?? '',
-        target: node.id,
-        animated: true,
+      joins.map(([from, to]) => ({
+        id: `edge-${from}-${to}`,
+        source: from,
+        target: to,
+        type: 'deletable',
+        markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
       })),
     );
+
+    // Laid out in the order it runs rather than in a row, so a plan with three
+    // parallel branches arrives looking like three parallel branches.
+    const layout = tidyPositions(
+      built,
+      joins.map(([source, target]) => ({ source, target })),
+    );
+    setNodes(built.map((node) => ({ ...node, position: layout.get(node.id) ?? node.position })));
+
     setBrief(template.summary);
     setSelectedId(built[0]?.id ?? null);
-  }, [template, roles, setNodes, setEdges]);
+    requestAnimationFrame(() => {
+      void fitView({ padding: 0.24, maxZoom: 1 });
+    });
+  }, [template, roles, setNodes, setEdges, fitView]);
 
   // Restoring a saved automation: nodes back where they were, with their
   // instructions and bindings, and the brief and attachments as they were left.
@@ -1266,13 +1366,49 @@ function CanvasInner({
    * user's and moving their nodes out from under them would be rude. */
   const arrangedByHand = useRef(false);
 
+  /**
+   * A step is gone, and so is everything that referred to it.
+   *
+   * React Flow removes the node and its edges on its own. What it cannot know
+   * about is the rest of this panel's state — the selection, the per-step
+   * output from the last run, the pre-authorisation somebody granted — and a
+   * pre-authorisation left behind under a reused node id would be a safety
+   * decision surviving the step it was made about.
+   */
+  const onNodesDelete = useCallback(
+    (removed: Node[]) => {
+      const gone = new Set(removed.map((node) => node.id));
+      setSelectedId((current) => (current !== null && gone.has(current) ? null : current));
+      setPreauthorised((current) => current.filter((nodeId) => !gone.has(nodeId)));
+      setStepOutput((current) =>
+        Object.fromEntries(Object.entries(current).filter(([nodeId]) => !gone.has(nodeId))),
+      );
+      setStepStatus((current) =>
+        Object.fromEntries(Object.entries(current).filter(([nodeId]) => !gone.has(nodeId))),
+      );
+    },
+    [setSelectedId, setPreauthorised, setStepOutput, setStepStatus],
+  );
+
+  /** Removes one step by id, from the inspector's own button. */
+  const removeStep = useCallback(
+    (nodeId: string) => {
+      setNodes((current) => current.filter((node) => node.id !== nodeId));
+      setEdges((current) =>
+        current.filter((edge) => edge.source !== nodeId && edge.target !== nodeId),
+      );
+      onNodesDelete([{ id: nodeId }] as Node[]);
+    },
+    [setNodes, setEdges, onNodesDelete],
+  );
+
   const onConnect = useCallback(
     (connection: Connection) => {
       setEdges((current) =>
         addEdge(
           {
             ...connection,
-            type: 'smoothstep',
+            type: 'deletable',
             markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
           },
           current,
@@ -1445,6 +1581,12 @@ function CanvasInner({
             }))}
             edges={edges}
             nodeTypes={NODE_TYPES}
+            edgeTypes={EDGE_TYPES}
+            // Both keys: Delete is what a Windows or Linux user reaches for,
+            // Backspace is what a Mac user reaches for, and a canvas that
+            // honours one of them is broken for half the people using it.
+            deleteKeyCode={['Delete', 'Backspace']}
+            onNodesDelete={onNodesDelete}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
@@ -1465,7 +1607,7 @@ function CanvasInner({
                say which way the work flows, which is the only thing the line
                is there for. */
             defaultEdgeOptions={{
-              type: 'smoothstep',
+              type: 'deletable',
               markerEnd: { type: MarkerType.ArrowClosed, width: 14, height: 14 },
             }}
             connectionLineType={ConnectionLineType.SmoothStep}
@@ -1970,6 +2112,21 @@ function CanvasInner({
       </div>
 
       <aside className="canvas__inspector scroll" aria-label="Step">
+        {selected && (
+          <div className="canvas__stepBar">
+            <span className="canvas__stepKind">{KIND_LABEL[selected.data.kind]}</span>
+            <button
+              type="button"
+              className="button button--quiet"
+              data-testid="node-remove"
+              onClick={() => {
+                removeStep(selected.id);
+              }}
+            >
+              Remove step
+            </button>
+          </div>
+        )}
         {selected ? (
           selected.data.kind === 'agent' ? (
             <>
