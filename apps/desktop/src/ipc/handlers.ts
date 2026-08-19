@@ -7,6 +7,7 @@ import {
   importCatalogue as importConnectionCatalogue,
   createConnection,
   estimateCost,
+  removeConnection,
   listConnections,
   startChat,
   sweepHealth,
@@ -212,6 +213,7 @@ registerHandler(channels.fileGrantAdd, async () => {
 });
 registerHandler(channels.fileGrantRevoke, (payload) => revokeFolder(payload.path));
 
+registerHandler(channels.connectionRemove, (payload) => removeConnection(payload.id));
 registerHandler(channels.emailAccountList, () => listAccounts());
 registerHandler(channels.emailAccountSave, (payload) => saveAccount(payload));
 registerHandler(channels.emailAccountRemove, (payload) => removeAccount(payload.id));

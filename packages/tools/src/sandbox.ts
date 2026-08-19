@@ -171,3 +171,38 @@ export function createSandbox(
 export function destroySandbox(sandbox: Sandbox): void {
   fs.rmSync(sandbox.root, { recursive: true, force: true });
 }
+
+/**
+ * Removes sandboxes left behind by runs that are long over.
+ *
+ * Nothing removed them. Every run made a directory under the workspace's
+ * sandbox root and every one of them stayed, so the disk grew without bound and
+ * whatever the agents had been working on — contract text, exported rows, a
+ * customer's spreadsheet — sat in the system temp directory indefinitely. That
+ * is a privacy question as much as a housekeeping one.
+ *
+ * Swept by age at startup rather than destroyed at the end of each run. A run's
+ * files are the only copy of what it made, and a person who wants one back an
+ * hour later should find it there; a week later, they have what they needed or
+ * they never will.
+ */
+export function sweepSandboxes(baseDir: string, olderThanMs: number): { removed: number } {
+  let removed = 0;
+  const root = path.resolve(baseDir);
+  if (!fs.existsSync(root)) return { removed };
+
+  const cutoff = Date.now() - olderThanMs;
+  for (const entry of fs.readdirSync(root, { withFileTypes: true })) {
+    if (!entry.isDirectory()) continue;
+    const candidate = path.join(root, entry.name);
+    try {
+      if (fs.statSync(candidate).mtimeMs > cutoff) continue;
+      fs.rmSync(candidate, { recursive: true, force: true });
+      removed += 1;
+    } catch {
+      // A directory that will not stat or will not delete is one to leave
+      // alone. Housekeeping must never be the reason the app fails to start.
+    }
+  }
+  return { removed };
+}

@@ -7,6 +7,9 @@ import { closeBrowsers, setBrowserRoot } from './runs/browser.ts';
 import { reloadTriggers, stopTriggers } from './triggers/service.ts';
 import { registerPanicKey, unregisterPanicKey } from './control/panicKey.ts';
 import { startControlBroadcast } from './control/broadcast.ts';
+import os from 'node:os';
+import path from 'node:path';
+import { sweepSandboxes } from '@chimera/tools';
 
 // Electron derives `userData` from the app name, and unpackaged it reads that
 // from package.json — which here is the scoped npm name `@chimera/desktop`,
@@ -19,6 +22,11 @@ import { startControlBroadcast } from './control/broadcast.ts';
 // directory. Set before anything reads `getPath('userData')`.
 app.setName('CHIMERA');
 
+/** How long a finished run's files stay on disk. A week: long enough that
+ * somebody who wants back what a run made can still find it, short enough that
+ * a machine running automations daily does not accumulate them forever. */
+const SANDBOX_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
+
 void app.whenReady().then(() => {
   // Before any window exists: the store applies pending migrations on open,
   // and a renderer that came up first could invoke a channel whose handler
@@ -27,6 +35,10 @@ void app.whenReady().then(() => {
   setScreenshotRoot(app.getPath('userData'));
   setBrowserRoot(app.getPath('userData'));
   registerIpcMainHandlers();
+  // Last week's run directories. Nothing removed them before, so they grew
+  // without bound and left whatever the agents were working on in the system
+  // temp directory indefinitely — see sweepSandboxes.
+  sweepSandboxes(path.join(os.tmpdir(), 'chimera-runs'), SANDBOX_KEEP_MS);
   // Armed before the window exists: an automation on a schedule belongs to the
   // workspace, not to whether somebody is looking at it.
   reloadTriggers();

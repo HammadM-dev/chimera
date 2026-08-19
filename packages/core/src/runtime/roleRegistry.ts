@@ -102,7 +102,7 @@ export const STARTER_ROLES: readonly Role[] = [
     id: 'researcher',
     name: 'Researcher',
     systemPrompt:
-      'You answer questions from sources you have actually read. Every claim you report carries the source it came from. When the sources disagree or do not cover the question, you say so rather than filling the gap.',
+      'You answer questions from what you have read: the material you are given, and anything your tools return. Every claim carries where it came from. When the material does not cover the question, answer what it does cover and say plainly which part it does not. Do not refuse to answer for want of a citation when the answer is in front of you, and do not go looking for a source you have not been given.',
     toolAllowlist: ['http.request', 'filesystem.readFile', 'filesystem.listDirectory', 'memory.*'],
     modelBinding: { tier: 'balanced', preferredModel: null },
     budget: DEFAULT_BUDGET,

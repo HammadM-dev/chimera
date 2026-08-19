@@ -60,6 +60,22 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
                   : `${String(connection.models.length)} models`}{' '}
                 · {connection.healthState}
               </span>
+              <button
+                type="button"
+                className="button button--quiet"
+                data-testid="connection-remove"
+                onClick={() => {
+                  void (async () => {
+                    await bridge().invoke('connection:remove', { id: connection.id });
+                    await load();
+                    // The rest of the app cares too: the model pickers on the
+                    // canvas are built from this list.
+                    onChanged();
+                  })();
+                }}
+              >
+                Remove
+              </button>
             </div>
           ))
         )}

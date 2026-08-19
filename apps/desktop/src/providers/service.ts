@@ -3,6 +3,7 @@ import type { WebContents } from 'electron';
 import { ProviderError } from '@chimera/errors';
 import {
   connectionsRepository,
+  deleteSecret,
   setSecret,
   settingsRepository,
   type AuthRef,
@@ -105,6 +106,30 @@ export interface ConnectionSummary {
  * let the user choose one the workspace has explicitly ruled out. `authRef` is
  * deliberately not included: the renderer has no use for a vault handle.
  */
+/**
+ * Removes a connection, and the credential that went with it.
+ *
+ * There was no way to remove one at all: a key typed wrongly, or a provider
+ * somebody stopped using, stayed in the list for good. And `deleteSecret` was
+ * called from nowhere in this app, so even when the row went the OS keychain
+ * entry would have stayed behind — the same leak the test suite spent a day
+ * teaching us about, waiting to happen in the product.
+ */
+export function removeConnection(id: string): { removed: boolean } {
+  const db = getStore();
+  const existing = connectionsRepository.get(db, id);
+  if (!existing) return { removed: false };
+
+  connectionsRepository.remove(db, id);
+  try {
+    deleteSecret(existing.authRef);
+  } catch {
+    // The row is gone either way. A keychain that will not answer is not a
+    // reason to leave a connection the user asked to be rid of.
+  }
+  return { removed: true };
+}
+
 export function listConnections(): {
   connections: ConnectionSummary[];
   localOnlyMode: boolean;

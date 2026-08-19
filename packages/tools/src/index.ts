@@ -7,7 +7,7 @@ export type { InvocationContext, RegisteredTool, ToolRegistry } from './toolRegi
 export { assertToolAllowed, isToolAllowed } from './allowlist.ts';
 export { isIrreversible, alwaysIrreversibleTools } from './reversibility.ts';
 export type { AllowlistedRole } from './allowlist.ts';
-export { createSandbox, destroySandbox } from './sandbox.ts';
+export { createSandbox, destroySandbox, sweepSandboxes } from './sandbox.ts';
 export type { Sandbox } from './sandbox.ts';
 export { createFilesystemServer } from './servers/filesystem.ts';
 export { createShellServer, runInSandbox } from './servers/shell.ts';

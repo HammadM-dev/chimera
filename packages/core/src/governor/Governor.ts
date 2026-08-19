@@ -67,7 +67,17 @@ export function deny(
   return { decision: 'deny', code, message, details };
 }
 
+/**
+ * Money, at a precision that does not round the number away.
+ *
+ * Four places is right for the figures a run actually reaches. It is wrong for
+ * a limit somebody set below that: a cap of $0.0000001 was reported as "the
+ * cost budget of $0.0000 is spent", which reads as a bug in the cap rather than
+ * as the cap doing its job.
+ */
 function money(value: number): string {
+  if (value === 0) return '$0';
+  if (Math.abs(value) < 0.0001) return `$${value.toPrecision(2)}`;
   return `$${value.toFixed(4)}`;
 }
 
