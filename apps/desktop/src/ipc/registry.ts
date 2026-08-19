@@ -984,6 +984,65 @@ export const fileGrantRevoke = defineInvokeChannel({
   responseSchema: z.object({ revoked: z.boolean() }),
 });
 
+// Mailboxes an agent can be given. No channel here returns a password or a
+// vault handle: the renderer's business is which mailboxes exist, not what
+// opens them.
+export const emailAccountList = defineInvokeChannel({
+  channel: 'email:accounts',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    accounts: z.array(
+      z.object({
+        id: z.string(),
+        label: z.string(),
+        address: z.string(),
+        imapHost: z.string(),
+        smtpHost: z.string(),
+        username: z.string(),
+      }),
+    ),
+  }),
+});
+
+export const emailAccountSave = defineInvokeChannel({
+  channel: 'email:save',
+  // Carries an app password on the way in, so it is logged by channel name
+  // only — the same treatment connection:create and vault:setSecret get.
+  v: 1,
+  sensitive: true,
+  requestSchema: z.object({
+    id: z.string(),
+    label: z.string(),
+    address: z.string(),
+    preset: z.string(),
+    imapHost: z.string(),
+    imapPort: z.number().int(),
+    smtpHost: z.string(),
+    smtpPort: z.number().int(),
+    username: z.string(),
+    password: z.string(),
+  }),
+  responseSchema: z.object({ id: z.string() }),
+});
+
+export const emailAccountRemove = defineInvokeChannel({
+  channel: 'email:remove',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ removed: z.boolean() }),
+});
+
+export const emailAccountTest = defineInvokeChannel({
+  channel: 'email:test',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ ok: z.boolean(), detail: z.string() }),
+});
+
 export const automationPlan = defineInvokeChannel({
   channel: 'automation:plan',
   v: 1,
@@ -1255,6 +1314,10 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   pluginTest,
   filesPick,
   automationPlan,
+  emailAccountList,
+  emailAccountSave,
+  emailAccountRemove,
+  emailAccountTest,
   fileGrantList,
   fileGrantAdd,
   fileGrantRevoke,

@@ -180,6 +180,28 @@ test('a graph that loops back on itself is opened up, not passed on', () => {
   );
 });
 
+test('a plan answered as a plain list, with no ids and no edges, still builds', () => {
+  // What a model does when it ignores half the schema, and what the stub in
+  // m4-demo does. Refusing it outright turned a usable plan into "the planner
+  // failed" — caught by that spec, which is the only reason this is a test.
+  const planned = plan({
+    steps: [
+      { id: '', kind: 'agent', roleId: 'researcher', instruction: 'Read them.' },
+      { id: '', kind: 'agent', roleId: 'summariser', instruction: 'Summarise.' },
+    ],
+    edges: [],
+  });
+  // ids are filled in before repair; here the repair simply must not lose them.
+  const withIds = {
+    ...planned,
+    steps: planned.steps.map((step, index) => ({ ...step, id: `step-${String(index)}` })),
+  };
+  const repaired = repairPlan({ ...withIds, edges: [['step-0', 'step-1']] }, roster);
+
+  assert.equal(repaired.steps.length, 2);
+  assert.equal(repaired.edges.length, 1);
+});
+
 test('parallel branches survive: the repair does not flatten a graph into a line', () => {
   const repaired = repairPlan(
     plan({

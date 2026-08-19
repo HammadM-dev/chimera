@@ -44,6 +44,8 @@ export * as pluginsRepository from './repositories/plugins.ts';
 export * as fileGrantsRepository from './repositories/fileGrants.ts';
 export type { FileGrant } from './repositories/fileGrants.ts';
 export { vaultHandlesAt } from './vaultHandles.ts';
+export * as emailAccountsRepository from './repositories/emailAccounts.ts';
+export type { EmailAccountRecord } from './repositories/emailAccounts.ts';
 export type { PluginRecord } from './repositories/plugins.ts';
 export type { EvalRunRecord } from './repositories/evals.ts';
 export type { DeadLetterRecord } from './repositories/deadLetter.ts';

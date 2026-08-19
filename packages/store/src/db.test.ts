@@ -209,6 +209,18 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'updated_at',
   ],
   file_grants: ['path', 'granted_at'],
+  email_accounts: [
+    'id',
+    'label',
+    'address',
+    'imap_host',
+    'imap_port',
+    'smtp_host',
+    'smtp_port',
+    'username',
+    'auth_ref',
+    'created_at',
+  ],
   roles: [
     'id',
     'name',

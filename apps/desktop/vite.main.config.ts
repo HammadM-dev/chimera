@@ -31,6 +31,11 @@ export default defineConfig({
         '@napi-rs/keyring',
         'playwright',
         'playwright-core',
+        // The mail clients, for the same reason: both reach for optional
+        // native and dynamically-required pieces at runtime, and neither is
+        // ours to inline into a bundle.
+        'imapflow',
+        'nodemailer',
       ],
     },
   },

@@ -58,6 +58,7 @@ import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
 import { grantFolder, listGrants, revokeFolder } from '../files/grants.ts';
+import { listAccounts, removeAccount, saveAccount, testAccount } from '../email/service.ts';
 
 // Most channels are still stubs: real business logic arrives with the
 // milestone that owns each domain (M1 providers, M2 runtime, M4 workflow
@@ -210,6 +211,11 @@ registerHandler(channels.fileGrantAdd, async () => {
   return grantFolder(picked.path);
 });
 registerHandler(channels.fileGrantRevoke, (payload) => revokeFolder(payload.path));
+
+registerHandler(channels.emailAccountList, () => listAccounts());
+registerHandler(channels.emailAccountSave, (payload) => saveAccount(payload));
+registerHandler(channels.emailAccountRemove, (payload) => removeAccount(payload.id));
+registerHandler(channels.emailAccountTest, (payload) => testAccount(payload.id));
 registerHandler(channels.triggerList, () => listTriggers());
 registerHandler(channels.automationPlan, (payload) => planAutomation(payload));
 registerHandler(channels.automationCheck, (payload) => checkAutomation(payload.definition));

@@ -2,7 +2,8 @@ import { _electron as electron, type ElectronApplication, type Page } from '@pla
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
-import { createRequire } from 'node:module';
+import { Entry } from '@napi-rs/keyring';
+import { vaultHandlesAt } from '@chimera/store';
 
 export const desktopRoot = path.resolve(import.meta.dirname, '..', '..');
 export const mainEntry = path.join(desktopRoot, 'dist', 'main.js');
@@ -52,13 +53,6 @@ export function removeProfile(profile: string): void {
 
 function purgeSecrets(dbPath: string): void {
   if (!fs.existsSync(dbPath)) return;
-
-  // Required lazily, and the SQL lives in packages/store where CLAUDE.md
-  // requires it: "all SQLite access through packages/store — no raw queries
-  // elsewhere" applies to the test suite too, which is how this was caught.
-  const require = createRequire(import.meta.url);
-  const { vaultHandlesAt } = require('@chimera/store') as typeof import('@chimera/store');
-  const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring');
 
   for (const handle of vaultHandlesAt(dbPath)) {
     try {

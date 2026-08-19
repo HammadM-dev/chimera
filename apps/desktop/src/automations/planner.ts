@@ -51,7 +51,12 @@ const SCHEMA = {
       minItems: 1,
       items: {
         type: 'object',
-        required: ['id', 'roleId', 'instruction'],
+        // `id` is wanted and not required. A model that answers with a plain
+        // list of steps and no ids has still answered the question, and
+        // refusing it outright — which is what requiring the field did — turns
+        // a usable plan into "the planner failed". Ids are filled in below when
+        // they are missing, and the steps then run in the order given.
+        required: ['roleId', 'instruction'],
         properties: {
           id: { type: 'string', minLength: 1 },
           kind: { type: 'string' },
@@ -356,15 +361,15 @@ export async function planAutomation(input: {
   const answered = result.value as {
     name: string;
     summary: string;
-    steps: { id: string; kind?: string; roleId: string; instruction: string }[];
+    steps: { id?: string; kind?: string; roleId: string; instruction: string }[];
     edges?: [string, string][];
   };
 
   const planned: PlannedAutomation = {
     name: answered.name,
     summary: answered.summary,
-    steps: answered.steps.map((step) => ({
-      id: step.id,
+    steps: answered.steps.map((step, index) => ({
+      id: step.id === undefined || step.id === '' ? `step-${String(index)}` : step.id,
       kind: step.kind === 'approval' ? 'approval' : 'agent',
       roleId: step.kind === 'approval' ? '' : step.roleId,
       instruction: step.instruction,

@@ -7,6 +7,7 @@ import { runsRepository, settingsRepository, tracesRepository } from '@chimera/s
 import { adapterFor } from '@chimera/providers';
 import {
   connectInProcess,
+  createEmailServer,
   createBrowserServer,
   createHttpServer,
   createFilesystemServer,
@@ -26,6 +27,12 @@ import { registerPlugins, pluginSecrets } from '../plugins/service.ts';
 import { exportRun } from './otel.ts';
 import { screenshotSinkFor } from './screenshots.ts';
 import { readableFolders } from '../files/grants.ts';
+import {
+  credentialsFor,
+  emailSecrets,
+  listAccounts,
+  serverIdForAccount,
+} from '../email/service.ts';
 
 // Starting a run: the main-process half. Assembles the real pieces — the role
 // registry, a per-run sandbox, the tool servers, an enforcing Governor — and
@@ -204,7 +211,7 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   // Whatever folders the user has granted read access to, read fresh each run
   // so a revoke takes effect on the next one rather than the next restart.
   const sandbox = createSandbox(path.join(os.tmpdir(), 'chimera-runs'), runId, readableFolders());
-  const tools = createToolRegistry({ secrets: pluginSecrets });
+  const tools = createToolRegistry({ secrets: () => [...pluginSecrets(), ...emailSecrets()] });
   await tools.registerServer('filesystem', await connectInProcess(createFilesystemServer(sandbox)));
   await tools.registerServer('shell', await connectInProcess(createShellServer(sandbox)));
   // Memory is per-run only in its attribution: what is written is workspace-wide
@@ -227,6 +234,26 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
     'http',
     await connectInProcess(createHttpServer({ egressAllowlist: brief.egressAllowlist ?? [] })),
   );
+
+  // Every mailbox the workspace holds, each under its own server id so an
+  // agent is granted one account rather than "email". A workspace with two
+  // mailboxes gets `email-<id>.send` twice over, and a role's allowlist says
+  // which — the alternative being an agent told to handle support mail that
+  // can also send from the founder's personal address.
+  for (const account of listAccounts().accounts) {
+    try {
+      const { record, password } = credentialsFor(account.id);
+      const { createMailTransport } = await import('../email/transport.ts');
+      await tools.registerServer(
+        serverIdForAccount(account.id),
+        await connectInProcess(createEmailServer(createMailTransport(record, password))),
+      );
+    } catch {
+      // A mailbox whose password will not read is a mailbox this run does not
+      // have. The account panel is where that is diagnosed; a run that refused
+      // to start over it would be worse than one that runs without it.
+    }
+  }
 
   // Whatever the user has plugged in. Registered after CHIMERA's own servers
   // so a plugin cannot shadow `filesystem` or `shell` by claiming the name —

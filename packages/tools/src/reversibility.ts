@@ -20,6 +20,11 @@ const ALWAYS: readonly string[] = [
   // honest classification is the one that assumes it sends.
   'browser.click',
   'browser.type',
+  // A sent message is gone. There is no protocol for taking one back, and the
+  // recipient has already read it or has not — which is exactly the shape of
+  // thing CLAUDE.md requires a person to approve first.
+  'email.send',
+  'email.reply',
 ];
 
 /** Calls whose effect stays inside the run's own sandbox, and stops there. */
@@ -38,6 +43,12 @@ const CONTAINED: readonly string[] = [
   'browser.read',
   'browser.extract',
   'browser.screenshot',
+  // Reading a mailbox changes nothing in it. Marking as read is not done here:
+  // these fetch without touching flags, so a triage run leaves an inbox exactly
+  // as it found it.
+  'email.list',
+  'email.read',
+  'email.search',
 ];
 
 /**
