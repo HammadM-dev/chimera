@@ -987,6 +987,14 @@ export const fileGrantRevoke = defineInvokeChannel({
 // Mailboxes an agent can be given. No channel here returns a password or a
 // vault handle: the renderer's business is which mailboxes exist, not what
 // opens them.
+export const workflowRemove = defineInvokeChannel({
+  channel: 'workflow:remove',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ removed: z.boolean() }),
+});
+
 export const connectionRemove = defineInvokeChannel({
   channel: 'connection:remove',
   v: 1,
@@ -1322,6 +1330,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   pluginTest,
   filesPick,
   automationPlan,
+  workflowRemove,
   connectionRemove,
   emailAccountList,
   emailAccountSave,

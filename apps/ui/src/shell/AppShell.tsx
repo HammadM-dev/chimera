@@ -214,19 +214,38 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
         ) : (
           <div className="sidebar__nav" data-testid="saved-list">
             {saved.map((automation) => (
-              <button
-                key={automation.id}
-                type="button"
-                className="sidebar__item"
-                data-testid={`saved-${automation.id}`}
-                onClick={() => {
-                  setTemplate(null);
-                  setOpenId(automation.id);
-                  setView('build');
-                }}
-              >
-                {automation.name}
-              </button>
+              <div key={automation.id} className="sidebar__saved">
+                <button
+                  type="button"
+                  className="sidebar__item"
+                  data-testid={`saved-${automation.id}`}
+                  onClick={() => {
+                    setTemplate(null);
+                    setOpenId(automation.id);
+                    setView('build');
+                  }}
+                >
+                  {automation.name}
+                </button>
+                {/* Quiet until the row is under the pointer: a list of the
+                    things you work on should not be a row of delete buttons. */}
+                <button
+                  type="button"
+                  className="sidebar__forget"
+                  data-testid={`forget-${automation.id}`}
+                  title={`Remove ${automation.name}`}
+                  aria-label={`Remove ${automation.name}`}
+                  onClick={() => {
+                    void (async () => {
+                      await bridge().invoke('workflow:remove', { id: automation.id });
+                      if (openId === automation.id) setOpenId(null);
+                      setRefreshToken((current) => current + 1);
+                    })();
+                  }}
+                >
+                  ×
+                </button>
+              </div>
             ))}
           </div>
         )}

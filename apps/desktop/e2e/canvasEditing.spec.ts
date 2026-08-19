@@ -83,3 +83,38 @@ test('removing a step takes its joins with it', async () => {
     removeProfile(profile);
   }
 });
+
+test('a saved automation can be removed from the list it fills up', async () => {
+  const profile = freshProfile();
+  const app = await launchApp({ profile });
+
+  try {
+    const page = await app.firstWindow();
+    await goTo(page, 'build');
+    await page.getByTestId('palette-summariser').click();
+    await page.getByTestId('brief-input').fill('Summarise the week.');
+    await page.getByTestId('brief-name').fill('Weekly summary');
+    await page.getByTestId('brief-save').click();
+    await expect(page.getByTestId('saved-list')).toContainText('Weekly summary', {
+      timeout: 20_000,
+    });
+
+    // There was no way to take one back out, so the list of things you work on
+    // became a list of everything you had ever tried.
+    await page.locator('[data-testid^="forget-"]').first().click();
+    await expect(page.getByTestId('saved-list')).toHaveCount(0, { timeout: 20_000 });
+
+    // Gone from the workspace, not just from the sidebar.
+    const remaining = await page.evaluate(async () => {
+      const chimera = (
+        window as unknown as { chimera: { invoke: (c: string, p: unknown) => Promise<unknown> } }
+      ).chimera;
+      const listed = (await chimera.invoke('workflow:list', {})) as { workflows: unknown[] };
+      return listed.workflows.length;
+    });
+    expect(remaining).toBe(0);
+  } finally {
+    await app.close();
+    removeProfile(profile);
+  }
+});

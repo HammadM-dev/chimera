@@ -90,6 +90,22 @@ export function listAutomations() {
   };
 }
 
+/**
+ * Removes a saved automation.
+ *
+ * There was no way to. Every draft anybody saved stayed in the sidebar for
+ * good, so the list of things you work on became a list of everything you had
+ * ever tried. Its runs are left where they are: a run is a record of something
+ * that actually happened and of what it cost, and deleting the automation is
+ * not a reason to lose the history of it.
+ */
+export function removeAutomation(id: string): { removed: boolean } {
+  const db = getStore();
+  if (!workflowsRepository.get(db, id)) return { removed: false };
+  workflowsRepository.remove(db, id);
+  return { removed: true };
+}
+
 export function getAutomation(id: string) {
   const version = workflowsRepository.get(getStore(), id);
   if (!version) throw new Error(`No automation with id "${id}".`);

@@ -53,6 +53,7 @@ import {
   checkAutomation,
   getAutomation,
   listAutomations,
+  removeAutomation,
   saveAutomation,
 } from '../automations/store.ts';
 import { registerHandler } from './types.ts';
@@ -213,6 +214,7 @@ registerHandler(channels.fileGrantAdd, async () => {
 });
 registerHandler(channels.fileGrantRevoke, (payload) => revokeFolder(payload.path));
 
+registerHandler(channels.workflowRemove, (payload) => removeAutomation(payload.id));
 registerHandler(channels.connectionRemove, (payload) => removeConnection(payload.id));
 registerHandler(channels.emailAccountList, () => listAccounts());
 registerHandler(channels.emailAccountSave, (payload) => saveAccount(payload));

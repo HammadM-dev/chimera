@@ -104,6 +104,52 @@
   font-weight: var(--font-weight-medium);
 }
 
+/* One saved automation, and the way to be rid of it. The remove control stays
+ * out of sight until the row is under the pointer or has focus: a list of the
+ * things you work on should not read as a row of delete buttons. */
+.sidebar__saved {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.sidebar__saved .sidebar__item {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar__forget {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  font: inherit;
+  font-size: var(--type-meta);
+  line-height: 1;
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-control);
+  opacity: 0;
+  transition:
+    opacity var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard);
+}
+
+.sidebar__saved:hover .sidebar__forget,
+.sidebar__forget:focus-visible {
+  opacity: 1;
+}
+
+.sidebar__forget:hover {
+  color: var(--semantic-danger);
+}
+
 .sidebar__icon {
   width: 15px;
   height: 15px;
