@@ -2,6 +2,7 @@ import { _electron as electron, type ElectronApplication, type Page } from '@pla
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
+import { createRequire } from 'node:module';
 
 export const desktopRoot = path.resolve(import.meta.dirname, '..', '..');
 export const mainEntry = path.join(desktopRoot, 'dist', 'main.js');
@@ -20,8 +21,79 @@ export function freshProfile(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'chimera-e2e-'));
 }
 
+/**
+ * Removes a test workspace, keychain entries included.
+ *
+ * Deleting the directory was the whole of this, and the directory is not where
+ * the secrets are: every connection and every plugin credential a test creates
+ * goes to the real OS keychain and stayed there afterwards. One entry per
+ * connection per run, never collected, across a suite that creates dozens and
+ * is run many times a day.
+ *
+ * On this machine that reached 1,218 orphaned entries — 99% of everything in
+ * the login keyring — at which point gnome-keyring, which rewrites and
+ * re-encrypts the collection on every write, took longer than DBus's 25s reply
+ * timeout to answer. The symptom was every provider-connecting test failing
+ * with "Did not receive a reply", and the daemon burning eighteen hours of CPU.
+ * The suite degraded the machine it ran on, a little more each run.
+ *
+ * Read the handles out of the workspace before the file goes, then delete each
+ * one. Best-effort throughout: a handle that will not delete must not fail the
+ * test that is already over.
+ */
 export function removeProfile(profile: string): void {
+  try {
+    purgeSecrets(path.join(profile, 'chimera.sqlite'));
+  } catch {
+    // A workspace with no database, or one already gone. Nothing to collect.
+  }
   fs.rmSync(profile, { recursive: true, force: true });
+}
+
+function purgeSecrets(dbPath: string): void {
+  if (!fs.existsSync(dbPath)) return;
+
+  // Required lazily: most specs never reach this, and neither module should be
+  // loaded by a test run that has no workspace to clean.
+  const require = createRequire(import.meta.url);
+  const Database = require('better-sqlite3') as typeof import('better-sqlite3');
+  const { Entry } = require('@napi-rs/keyring') as typeof import('@napi-rs/keyring');
+
+  const handles = new Set<string>();
+  const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+  try {
+    for (const row of db.prepare('SELECT auth_ref FROM connections').all() as {
+      auth_ref: string;
+    }[]) {
+      if (row.auth_ref.startsWith('vault:')) handles.add(row.auth_ref);
+    }
+    const pluginTable = db
+      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='plugins'")
+      .get();
+    if (pluginTable) {
+      for (const row of db.prepare('SELECT env_json, headers_json FROM plugins').all() as {
+        env_json: string;
+        headers_json: string;
+      }[]) {
+        for (const json of [row.env_json, row.headers_json]) {
+          for (const value of Object.values(JSON.parse(json) as Record<string, string>)) {
+            if (typeof value === 'string' && value.startsWith('vault:')) handles.add(value);
+          }
+        }
+      }
+    }
+  } finally {
+    db.close();
+  }
+
+  for (const handle of handles) {
+    try {
+      new Entry('chimera', handle).deletePassword();
+    } catch {
+      // Already gone, or a keychain that is not answering. Either way the test
+      // is finished and this is not its problem.
+    }
+  }
 }
 
 export interface LaunchOptions {
