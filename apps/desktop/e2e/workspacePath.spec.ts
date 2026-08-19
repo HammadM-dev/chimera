@@ -18,6 +18,13 @@ test('the app reports one workspace name, matching the packaged identity', async
   const app = await launchApp({ profile });
 
   try {
+    // Wait for the window before asking main anything. Evaluating into a main
+    // process that is still starting up intermittently came back "resulting
+    // promise was garbage collected" — the harness losing its context rather
+    // than the app answering wrongly, and the last test in the suite failing
+    // for a reason that has nothing to do with what it checks.
+    await app.firstWindow();
+
     const identity = await app.evaluate(({ app: electronApp }) => ({
       name: electronApp.getName(),
       userData: electronApp.getPath('userData'),
