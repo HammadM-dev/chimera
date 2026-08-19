@@ -20,7 +20,7 @@ interface ControlSession {
   dryRun: boolean;
 }
 
-export function StatusBar(): JSX.Element {
+export function StatusBar({ changed = 0 }: { changed?: number }): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [totals, setTotals] = useState<SessionTotals>(sessionTotals());
   const [control, setControl] = useState<ControlSession | null>(null);
@@ -126,7 +126,10 @@ export function StatusBar(): JSX.Element {
       cancelled = true;
       clearInterval(timer);
     };
-  }, []);
+    // `changed` as well as the timer: connecting a provider and then reading
+    // "No connections" for up to fifteen seconds is the first thing a new user
+    // sees, at the exact moment they are looking for confirmation it worked.
+  }, [changed]);
 
   const costLabel =
     totals.exchanges === 0

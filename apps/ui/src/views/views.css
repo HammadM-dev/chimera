@@ -340,6 +340,19 @@
   padding: var(--space-4);
 }
 
+/* Prose inside a panel. Two paragraphs in a row ran together into one block —
+ * "agents can read these folders and nothing else" and "no folders granted"
+ * read as a single sentence with a full stop in the middle of it — and a
+ * button immediately under prose looked like part of the sentence. */
+.panel > p + p {
+  margin-top: var(--space-2);
+}
+
+.panel > p + button,
+.panel > div + button {
+  margin-top: var(--space-3);
+}
+
 .panel__title {
   margin: 0 0 var(--space-3);
   font-size: var(--type-floor);

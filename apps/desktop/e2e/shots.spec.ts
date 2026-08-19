@@ -127,6 +127,22 @@ test('every view, photographed', async () => {
 
     await goTo(page, 'memory');
     await shot('memory');
+
+    // The panels added since: mailboxes, granted folders, plugins, and the
+    // remove control on a connection.
+    await goTo(page, 'providers');
+    await page.getByTestId('email-add').click();
+    await shot('providers-email');
+    await page.getByTestId('email-cancel').click();
+
+    // A saved automation in the sidebar, with its remove control showing.
+    await goTo(page, 'build');
+    await page.getByTestId('palette-summariser').click();
+    await page.getByTestId('brief-input').fill('Summarise the week.');
+    await page.getByTestId('brief-name').fill('Weekly summary');
+    await page.getByTestId('brief-save').click();
+    await page.locator('.sidebar__saved').first().hover();
+    await shot('sidebar-saved');
   } finally {
     await app.close();
     removeProfile(profile);

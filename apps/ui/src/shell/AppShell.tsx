@@ -324,7 +324,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
         )}
       </main>
 
-      <StatusBar />
+      <StatusBar changed={refreshToken} />
     </div>
   );
 }
