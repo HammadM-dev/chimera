@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 
 // Not a test: a way to look at the product.
 //
@@ -105,9 +105,7 @@ test('every view, photographed', async () => {
     await place('data-extractor', 'Pull every invoice number and amount.');
     await place('summariser', 'Write the note for the finance director.');
     const join = async (from: string, to: string) => {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+      await joinSteps(page, from, to);
     };
     await join('node-researcher', 'node-summariser');
     await join('node-data-extractor', 'node-summariser');

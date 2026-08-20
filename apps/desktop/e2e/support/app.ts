@@ -1,4 +1,10 @@
-import { _electron as electron, type ElectronApplication, type Page } from '@playwright/test';
+import {
+  _electron as electron,
+  expect,
+  type ElectronApplication,
+  type Locator,
+  type Page,
+} from '@playwright/test';
 import path from 'node:path';
 import os from 'node:os';
 import fs from 'node:fs';
@@ -137,4 +143,186 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   // so there is no race left to wait out.
   if ((await skip.count()) === 0) return;
   await skip.click();
+}
+
+/**
+ * Waits until the canvas has stopped rearranging itself.
+ *
+ * Drawing a line schedules a layout, which lands a moment later and moves the
+ * steps into the order they run in. Measuring a handle before that and dropping
+ * on it afterwards means dropping where the handle used to be — which is what a
+ * person avoids without thinking, by waiting for the graph to settle before
+ * reaching for the next port.
+ */
+export async function waitForCanvasStill(page: Page, timeoutMs = 5_000): Promise<void> {
+  const positions = async (): Promise<string> =>
+    page.evaluate(() =>
+      Array.from(document.querySelectorAll('.react-flow__node'))
+        .map(
+          (node) =>
+            `${node.getAttribute('data-id') ?? ''}:${(node as HTMLElement).style.transform}`,
+        )
+        .join('|'),
+    );
+
+  const deadline = Date.now() + timeoutMs;
+  let last = await positions();
+  while (Date.now() < deadline) {
+    await page.waitForTimeout(120);
+    const now = await positions();
+    if (now === last && now !== '') return;
+    last = now;
+  }
+}
+
+/**
+ * Drags one React Flow handle onto another.
+ *
+ * `locator.dragTo` sends mousedown, one mousemove and mouseup. React Flow
+ * builds a connection from a *sequence* of moves — it starts a connection line
+ * on the first, tracks the pointer across the rest, and accepts a drop only
+ * onto a handle it has seen the pointer over. One move sometimes satisfies that
+ * and sometimes does not, which is why specs drawing three lines in a row lost
+ * one of them in a loaded suite while passing on their own.
+ *
+ * Twice that was read as the canvas's own auto-layout moving the target
+ * mid-drag, and twice something real but different was fixed. The tell was that
+ * it kept happening afterwards, always on whichever spec drew the most lines.
+ */
+export async function dragHandle(page: Page, source: Locator, target: Locator): Promise<void> {
+  await waitForCanvasStill(page);
+
+  const from = await source.boundingBox();
+  const to = await target.boundingBox();
+  if (!from || !to) throw new Error('Cannot draw a join: a handle has no box');
+
+  const centre = (box: { x: number; y: number; width: number; height: number }) => ({
+    x: box.x + box.width / 2,
+    y: box.y + box.height / 2,
+  });
+  const start = centre(from);
+  const end = centre(to);
+
+  // `hover` rather than a bare move to begin with: it waits for the handle to
+  // be visible, stable and actually hittable, which a raw mouse.move does not,
+  // and a connection started on an element that was still settling never
+  // starts at all.
+  await source.hover();
+  await page.mouse.down();
+
+  // Through the middle rather than straight to the end. React Flow builds a
+  // connection from a sequence of moves — it opens a line on the first, follows
+  // the pointer across the rest, and accepts a drop only onto a handle it has
+  // seen the pointer arrive over. `locator.dragTo` sends one move, which
+  // sometimes satisfies that and sometimes does not.
+  await page.mouse.move((start.x + end.x) / 2, (start.y + end.y) / 2, { steps: 10 });
+  await page.mouse.move(end.x, end.y, { steps: 10 });
+  // Twice at the destination: the second is what marks the handle as the one
+  // under the pointer when the button comes up.
+  await page.mouse.move(end.x, end.y);
+  await page.mouse.up();
+}
+
+/**
+ * Joins two steps by their default ports, and waits for the line to exist.
+ *
+ * The wait is the point. Drawing a line re-renders the canvas, and a second
+ * drag begun before that has committed measures handles that are about to
+ * move. The symptom was one join in a sequence silently not landing — and the
+ * tell was that adding a diagnostic between the joins made it pass, because
+ * reading the edge count was itself the pause that had been missing.
+ */
+/**
+ * Drags until a line exists, or gives up saying so.
+ *
+ * Drawing a line schedules a layout that moves the steps into the order they
+ * run in, so the next join aims at a handle that may have just moved. Waiting
+ * for the canvas to settle first helps and does not always suffice, because the
+ * arrangement can begin between the measurement and the drop. Retrying is what
+ * a person does when a drag does not take, and it makes these helpers mean "the
+ * join exists afterwards" rather than "a drag was attempted".
+ */
+export async function joinHandles(
+  page: Page,
+  source: () => Locator,
+  target: () => Locator,
+  what: string,
+): Promise<void> {
+  const edges = page.locator('.react-flow__edge');
+  const before = await edges.count();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    await dragHandle(page, source(), target());
+    try {
+      await expect(edges).toHaveCount(before + 1, { timeout: 2_000 });
+      return;
+    } catch {
+      await waitForCanvasStill(page);
+    }
+  }
+
+  await expect(edges, `${what} did not draw a line after three attempts`).toHaveCount(before + 1, {
+    timeout: 2_000,
+  });
+}
+
+export async function joinSteps(page: Page, fromTestId: string, toTestId: string): Promise<void> {
+  await joinHandles(
+    page,
+    () => page.locator(`[data-testid="${fromTestId}"] .react-flow__handle-right`),
+    () => page.locator(`[data-testid="${toTestId}"] .react-flow__handle-left`),
+    `joining ${fromTestId} to ${toTestId}`,
+  );
+}
+
+/**
+ * Joins several steps of the same kind into one target, top to bottom.
+ *
+ * Every step of one role carries the same test id, so `.nth(i)` is DOM order —
+ * and clicking a node moves it in the DOM, which meant a loop of four joins
+ * connected one node twice and another not at all. React Flow drops the
+ * duplicate, so four drags produced three edges and the rule under test never
+ * tripped.
+ *
+ * Their vertical order is stable in a way DOM order is not, so that is what
+ * identifies them.
+ */
+export async function joinAllInto(
+  page: Page,
+  sourceTestId: string,
+  toTestId: string,
+): Promise<void> {
+  const handles = page.locator(`[data-testid^="${sourceTestId}"] .react-flow__handle-right`);
+  const count = await handles.count();
+
+  const ordered: { index: number; y: number }[] = [];
+  for (let index = 0; index < count; index += 1) {
+    const box = await handles.nth(index).boundingBox();
+    ordered.push({ index, y: box?.y ?? 0 });
+  }
+  ordered.sort((a, b) => a.y - b.y);
+
+  const target = page.locator(`[data-testid="${toTestId}"] .react-flow__handle-left`);
+  for (const { y } of ordered) {
+    // Re-found by position each time: a join can move what is on the canvas,
+    // and an index captured before the first drag would not survive it.
+    const fresh = page.locator(`[data-testid^="${sourceTestId}"] .react-flow__handle-right`);
+    const total = await fresh.count();
+    let pick = 0;
+    let best = Number.POSITIVE_INFINITY;
+    for (let index = 0; index < total; index += 1) {
+      const box = await fresh.nth(index).boundingBox();
+      const distance = Math.abs((box?.y ?? 0) - y);
+      if (distance < best) {
+        best = distance;
+        pick = index;
+      }
+    }
+    await joinHandles(
+      page,
+      () => fresh.nth(pick),
+      () => target,
+      `joining a ${sourceTestId} to ${toTestId}`,
+    );
+  }
 }

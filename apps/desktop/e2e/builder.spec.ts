@@ -4,7 +4,14 @@ import type { AddressInfo } from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { desktopRoot, freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import {
+  desktopRoot,
+  freshProfile,
+  goTo,
+  joinSteps,
+  launchApp,
+  removeProfile,
+} from './support/app.ts';
 
 // The builder as a person uses it: several agents feeding one, an agent the
 // user wrote themselves, and a result they can actually read afterwards.
@@ -160,9 +167,7 @@ test('three agents feed one, and the run shows what every step produced', async 
 
     // Three into one — the shape the old one-in-one-out canvas could not draw.
     const join = async (from: string, to: string) => {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+      await joinSteps(page, from, to);
     };
     await join('node-researcher', 'node-summariser');
     await join('node-data-extractor', 'node-summariser');

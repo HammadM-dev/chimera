@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 
 // M5-6, the milestone's exit criterion: a batch processed through fan-out on
 // budget, with a failure report — plus the two things M5 adds around it, a
@@ -130,9 +130,7 @@ test('M5 exit: a batch through fan-out on tiers, with a failure report and the s
     await page.getByTestId('node-instruction').fill('Handle this row.');
 
     const join = async (from: string, to: string) => {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+      await joinSteps(page, from, to);
     };
     await join('node-transform', 'node-fanout');
     await join('node-fanout', 'node-summariser');

@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 import { startStub } from './support/stub.ts';
 
 // The run monitor as it really looks after a run that stopped, with a long
@@ -40,9 +40,7 @@ test('the monitor, after a run that stopped with a long answer', async () => {
       await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
       await page.getByTestId('node-instruction').fill('Find the companies.');
     }
-    await page
-      .locator('[data-testid="node-planner"] .react-flow__handle-right')
-      .dragTo(page.locator('[data-testid="node-researcher"] .react-flow__handle-left'));
+    await joinSteps(page, 'node-planner', 'node-researcher');
     await page.getByTestId('brief-input').fill('Find companies without websites.');
 
     // The monitor opens itself when the run starts.

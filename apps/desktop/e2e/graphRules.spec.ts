@@ -1,5 +1,13 @@
 import { test, expect, type Page } from '@playwright/test';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import {
+  dragHandle,
+  freshProfile,
+  goTo,
+  joinAllInto,
+  joinSteps,
+  launchApp,
+  removeProfile,
+} from './support/app.ts';
 import { startStub } from './support/stub.ts';
 
 // The rules that decide whether a graph is allowed to exist.
@@ -29,9 +37,7 @@ async function place(page: Page, id: string, instruction = 'Do the thing.'): Pro
 }
 
 async function join(page: Page, from: string, to: string): Promise<void> {
-  await page
-    .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-    .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+  await joinSteps(page, from, to);
 }
 
 test('a fourth copy of the same agent into one step is refused, and a combiner is not', async () => {
@@ -55,14 +61,10 @@ test('a fourth copy of the same agent into one step is refused, and a combiner i
 
     const researchers = page.locator('[data-testid^="node-researcher"]');
     await expect(researchers).toHaveCount(4);
-    for (let i = 0; i < 4; i += 1) {
-      await page
-        .locator('[data-testid^="node-researcher"]')
-        .nth(i)
-        .locator('.react-flow__handle-right')
-        .dragTo(page.locator('[data-testid="node-data-extractor"] .react-flow__handle-left'));
-    }
+    await joinAllInto(page, 'node-researcher', 'node-data-extractor');
 
+    // All four landed, which is what makes the rule below the thing under test.
+    await expect(page.locator('.react-flow__edge')).toHaveCount(4);
     await page.getByTestId('brief-input').fill('Research it four ways and review the lot.');
     await page.getByTestId('brief-name').fill('Four researchers');
 
@@ -96,13 +98,7 @@ test('four into a summariser is allowed, because it is built to take many', asyn
     for (let i = 0; i < 4; i += 1) await place(page, 'researcher', `Angle ${String(i)}.`);
     await place(page, 'summariser', 'Pull it together.');
 
-    for (let i = 0; i < 4; i += 1) {
-      await page
-        .locator('[data-testid^="node-researcher"]')
-        .nth(i)
-        .locator('.react-flow__handle-right')
-        .dragTo(page.locator('[data-testid="node-summariser"] .react-flow__handle-left'));
-    }
+    await joinAllInto(page, 'node-researcher', 'node-summariser');
 
     await page.getByTestId('brief-input').fill('Four angles, one summary.');
     await page.getByTestId('brief-name').fill('Four into one');

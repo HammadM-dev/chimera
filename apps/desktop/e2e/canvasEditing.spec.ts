@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 
 // Taking things off the canvas.
 //
@@ -25,9 +25,7 @@ test('a join can be cut and a step can be removed', async () => {
     await page.getByTestId('palette-summariser').click();
     await expect(page.locator('.react-flow__node')).toHaveCount(2);
 
-    await page
-      .locator('[data-testid="node-researcher"] .react-flow__handle-right')
-      .dragTo(page.locator('[data-testid="node-summariser"] .react-flow__handle-left'));
+    await joinSteps(page, 'node-researcher', 'node-summariser');
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
     // Cut the join. The button lives on the edge itself.
@@ -65,9 +63,7 @@ test('removing a step takes its joins with it', async () => {
       await page.getByTestId(`palette-${id}`).click();
     }
     for (const from of ['node-researcher', 'node-data-extractor']) {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator('[data-testid="node-summariser"] .react-flow__handle-left'));
+      await joinSteps(page, from, 'node-summariser');
     }
     await expect(page.locator('.react-flow__edge')).toHaveCount(2);
 

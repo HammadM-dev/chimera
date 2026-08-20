@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import type { Page } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinHandles, launchApp, removeProfile } from './support/app.ts';
 
 // M4-3 and M4-4: the node types that are not agents, built on the real canvas
 // and run by the real executor. A branch that sends the run one way, and a gate
@@ -88,7 +88,16 @@ async function join(
     handle === undefined
       ? page.locator(`[data-testid="${from}"] .react-flow__handle-right`)
       : page.locator(`[data-testid="${from}"] [data-handleid="${handle}"]`);
-  await source.dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+  // Retrying, like every other join in the suite: a line that does not land
+  // leaves the target with no inputs, which makes it an entry step that runs
+  // straight away — and a test about a gate holding a step back then fails
+  // saying the step ran, which is true and is not the reason.
+  await joinHandles(
+    page,
+    () => source,
+    () => page.locator(`[data-testid="${to}"] .react-flow__handle-left`),
+    `joining ${from} to ${to}`,
+  );
 }
 
 test('a branch sends the run down one path and leaves the other alone', async () => {

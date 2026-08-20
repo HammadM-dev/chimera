@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 
 // M6-5, the milestone's exit criterion: "an agent logs into a test site,
 // extracts a table, fills a form under supervision."
@@ -238,9 +238,7 @@ test('M6 exit: an agent signs in, reads the table, and the send waits for a pers
     await page.getByTestId('node-instruction').fill('Write the one-line report.');
 
     const join = async (from: string, to: string) => {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+      await joinSteps(page, from, to);
     };
     await join('node-browser-operator', 'node-approval');
     await join('node-approval', 'node-summariser');

@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 
 // M5-1 and M5-6: a fan-out built on the real canvas, run by the real executor,
 // with a failure report a person can read afterwards.
@@ -118,9 +118,7 @@ test('a fan-out processes a list, several at a time, and reports what failed', a
     await page.getByTestId('node-instruction').fill('Handle this invoice.');
 
     const join = async (from: string, to: string) => {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+      await joinSteps(page, from, to);
     };
     await join('node-transform', 'node-fanout');
     await join('node-fanout', 'node-summariser');

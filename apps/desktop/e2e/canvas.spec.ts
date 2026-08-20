@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { dragHandle, freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 
 // The automation canvas: place agents, join them, choose a model for each.
 // Driven through the real app — the palette is fed by the real role registry
@@ -125,7 +125,7 @@ test('agents are placed on the canvas, joined, and bound to a model', async () =
     // Joining two steps: dragging the source port onto the target's.
     const source = page.locator('[data-testid="node-planner"] .react-flow__handle-right');
     const target = page.locator('[data-testid="node-coder"] .react-flow__handle-left');
-    await source.dragTo(target);
+    await dragHandle(page, source, target);
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
 
     // The coder may run shell commands, and M4-6 will not save a file that

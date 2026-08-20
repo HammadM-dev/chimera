@@ -2,7 +2,7 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
 
 // The whole product, against the real thing.
 //
@@ -171,9 +171,7 @@ test('a real contract, four real agents, one real answer', async () => {
     );
 
     const join = async (from: string, to: string): Promise<void> => {
-      await page
-        .locator(`[data-testid="${from}"] .react-flow__handle-right`)
-        .dragTo(page.locator(`[data-testid="${to}"] .react-flow__handle-left`));
+      await joinSteps(page, from, to);
     };
     await join('node-researcher', 'node-summariser');
     await join('node-data-extractor', 'node-summariser');
