@@ -102,6 +102,8 @@ test('a saved automation can be removed from the list it fills up', async () => 
     // There was no way to take one back out, so the list of things you work on
     // became a list of everything you had ever tried.
     await page.locator('[data-testid^="forget-"]').first().click();
+    // It asks first; confirmAndHelp.spec covers the asking itself.
+    await page.getByTestId('confirm-ok').click();
     await expect(page.getByTestId('saved-list')).toHaveCount(0, { timeout: 20_000 });
 
     // Gone from the workspace, not just from the sidebar.

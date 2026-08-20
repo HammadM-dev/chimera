@@ -176,7 +176,9 @@ test('a host that is not on the list is refused, and never contacted', async () 
     // was offered and the call was attempted, which is what makes the zero
     // above mean "stopped" rather than "never tried".
     expect(run.trace).toContain('http__request');
-    expect(run.trace).toContain('allowlist');
+    // What the refusal has to convey, rather than the words it uses: which
+    // hosts are permitted, and that guessing another will not help.
+    expect(run.trace).toMatch(/not allowed|no allowed sites/);
   } finally {
     await run.done();
   }

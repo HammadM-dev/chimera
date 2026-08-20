@@ -42,6 +42,7 @@ test('a connection can be removed, and its key goes with it', async () => {
     expect(handle).not.toBe('');
 
     await page.getByTestId('connection-remove').first().click();
+    await page.getByTestId('confirm-ok').click();
     await expect(page.getByTestId('connection-row')).toHaveCount(0, { timeout: 20_000 });
 
     // Gone from the workspace, not just from the screen.
