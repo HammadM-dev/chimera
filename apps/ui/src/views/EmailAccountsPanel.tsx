@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
+import { HowTo, Step, Steps } from './HowTo.tsx';
 
 // Mailboxes an agent can be given.
 //
@@ -225,6 +226,96 @@ export function EmailAccountsPanel(): JSX.Element {
               }}
             />
             <span className="agent-editor__toolNote">{preset.note}</span>
+
+            <HowTo label="Not sure how? Show me the steps">
+              {preset.id === 'gmail' && (
+                <Steps>
+                  <Step>
+                    Go to <strong>myaccount.google.com</strong> and open <strong>Security</strong>.
+                  </Step>
+                  <Step>
+                    Turn on <strong>2-Step Verification</strong> if it is off. Google will not offer
+                    app passwords until it is on.
+                  </Step>
+                  <Step>
+                    Back in Security, open <strong>App passwords</strong>. If you cannot see it,
+                    search &quot;app passwords&quot; in the search box at the top.
+                  </Step>
+                  <Step>
+                    Give it a name — <strong>CHIMERA</strong> — and create it. Google shows a
+                    16-character password once. Copy it.
+                  </Step>
+                  <Step>
+                    Paste it above. Not your normal Google password: that one will always be
+                    refused.
+                  </Step>
+                  <Step>
+                    In Gmail, open <strong>Settings</strong>, then{' '}
+                    <strong>Forwarding and POP/IMAP</strong>, and make sure{' '}
+                    <strong>IMAP is enabled</strong>.
+                  </Step>
+                </Steps>
+              )}
+
+              {preset.id === 'outlook' && (
+                <Steps>
+                  <Step>
+                    Go to <strong>account.microsoft.com/security</strong>.
+                  </Step>
+                  <Step>
+                    Turn on <strong>two-step verification</strong>, then open{' '}
+                    <strong>Advanced security options</strong>.
+                  </Step>
+                  <Step>
+                    Under <strong>App passwords</strong>, create one and copy it.
+                  </Step>
+                  <Step>Paste it above, in place of your normal password.</Step>
+                  <Step>
+                    If sign-in still fails on a <strong>work or school account</strong>, IMAP is
+                    almost certainly switched off by your administrator. Ask them to enable IMAP for
+                    your mailbox — nothing here can turn it on for you.
+                  </Step>
+                </Steps>
+              )}
+
+              {preset.id === 'icloud' && (
+                <Steps>
+                  <Step>
+                    Sign in at <strong>appleid.apple.com</strong>.
+                  </Step>
+                  <Step>
+                    Under <strong>Sign-In and Security</strong>, choose{' '}
+                    <strong>App-Specific Passwords</strong>.
+                  </Step>
+                  <Step>Create one, name it CHIMERA, and copy it.</Step>
+                  <Step>Paste it above.</Step>
+                </Steps>
+              )}
+
+              {preset.id === 'custom' && (
+                <Steps>
+                  <Step>
+                    Find your provider&apos;s <strong>IMAP</strong> and <strong>SMTP</strong> host
+                    names. They are usually in a help page called &quot;email settings&quot; or
+                    &quot;set up your email in another app&quot;, and are usually{' '}
+                    <code>imap.yourdomain.com</code> and <code>smtp.yourdomain.com</code>.
+                  </Step>
+                  <Step>
+                    Put them in the two fields above. The ports CHIMERA uses are <code>993</code>{' '}
+                    for IMAP and <code>587</code> for SMTP, which is what almost every provider
+                    expects.
+                  </Step>
+                  <Step>
+                    Use your mailbox password, unless your provider issues separate{' '}
+                    <strong>app passwords</strong> — if it does, use one of those.
+                  </Step>
+                  <Step>
+                    Add the mailbox, then press <strong>Check</strong>. If something is wrong the
+                    server&apos;s own words appear, and they are usually specific enough to act on.
+                  </Step>
+                </Steps>
+              )}
+            </HowTo>
           </div>
 
           <div className="brief__left">

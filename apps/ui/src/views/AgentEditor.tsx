@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import type { AgentRole } from './useRoles.ts';
+import { Confirm } from '../shell/Confirm.tsx';
 
 // Building an agent, in full.
 //
@@ -72,6 +73,7 @@ export function AgentEditor({ draft, onSaved, onCancel }: Props): JSX.Element {
   const [tools, setTools] = useState<ToolChoice[]>([]);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     setAgent(draft);
@@ -320,12 +322,33 @@ export function AgentEditor({ draft, onSaved, onCancel }: Props): JSX.Element {
             type="button"
             className="button"
             data-testid="agent-delete"
-            onClick={() => void remove()}
+            onClick={() => {
+              setConfirming(true);
+            }}
           >
             Delete
           </button>
         )}
       </div>
+
+      <Confirm
+        open={confirming}
+        title={`Delete ${agent.name}?`}
+        body={
+          <>
+            Any automation still using this agent will not run until you put another in its place.
+            Deleting it does not change the runs it has already made.
+          </>
+        }
+        confirmLabel="Delete agent"
+        onCancel={() => {
+          setConfirming(false);
+        }}
+        onConfirm={() => {
+          setConfirming(false);
+          void remove();
+        }}
+      />
 
       {note !== '' && (
         <p className="connections__error" data-testid="agent-note" role="alert">

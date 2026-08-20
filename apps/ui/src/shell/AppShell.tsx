@@ -8,6 +8,7 @@ import { MemoryView } from '../views/MemoryView.tsx';
 import { ProvidersView } from '../views/ProvidersView.tsx';
 import { RunsView } from '../views/RunsView.tsx';
 import { StatusBar } from './StatusBar.tsx';
+import { Confirm } from './Confirm.tsx';
 import { bridge } from '../chat/useChimera.ts';
 import './shell.css';
 
@@ -137,6 +138,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
   // Bumped whenever the set of connections changes, so every view reading it
   // re-reads rather than each keeping its own copy and disagreeing.
   const [refreshToken, setRefreshToken] = useState(0);
+  const [forgetting, setForgetting] = useState<{ id: string; name: string } | null>(null);
 
   const onChanged = useCallback(() => {
     setRefreshToken((current) => current + 1);
@@ -236,11 +238,7 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
                   title={`Remove ${automation.name}`}
                   aria-label={`Remove ${automation.name}`}
                   onClick={() => {
-                    void (async () => {
-                      await bridge().invoke('workflow:remove', { id: automation.id });
-                      if (openId === automation.id) setOpenId(null);
-                      setRefreshToken((current) => current + 1);
-                    })();
+                    setForgetting(automation);
                   }}
                 >
                   ×
@@ -323,6 +321,31 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
           </section>
         )}
       </main>
+
+      <Confirm
+        open={forgetting !== null}
+        title={`Delete ${forgetting?.name ?? ''}?`}
+        body={
+          <>
+            The automation and everything it was built from goes. Its runs stay in Runs, with what
+            they produced and what they cost.
+          </>
+        }
+        confirmLabel="Delete automation"
+        onCancel={() => {
+          setForgetting(null);
+        }}
+        onConfirm={() => {
+          const target = forgetting;
+          setForgetting(null);
+          if (!target) return;
+          void (async () => {
+            await bridge().invoke('workflow:remove', { id: target.id });
+            if (openId === target.id) setOpenId(null);
+            setRefreshToken((current) => current + 1);
+          })();
+        }}
+      />
 
       <StatusBar changed={refreshToken} />
     </div>

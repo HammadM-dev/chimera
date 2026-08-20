@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
 import { ConnectionForm } from '../connections/ConnectionForm.tsx';
 import { AnswerCache, ModelTiers, TelemetryPanel } from './ModelTiers.tsx';
+import { Confirm } from '../shell/Confirm.tsx';
 import { PluginsPanel } from './PluginsPanel.tsx';
 import { FileGrantsPanel } from './FileGrantsPanel.tsx';
 import { EmailAccountsPanel } from './EmailAccountsPanel.tsx';
@@ -22,6 +23,7 @@ interface Props {
 export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [kinds, setKinds] = useState<string[]>([]);
+  const [confirming, setConfirming] = useState<ConnectionSummary | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -41,8 +43,35 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
     void load();
   }, [load, refreshToken]);
 
+  const removeConfirmed = useCallback(async () => {
+    const target = confirming;
+    setConfirming(null);
+    if (!target) return;
+    await bridge().invoke('connection:remove', { id: target.id });
+    await load();
+    // The rest of the app cares too: the model pickers on the canvas are built
+    // from this list.
+    onChanged();
+  }, [confirming, load, onChanged]);
+
   return (
     <div className="providers" data-testid="providers-view">
+      <Confirm
+        open={confirming !== null}
+        title={`Remove ${confirming?.label ?? ''}?`}
+        body={
+          <>
+            Its API key is deleted from your keychain, and any step bound to one of its models will
+            need a new one before it can run.
+          </>
+        }
+        confirmLabel="Remove connection"
+        onCancel={() => {
+          setConfirming(null);
+        }}
+        onConfirm={() => void removeConfirmed()}
+      />
+
       <div className="panel">
         <h3 className="panel__title">Connected</h3>
         {connections.length === 0 ? (
@@ -65,13 +94,7 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
                 className="button button--quiet"
                 data-testid="connection-remove"
                 onClick={() => {
-                  void (async () => {
-                    await bridge().invoke('connection:remove', { id: connection.id });
-                    await load();
-                    // The rest of the app cares too: the model pickers on the
-                    // canvas are built from this list.
-                    onChanged();
-                  })();
+                  setConfirming(connection);
                 }}
               >
                 Remove

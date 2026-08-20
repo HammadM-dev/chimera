@@ -1,0 +1,59 @@
+/* The confirm dialog. One accent in this view and it is the danger colour,
+ * because the only decision on screen is whether to destroy something. */
+
+.confirm__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: var(--space-5);
+  /* Dimmed rather than blurred: the thing behind is the context for the
+   * question, and it should stay readable. */
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.confirm {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface-popover);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-popover);
+}
+
+.confirm__title {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.confirm__body {
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+.confirm__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-2);
+}
+
+/* The one button in the app that is the danger colour. Nothing else destroys
+ * anything without passing through here. */
+.button--danger {
+  color: var(--surface-canvas);
+  background: var(--semantic-danger);
+  border-color: transparent;
+}
+
+.button--danger:hover:not(:disabled) {
+  background: var(--semantic-danger);
+  border-color: var(--text-primary);
+}

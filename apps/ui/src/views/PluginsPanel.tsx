@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
+import { HowTo, Step, Steps } from './HowTo.tsx';
 
 // Plugins: tool servers the user adds.
 //
@@ -274,6 +275,40 @@ export function PluginsPanel({ refreshToken }: { refreshToken: number }): JSX.El
           </div>
 
           <div className="brief__left">
+            <HowTo label="Not sure how? Show me the steps">
+              <Steps>
+                <Step>
+                  A plugin is an <strong>MCP server</strong> — the same kind of tool server Claude
+                  Code uses. It is a program on this machine that CHIMERA starts and talks to, and
+                  the tools it offers become tools your agents can be granted.
+                </Step>
+                <Step>
+                  Find one. Most are published on npm and run with <code>npx</code> — their README
+                  gives the exact command, usually something like{' '}
+                  <code>npx -y @some/mcp-server</code>.
+                </Step>
+                <Step>
+                  Put the program in <strong>Command</strong> and everything after it in{' '}
+                  <strong>Arguments</strong>, one per line. For the example above, the command is{' '}
+                  <code>npx</code> and the arguments are <code>-y</code> and{' '}
+                  <code>@some/mcp-server</code>.
+                </Step>
+                <Step>
+                  If it needs a key, put it in <strong>Secrets</strong> as <code>NAME=value</code>,
+                  one per line — the name is whatever its README calls the environment variable.
+                  Keys go to your OS keychain, never into the workspace file.
+                </Step>
+                <Step>
+                  Add it, then press <strong>Check</strong>. It reports how many tools the server
+                  offered, which is how you know it started and answered.
+                </Step>
+                <Step>
+                  Open <strong>Agents</strong>, edit or build an agent, and tick the plugin&apos;s
+                  tools under &quot;what it may use&quot;. An agent only gets what you grant it.
+                </Step>
+              </Steps>
+            </HowTo>
+
             <button
               type="button"
               className="button button--primary"
