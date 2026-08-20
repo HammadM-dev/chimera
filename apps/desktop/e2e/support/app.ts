@@ -146,6 +146,12 @@ export async function dismissOnboarding(page: Page): Promise<void> {
 }
 
 /**
+ * The canvas's own settle delay before it arranges itself, plus a margin.
+ * Mirrors TIDY_SETTLE_MS in apps/ui/src/views/CanvasView.tsx.
+ */
+const CANVAS_SETTLE_MS = 600;
+
+/**
  * Waits until the canvas has stopped rearranging itself.
  *
  * Drawing a line schedules a layout, which lands a moment later and moves the
@@ -154,7 +160,7 @@ export async function dismissOnboarding(page: Page): Promise<void> {
  * person avoids without thinking, by waiting for the graph to settle before
  * reaching for the next port.
  */
-export async function waitForCanvasStill(page: Page, timeoutMs = 1_500): Promise<void> {
+export async function waitForCanvasStill(page: Page, timeoutMs = 3_000): Promise<void> {
   const positions = async (): Promise<string> =>
     page.evaluate(() =>
       Array.from(document.querySelectorAll('.react-flow__node'))
@@ -257,6 +263,16 @@ export async function joinHandles(
     await dragHandle(page, source(), target());
     try {
       await expect(edges).toHaveCount(before + 1, { timeout: 2_000 });
+
+      // Sit out the arrangement this line just scheduled.
+      //
+      // `waitForCanvasStill` can only see movement that has already begun; a
+      // layout waiting on a timer looks exactly like a canvas at rest. So the
+      // next join would measure a handle, the layout would fire, and the drop
+      // would land where the handle used to be — which the retry above then
+      // papered over, slowly. Waiting out the delay makes it not happen.
+      await page.waitForTimeout(CANVAS_SETTLE_MS);
+      await waitForCanvasStill(page);
       return;
     } catch {
       await waitForCanvasStill(page);
