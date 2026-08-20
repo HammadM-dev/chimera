@@ -259,7 +259,26 @@ export const runSubscribe = defineInvokeChannel({
   v: 1,
   sensitive: false,
   requestSchema: z.object({ runId: z.string() }),
-  responseSchema: z.object({ subscribed: z.boolean() }),
+  // The response carries what the watcher missed. Events are a live view and
+  // nothing more, so a window that opens after a run has already finished —
+  // which is every window, when the run takes four seconds — would otherwise
+  // have nothing to show and no way to ask.
+  responseSchema: z.object({
+    subscribed: z.boolean(),
+    //
+    // Every field a handler returns has to be declared here or Zod strips it,
+    // silently and with the call still succeeding. `label`, `startedAt` and
+    // `endedAt` were added to the snapshot and not to this schema, so the
+    // monitor showed a step with no name and a run that took no time.
+    snapshot: z.object({
+      status: z.string(),
+      output: z.string(),
+      errorSummary: z.string(),
+      startedAt: z.string(),
+      endedAt: z.string(),
+      steps: z.array(z.object({ nodeId: z.string(), label: z.string(), status: z.string() })),
+    }),
+  }),
 });
 
 export const runEvent = defineEventChannel({

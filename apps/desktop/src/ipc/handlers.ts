@@ -30,7 +30,13 @@ import {
 } from '../memory/service.ts';
 import { previewCost } from '../providers/costPreview.ts';
 import { subscribe } from '../runs/subscriptions.ts';
-import { answerApproval, awaitingApprovals, cancelRun, startRun } from '../runs/service.ts';
+import {
+  answerApproval,
+  awaitingApprovals,
+  cancelRun,
+  runSnapshot,
+  startRun,
+} from '../runs/service.ts';
 import { exportTrace, listFailures, listRuns, listTrace } from '../runs/history.ts';
 import { readScreenshot } from '../runs/screenshots.ts';
 import { costSummary } from '../runs/costs.ts';
@@ -127,9 +133,10 @@ registerHandler(channels.runCostPreview, (payload) => previewCost(payload));
 // M3-4: the renderer asks to watch a run, and receives `run:event` pushes for
 // it. Subscription is per WebContents, so a second window watching a different
 // run does not receive this one's events.
-registerHandler(channels.runSubscribe, (payload, context) =>
-  subscribe(payload.runId, context.webContents),
-);
+registerHandler(channels.runSubscribe, (payload, context) => ({
+  ...subscribe(payload.runId, context.webContents),
+  snapshot: runSnapshot(payload.runId),
+}));
 
 registerHandler(channels.runStart, async (payload, context) => {
   const started = await startRun(payload.brief, 'manual', context.webContents);

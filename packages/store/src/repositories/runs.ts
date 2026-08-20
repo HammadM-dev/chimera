@@ -16,6 +16,9 @@ export interface RunRecord {
   triggerType: string;
   inputJson: string;
   errorSummary: string | null;
+  /** What the run produced. Empty until it finishes, and for a run that
+   * produced no text at all. */
+  output: string;
 }
 
 interface RunRow {
@@ -32,6 +35,7 @@ interface RunRow {
   frontier_cost_usd: number | null;
   saved_by_cache_usd: number;
   error_summary: string | null;
+  output: string;
 }
 
 function toRecord(row: RunRow): RunRecord {
@@ -45,6 +49,7 @@ function toRecord(row: RunRow): RunRecord {
     triggerType: row.trigger_type,
     inputJson: row.input_json,
     errorSummary: row.error_summary,
+    output: row.output ?? '',
   };
 }
 
@@ -104,6 +109,8 @@ export function create(db: Database.Database, input: CreateRunInput = {}): RunRe
     triggerType: input.triggerType ?? 'manual',
     inputJson: input.inputJson ?? '{}',
     errorSummary: null,
+    // Filled in when the run finishes.
+    output: '',
   };
 
   db.prepare(
@@ -172,6 +179,18 @@ export function spendOf(
  * for an approval has not ended, and a row that claims it has is a row nothing
  * will pick back up.
  */
+/**
+ * Records what a run produced.
+ *
+ * Kept with the run rather than only broadcast, so that anything arriving
+ * after the fact — a monitor window that opened while the run was already
+ * over, the Runs view a day later — can ask instead of having had to be
+ * listening at the time.
+ */
+export function setOutput(db: Database.Database, id: string, output: string): void {
+  db.prepare('UPDATE runs SET output = ? WHERE id = ?').run(output, id);
+}
+
 export function setStatus(db: Database.Database, id: string, status: string): void {
   db.prepare('UPDATE runs SET status = ? WHERE id = ?').run(status, id);
 }

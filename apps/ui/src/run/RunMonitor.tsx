@@ -172,8 +172,55 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
       },
     );
 
+    // Subscribing also asks what has already happened. This window takes long
+    // enough to open that a short run is over before it is listening, and
+    // without the snapshot it sat on "Starting…" for exactly the runs that
+    // succeeded quickest.
     void bridge()
-      .invoke('run:subscribe', { runId })
+      .invoke<{
+        subscribed: boolean;
+        snapshot: {
+          status: string;
+          output: string;
+          errorSummary: string;
+          startedAt: string;
+          endedAt: string;
+          steps: { nodeId: string; label: string; status: string }[];
+        };
+      }>('run:subscribe', { runId })
+      .then((result) => {
+        const snapshot = result.snapshot;
+        if (snapshot.steps.length > 0) {
+          setSteps((current) =>
+            current.length > 0
+              ? current
+              : snapshot.steps.map((step) => ({
+                  nodeId: step.nodeId,
+                  label: step.label,
+                  phase: phaseOf(step.status),
+                  detail: '',
+                  output: '',
+                  startedAt: null,
+                  endedAt: null,
+                })),
+          );
+        }
+        // The run's own clock, not this window's. A monitor that opened after
+        // the run finished was timing itself, and reported "0s".
+        if (snapshot.startedAt !== '') {
+          const began = Date.parse(snapshot.startedAt);
+          if (!Number.isNaN(began)) startedAt.current = began;
+        }
+        if (snapshot.endedAt !== '') {
+          const ended = Date.parse(snapshot.endedAt);
+          if (!Number.isNaN(ended)) setNow(ended);
+        }
+        if (snapshot.status === 'succeeded' || snapshot.status === 'failed') {
+          setStatus(snapshot.status);
+          setOutput((current) => (current === '' ? snapshot.output : current));
+          setNote((current) => (current === '' ? snapshot.errorSummary : current));
+        }
+      })
       .catch(() => {
         setNote('This window lost touch with the run. Open it in Runs to see what happened.');
       });
@@ -213,63 +260,65 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
         </p>
       </header>
 
-      <ol className="monitor__steps scroll" data-testid="monitor-steps">
-        {steps.length === 0 && <li className="monitor__empty">Starting…</li>}
-        {steps.map((step) => (
-          <li key={step.nodeId} className={`moment moment--${step.phase}`}>
-            <span className="moment__mark" aria-hidden="true" />
-            <div className="moment__body">
-              <p className="moment__label">
-                {step.label}
-                <span className="moment__phase">{PHASE_WORD[step.phase]}</span>
-              </p>
-              {step.detail !== '' && <p className="moment__detail">{step.detail}</p>}
-              {step.output !== '' && (
-                <p className="moment__output" title={step.output}>
-                  {step.output}
+      <div className="monitor__body scroll">
+        <ol className="monitor__steps" data-testid="monitor-steps">
+          {steps.length === 0 && <li className="monitor__empty">Starting…</li>}
+          {steps.map((step) => (
+            <li key={step.nodeId} className={`moment moment--${step.phase}`}>
+              <span className="moment__mark" aria-hidden="true" />
+              <div className="moment__body">
+                <p className="moment__label">
+                  {step.label}
+                  <span className="moment__phase">{PHASE_WORD[step.phase]}</span>
                 </p>
-              )}
-              {step.startedAt !== null && (
-                <p className="moment__time">{seconds(step.startedAt, step.endedAt ?? now)}</p>
+                {step.detail !== '' && <p className="moment__detail">{step.detail}</p>}
+                {step.output !== '' && (
+                  <p className="moment__output" title={step.output}>
+                    {step.output}
+                  </p>
+                )}
+                {step.startedAt !== null && (
+                  <p className="moment__time">{seconds(step.startedAt, step.endedAt ?? now)}</p>
+                )}
+              </div>
+            </li>
+          ))}
+          <div ref={tail} />
+        </ol>
+
+        {done && (
+          <section className="monitor__result" data-testid="monitor-result">
+            <div className="monitor__resultHead">
+              <p className="monitor__resultTitle">
+                {status === 'succeeded' ? 'What it produced' : 'Where it stopped'}
+              </p>
+              {output !== '' && (
+                <button
+                  type="button"
+                  className="button button--quiet"
+                  data-testid="monitor-copy"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(output);
+                    setCopied(true);
+                  }}
+                >
+                  {copied ? 'Copied' : 'Copy'}
+                </button>
               )}
             </div>
-          </li>
-        ))}
-        <div ref={tail} />
-      </ol>
-
-      {done && (
-        <section className="monitor__result" data-testid="monitor-result">
-          <div className="monitor__resultHead">
-            <p className="monitor__resultTitle">
-              {status === 'succeeded' ? 'What it produced' : 'Where it stopped'}
-            </p>
-            {output !== '' && (
-              <button
-                type="button"
-                className="button button--quiet"
-                data-testid="monitor-copy"
-                onClick={() => {
-                  void navigator.clipboard.writeText(output);
-                  setCopied(true);
-                }}
-              >
-                {copied ? 'Copied' : 'Copy'}
-              </button>
+            {note !== '' && <p className="monitor__note">{note}</p>}
+            {output === '' ? (
+              <p className="monitor__note">
+                Nothing was produced as text. Open the run in Runs to see each step.
+              </p>
+            ) : (
+              <pre className="monitor__output" data-testid="monitor-output">
+                {output}
+              </pre>
             )}
-          </div>
-          {note !== '' && <p className="monitor__note">{note}</p>}
-          {output === '' ? (
-            <p className="monitor__note">
-              Nothing was produced as text. Open the run in Runs to see each step.
-            </p>
-          ) : (
-            <pre className="monitor__output" data-testid="monitor-output">
-              {output}
-            </pre>
-          )}
-        </section>
-      )}
+          </section>
+        )}
+      </div>
     </main>
   );
 }

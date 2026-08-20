@@ -3,7 +3,12 @@ import type { WebContents } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
 import { Governor, createRoleRegistry, runAutomation, type RunBrief } from '@chimera/core';
-import { runsRepository, settingsRepository, tracesRepository } from '@chimera/store';
+import {
+  nodeStatesRepository,
+  runsRepository,
+  settingsRepository,
+  tracesRepository,
+} from '@chimera/store';
 import { adapterFor } from '@chimera/providers';
 import {
   connectInProcess,
@@ -202,6 +207,67 @@ export function answerApproval(input: {
  * immediately so the renderer can subscribe and watch, rather than blocking a
  * channel for the length of a run that may take minutes.
  */
+/**
+ * The state of a run, for something that has just started watching it.
+ *
+ * Events are a live view and nothing more: whatever was emitted before a
+ * watcher subscribed is gone. The run monitor opens in a second window, which
+ * takes long enough to load that a short run is finished before it is
+ * listening — so it sat on "Starting…" and never moved, for exactly the runs
+ * that were quickest to succeed.
+ */
+export function runSnapshot(runId: string): {
+  status: string;
+  output: string;
+  errorSummary: string;
+  startedAt: string;
+  endedAt: string;
+  steps: { nodeId: string; label: string; status: string }[];
+} {
+  const db = getStore();
+  const record = runsRepository.get(db, runId);
+  if (!record) {
+    return { status: '', output: '', errorSummary: '', startedAt: '', endedAt: '', steps: [] };
+  }
+
+  // The names the steps were given, out of the brief the run was started with.
+  // Without them a watcher can only show node ids, and "planner-1" is not what
+  // the step is called.
+  const labels = new Map<string, string>();
+  try {
+    const brief = JSON.parse(record.inputJson) as {
+      steps?: { nodeId: string; roleId: string; type?: string }[];
+    };
+    const roles = createRoleRegistry(db).list();
+    for (const step of brief.steps ?? []) {
+      labels.set(
+        step.nodeId,
+        roles.find((role) => role.id === step.roleId)?.name ?? step.type ?? step.nodeId,
+      );
+    }
+  } catch {
+    // A brief that will not parse costs the labels and nothing else.
+  }
+
+  const over = record.status !== 'running' && record.status !== AWAITING;
+
+  return {
+    status: record.status,
+    output: record.output,
+    errorSummary: record.errorSummary ?? '',
+    startedAt: record.startedAt,
+    endedAt: record.endedAt ?? '',
+    steps: nodeStatesRepository.listForRun(db, runId).map((state) => ({
+      nodeId: state.nodeId,
+      label: labels.get(state.nodeId) ?? state.nodeId,
+      // A step journaled as running on a run that is over did not finish. Left
+      // as "running" it reads as still working, on a run that stopped minutes
+      // ago.
+      status: over && state.status === 'running' ? 'failed' : state.status,
+    })),
+  };
+}
+
 async function execute(runId: string, brief: RunBrief, resume: boolean): Promise<void> {
   const db = getStore();
   const cancellation = { cancelled: false };
@@ -353,6 +419,10 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
           emitRunEvent(runId, 'approval:requested', input);
         }),
     });
+    // Kept, not only broadcast. A window that opens while the run is already
+    // over — which is every window, when the run takes four seconds — has to be
+    // able to ask what happened.
+    runsRepository.setOutput(db, runId, outcome.output);
     emitRunEvent(runId, 'finished', outcome);
     // Sent after the run is recorded, and never waited on for anything: a run
     // that depended on an observability endpoint would have the dependency the

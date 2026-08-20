@@ -9,9 +9,22 @@
 
 .monitor {
   height: 100%;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  display: flex;
+  flex-direction: column;
   background: var(--surface-canvas);
+}
+
+/* One scrolling column, not a pinned panel under a stretched list.
+ *
+ * As three grid rows, a run with two steps left most of the window empty and
+ * pushed the answer to the bottom edge with a scrollbar of its own, and on a
+ * short window the two regions could meet. The steps and the answer are one
+ * reading — what happened, then what came of it — so they scroll as one. */
+.monitor__body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 /* ---- head --------------------------------------------------------------- */
@@ -228,8 +241,10 @@
   padding: var(--space-4) var(--space-5) var(--space-5);
   border-top: var(--border-width) solid var(--border-hairline);
   background: var(--surface-panel);
-  max-height: 46%;
-  overflow-y: auto;
+  /* Takes the room that is left, so a short answer does not sit in a strip at
+   * the bottom of an empty window. */
+  flex: 1;
+  min-height: 0;
 }
 
 .monitor__resultHead {

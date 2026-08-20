@@ -112,6 +112,8 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'error_summary',
     'frontier_cost_usd',
     'saved_by_cache_usd',
+    // Appended by 0016, and ALTER TABLE ADD COLUMN puts it last.
+    'output',
   ],
   traces: [
     'id',
