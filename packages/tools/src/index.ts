@@ -16,7 +16,15 @@ export { createEmailServer } from './servers/email.ts';
 export type { MailTransport, MailSummary, MailMessage, SendRequest } from './servers/email.ts';
 export type { BrowserPage, BrowserServerOptions } from './servers/browser.ts';
 export type { ShellResult } from './servers/shell.ts';
-export { createHttpServer, assertEgressAllowed, isHostAllowed } from './servers/http.ts';
+export {
+  createHttpServer,
+  assertEgressAllowed,
+  isHostAllowed,
+  isPrivateHost,
+  DEFAULT_MAX_PAGE_CHARS,
+} from './servers/http.ts';
+export type { EgressMode } from './servers/http.ts';
+export { htmlToText } from './html.ts';
 export type { HttpServerOptions, HttpTransport } from './servers/http.ts';
 export { createMemoryServer } from './servers/memory.ts';
 export type { MemoryBackend } from './servers/memory.ts';

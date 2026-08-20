@@ -58,12 +58,28 @@ export interface RunBrief {
   /**
    * Hosts this automation's tools may reach — `policy.egressAllowlist`.
    *
-   * Absent or empty means none, which is the correct default: a tool server
-   * nobody has granted egress to should not have any. Capability limits are the
-   * real defence, and an allowlist that defaulted to open would be a defence
-   * that defaulted to off.
+   * Under `egressMode: 'browse'` — the default — this is the list of places the
+   * automation may *send* to. Under `allowlist` it is the only places it may
+   * reach at all.
    */
   egressAllowlist?: string[];
+  /**
+   * How far this automation may reach. Defaults to `browse`.
+   *
+   * The list above used to be the whole rule, and empty by default, on the
+   * reasoning that a defence which defaults to open is a defence that defaults
+   * to off. That reasoning holds for sending and not for reading: it left the
+   * agent whose job is answering from sources unable to open a single page
+   * until somebody guessed the right domains in advance, which is not a
+   * defence, it is a product that does not work. Reading the public web and
+   * posting data out of it are different permissions and are now separate.
+   */
+  egressMode?: 'allowlist' | 'browse' | 'open';
+  /**
+   * How much of a fetched page reaches the prompt. Defaults to 40,000
+   * characters, which is roughly ten thousand tokens of text.
+   */
+  maxPageChars?: number;
   /**
    * What starts this automation when nobody presses Run.
    *

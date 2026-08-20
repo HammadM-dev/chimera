@@ -122,7 +122,15 @@ test('an HTTP request to a host outside the allowlist makes no outbound call', a
   const registry = createToolRegistry();
   await registry.registerServer(
     'http',
-    await connectInProcess(createHttpServer({ egressAllowlist: ['api.example.com'], transport })),
+    // Allowlist mode explicitly: this test is about the tightest setting, and
+    // the default is now `browse`, under which reading elsewhere is permitted.
+    await connectInProcess(
+      createHttpServer({
+        egressAllowlist: ['api.example.com'],
+        egressMode: 'allowlist',
+        transport,
+      }),
+    ),
   );
 
   try {

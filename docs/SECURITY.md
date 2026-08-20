@@ -164,6 +164,27 @@ Enforcement point: `packages/tools/src/servers/http.ts` and `packages/tools/src/
 
 DECISION: an empty or absent `policy.egressAllowlist` denies all network-tool egress by default (fail closed), rather than defaulting to allow-all — rationale: the master plan does not state the default, and a security control that silently no-ops when unconfigured is worse than no control; a workflow author who wants unrestricted egress must say so explicitly (a single allowlist entry of `*` is the escape hatch, itself worth flagging in the editor UI as a deliberate choice, though that UI treatment is DESIGN.md's concern, not this document's).
 
+### 4.1 Reading and sending are different permissions (M11-6, supersedes the default above)
+
+DECISION: the allowlist is no longer the whole rule. An automation declares `policy.egressMode`, one of three:
+
+| Mode | Reading (GET, HEAD, page loads) | Sending (POST, PUT, PATCH, DELETE) |
+|---|---|---|
+| `allowlist` | named hosts only | named hosts only |
+| `browse` — **the default** | any public host | named hosts only |
+| `open` | any public host | any public host |
+
+Rationale, and it is a revision of the fail-closed decision above rather than an exception to it. Fail-closed was right about *sending* and wrong about *reading*, and applying one rule to both produced a product that did not work: the shipped Researcher — the agent whose entire job is answering from sources — could not open a single page until somebody guessed the right domains in advance. Observed cost of that, in one run: twelve iterations and 101,848 tokens spent discovering, one refused host at a time, that nothing was reachable.
+
+The risk the original decision was protecting against is exfiltration, and exfiltration is a *send*. An agent that has read a mailbox, a granted folder or an attachment, and can POST anywhere, is a data-loss path — and a hostile page telling it to do exactly that is the injection scenario §2 exists to survive. That path stays closed by default: under `browse`, a POST to a host nobody named is refused with a message that says so. Fetching a page carries none of that risk, so it is permitted.
+
+Two properties hold in every mode:
+
+- **A named host is always permitted**, whatever the method and whatever the mode, because somebody typed it deliberately.
+- **A host reached by wandering rather than by being named must be public.** `isPrivateHost` refuses loopback, link-local (169.254.0.0/16, which is the cloud metadata endpoint), and the RFC1918 ranges when a host was not named. "Browse the web" must not mean the router's admin page or whatever is listening on localhost — the standard turn by which an outward-looking fetch becomes an inward-looking one. Naming such a host in the allowlist still works, since that is a deliberate act.
+
+DECISION: fetched pages are converted to text before they reach a prompt (`packages/tools/src/html.ts`), and the amount kept is `policy.maxPageChars`, defaulting to 40,000 characters — about ten thousand tokens. The previous limit was 200,000 characters of raw HTML, roughly fifty thousand tokens per page of which most was markup. This is a default a person changes, not a ceiling they cannot: an automation reading contracts raises it, one checking headlines lowers it.
+
 This is a process-level allowlist, not a network-layer firewall — it prevents CHIMERA's own tool code from issuing the request, but does not prevent, for example, a native binary spawned by the (Tier-2, M8+) native-control sidecar from making its own connections outside this check. That is out of scope for M0–M6 since Tier 2 doesn't ship until M8, and is noted again in §9.
 
 **Observed gap, not acted on this session:** WORKFLOW_SCHEMA.md's eight save-time validation rules do not include a check that `policy.egressAllowlist` entries are well-formed domains. As written, an entry of `""`, a bare `*`, a protocol-relative string, or a value with embedded whitespace would all be accepted at save time and only fail (or, worse, silently misbehave) at the enforcement point in §2.3/§4 at run time. This is flagged as a candidate for a future `schemaVersion` bump (a ninth validation rule, e.g. "every `egressAllowlist` entry is a syntactically valid hostname or `*`") — not implemented here, per this session's explicit instruction not to modify `WORKFLOW_SCHEMA.md`.

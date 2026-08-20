@@ -9,6 +9,7 @@ import path from 'node:path';
 import { connectInProcess } from '../mcpClient.ts';
 import { createToolRegistry } from '../toolRegistry.ts';
 import { ToolAllowlistError } from '@chimera/errors';
+import type { EgressMode } from './http.ts';
 import { createBrowserServer, type BrowserPage } from './browser.ts';
 
 // M6-2 and M6-3, against a real browser and a real page.
@@ -63,7 +64,15 @@ async function site(): Promise<{ origin: string; close: () => Promise<void> }> {
   };
 }
 
-async function harness(allowlist: readonly string[]) {
+/**
+ * A browser bound to one allowlist.
+ *
+ * `allowlist` mode by default, because these tests are about the tightest
+ * setting — that a redirect, a subresource or a frame cannot carry the browser
+ * somewhere it was not sent. The shipped default is `browse`, whose reading
+ * rule is covered in egress.test.ts.
+ */
+async function harness(allowlist: readonly string[], mode: EgressMode = 'allowlist') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'chimera-browsertest-'));
   const context: BrowserContext = await chromium.launchPersistentContext(dir, { headless: true });
   const page = (context.pages()[0] ?? (await context.newPage())) as unknown as BrowserPage;
@@ -76,6 +85,7 @@ async function harness(allowlist: readonly string[]) {
       createBrowserServer({
         page: () => Promise.resolve(page),
         egressAllowlist: allowlist,
+        egressMode: mode,
         screenshotSink: (png) => {
           shots.push(png);
           return `screenshot-${String(shots.length)}.png`;

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ToolExecutionError } from '@chimera/errors';
-import { assertEgressAllowed, isHostAllowed } from './http.ts';
+import { assertEgressAllowed, mayReachHost, type EgressMode } from './http.ts';
 
 // M6-2 and M6-3. Navigate, read, click, type, extract, screenshot — the six
 // things "control my computer" turns out to mean for most businesses.
@@ -64,8 +64,14 @@ export interface PageRoute {
 export interface BrowserServerOptions {
   /** Resolves the page for this run. Launching is the profile manager's business. */
   page: () => Promise<BrowserPage>;
-  /** `policy.egressAllowlist` from the workflow. Empty means the browser goes nowhere. */
+  /** `policy.egressAllowlist` from the workflow. */
   egressAllowlist: readonly string[];
+  /**
+   * Defaults to `browse`: the browser may be on any public page, and the named
+   * sites are the ones an automation may send to. A browser that could only
+   * open pages somebody had listed in advance could not research anything.
+   */
+  egressMode?: EgressMode;
   /** Where screenshots are written. One per call, named for the run. */
   screenshotSink?: (png: Buffer) => Promise<string> | string;
   /** How long a click or a fill waits for its element. */
@@ -101,6 +107,7 @@ const textResult = (text: string) => ({
 function watchNavigation(
   page: BrowserPage,
   allowlist: readonly string[],
+  mode: EgressMode,
 ): { breach: () => string } {
   let breached = '';
 
@@ -121,7 +128,7 @@ function watchNavigation(
     void (async () => {
       const url = route.request().url();
       const host = hostOf(url);
-      if (host !== null && !isHostAllowed(host, allowlist)) {
+      if (host !== null && !mayReachHost(host, allowlist, mode)) {
         breached = host;
         await route.abort('blockedbyclient');
         return;
@@ -142,7 +149,7 @@ function watchNavigation(
         const location = response.headers()['location'];
         if (location !== undefined && location !== '') {
           const nextHost = hostOf(new URL(location, url).toString());
-          if (nextHost !== null && !isHostAllowed(nextHost, allowlist)) {
+          if (nextHost !== null && !mayReachHost(nextHost, allowlist, mode)) {
             breached = nextHost;
             await route.abort('blockedbyclient');
             return;
@@ -163,7 +170,7 @@ function watchNavigation(
     try {
       const parsed = new URL(url);
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
-      if (!isHostAllowed(parsed.hostname, allowlist)) breached = parsed.hostname;
+      if (!mayReachHost(parsed.hostname, allowlist, mode)) breached = parsed.hostname;
     } catch {
       // An unparseable URL is not a host we can vouch for either.
       breached = url;
@@ -183,7 +190,7 @@ export function createBrowserServer(options: BrowserServerOptions): McpServer {
     const page = await options.page();
     let watcher = watchers.get(page);
     if (!watcher) {
-      watcher = watchNavigation(page, options.egressAllowlist);
+      watcher = watchNavigation(page, options.egressAllowlist, options.egressMode ?? 'browse');
       watchers.set(page, watcher);
     }
     return { page, breach: watcher.breach };
@@ -209,9 +216,9 @@ export function createBrowserServer(options: BrowserServerOptions): McpServer {
     try {
       const parsed = new URL(current);
       if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return;
-      if (!isHostAllowed(parsed.hostname, options.egressAllowlist)) {
+      if (!mayReachHost(parsed.hostname, options.egressAllowlist, options.egressMode ?? 'browse')) {
         throw new ToolExecutionError(
-          `The browser is on "${parsed.hostname}", which is not in this workflow's egress allowlist.`,
+          `The browser is on "${parsed.hostname}", which this automation may not reach.`,
           { host: parsed.hostname, allowlist: [...options.egressAllowlist] },
         );
       }

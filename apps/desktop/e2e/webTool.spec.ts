@@ -98,6 +98,7 @@ async function startGateway(
 async function runWith(
   sites: string,
   target: string,
+  mode: 'allowlist' | 'browse' | 'open' = 'browse',
 ): Promise<{ trace: string; hits: () => number; done: () => Promise<void> }> {
   const site = await startSite();
   const gateway = await startGateway(target === '' ? site.url : target);
@@ -126,6 +127,7 @@ async function runWith(
   await page.getByTestId('palette-fetcher').click();
   await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
   await page.getByTestId('node-instruction').fill('Fetch the page and say what it says.');
+  await page.getByTestId('brief-egress-mode').selectOption(mode);
   await page.getByTestId('brief-sites').fill(sites);
   await page.getByTestId('brief-input').fill('Read the facts page.');
   await expect(page.getByTestId('brief-run')).toBeEnabled({ timeout: 20_000 });
@@ -155,6 +157,24 @@ async function runWith(
   };
 }
 
+test('browsing cannot wander into this machine, even with nothing named', async () => {
+  // Reading the open web needs no list — that rule is exercised against real
+  // hostnames in packages/tools/src/egress.test.ts, because a test that must
+  // stay offline cannot fetch a public page to prove it.
+  //
+  // What is worth proving here, end to end, is the other half: the stand-in
+  // site is on loopback, and "browse the web" must not mean the things
+  // listening on this machine. Named, it is reachable; unnamed, it is not.
+  const run = await runWith('', '');
+  try {
+    expect(run.hits()).toBe(0);
+    expect(run.trace).not.toContain('RENEWAL-CLAUSE-FOUND');
+    expect(run.trace).toMatch(/inside this machine|local network/);
+  } finally {
+    await run.done();
+  }
+});
+
 test('an agent granted the web tool can actually reach an allowed host', async () => {
   const run = await runWith('127.0.0.1', '');
   try {
@@ -167,8 +187,8 @@ test('an agent granted the web tool can actually reach an allowed host', async (
 });
 
 test('a host that is not on the list is refused, and never contacted', async () => {
-  // The allowlist names somewhere else entirely; the model asks for the site.
-  const run = await runWith('example.com', '');
+  // Allowlist mode: the tightest setting, where the list is the whole rule.
+  const run = await runWith('example.com', '', 'allowlist');
   try {
     expect(run.hits()).toBe(0);
     expect(run.trace).not.toContain('RENEWAL-CLAUSE-FOUND');

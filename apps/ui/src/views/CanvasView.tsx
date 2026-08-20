@@ -400,6 +400,15 @@ let nodeSeq = 0;
 /** How long the canvas waits, after the last join, before arranging itself. */
 const TIDY_SETTLE_MS = 450;
 
+/**
+ * How much of a fetched page an automation reads, unless it says otherwise.
+ *
+ * Roughly ten thousand tokens of text. Kept as a default a person can change
+ * rather than a limit they cannot: an automation reading contracts wants more,
+ * one checking headlines wants far less.
+ */
+const DEFAULT_PAGE_CHARS = 40_000;
+
 const COLUMN_PITCH = 264;
 const ROW_PITCH = 108;
 const ORIGIN_X = 48;
@@ -573,6 +582,8 @@ function CanvasInner({
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [attachNote, setAttachNote] = useState('');
   const [sites, setSites] = useState('');
+  const [egressMode, setEgressMode] = useState<'allowlist' | 'browse' | 'open'>('browse');
+  const [pageChars, setPageChars] = useState(DEFAULT_PAGE_CHARS);
   const [triggers, setTriggers] = useState<TriggerWire[]>([]);
   const [evals, setEvals] = useState<EvalCaseWire[]>([]);
   const [evalOutcomes, setEvalOutcomes] = useState<EvalOutcomeWire[]>([]);
@@ -722,6 +733,8 @@ function CanvasInner({
             steps: BriefStepWire[];
             edges: [string, string][];
             egressAllowlist?: string[];
+            egressMode?: 'allowlist' | 'browse' | 'open';
+            maxPageChars?: number;
             triggers?: TriggerWire[];
             evals?: EvalCaseWire[];
             layout?: { nodeId: string; x: number; y: number }[];
@@ -850,6 +863,8 @@ function CanvasInner({
         );
         setBrief(loaded.definition.instruction);
         setSites((loaded.definition.egressAllowlist ?? []).join(', '));
+        setEgressMode(loaded.definition.egressMode ?? 'browse');
+        setPageChars(loaded.definition.maxPageChars ?? DEFAULT_PAGE_CHARS);
         setTriggers(loaded.definition.triggers ?? []);
         setEvals(loaded.definition.evals ?? []);
         setAttachments(loaded.definition.attachments);
@@ -1130,13 +1145,14 @@ function CanvasInner({
       preauthorised,
       triggers,
       evals,
-      // Hosts, not URLs. Empty means the browser and the HTTP tool reach
-      // nothing, which is the right default for an automation nobody has
-      // granted the network to.
+      // Hosts, not URLs. Under the default mode these are the places the
+      // automation may *send* to; reading the public web needs no list.
       egressAllowlist: sites
         .split(',')
         .map((entry) => entry.trim())
         .filter((entry) => entry !== ''),
+      egressMode,
+      maxPageChars: pageChars,
       // Positions are not part of the run, but they are part of the thing the
       // user arranged. Losing the layout on reload would make saving feel like
       // it half-worked.
@@ -1871,8 +1887,34 @@ function CanvasInner({
                 {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
 
                 <div className="field">
+                  <label className="field__label" htmlFor="brief-egress-mode">
+                    What it may reach
+                  </label>
+                  <select
+                    id="brief-egress-mode"
+                    className="control"
+                    data-testid="brief-egress-mode"
+                    value={egressMode}
+                    onChange={(event) => {
+                      setEgressMode(event.target.value as 'allowlist' | 'browse' | 'open');
+                    }}
+                  >
+                    <option value="browse">Read any site, send only to the ones named below</option>
+                    <option value="allowlist">Only the sites named below</option>
+                    <option value="open">Anywhere, including sending</option>
+                  </select>
+                  <span className="agent-editor__toolNote" data-testid="brief-egress-note">
+                    {egressMode === 'browse'
+                      ? 'Agents can research the open web. Sending anything — a form, an API call, an email through a web service — still needs the site named below.'
+                      : egressMode === 'allowlist'
+                        ? 'Nothing outside the list below is reachable at all. Tightest, and the right choice when an automation talks to one API.'
+                        : 'No restriction on where data can be sent. Only worth choosing when an automation must submit to sites it cannot name in advance.'}
+                  </span>
+                </div>
+
+                <div className="field">
                   <label className="field__label" htmlFor="brief-sites">
-                    Sites this automation may use
+                    {egressMode === 'allowlist' ? 'Sites it may use' : 'Sites it may send to'}
                   </label>
                   <input
                     id="brief-sites"
@@ -1888,7 +1930,32 @@ function CanvasInner({
                       agent that can use the web, in an automation that allows
                       no sites, spends its whole iteration budget being refused
                       one address at a time. */}
-                  {needsSites && (
+                  <div className="field">
+                    <label className="field__label" htmlFor="brief-page-chars">
+                      How much of a page to read
+                    </label>
+                    <input
+                      id="brief-page-chars"
+                      className="control"
+                      type="number"
+                      min={1000}
+                      step={1000}
+                      data-testid="brief-page-chars"
+                      value={pageChars}
+                      onChange={(event) => {
+                        setPageChars(
+                          Math.max(1000, Number(event.target.value) || DEFAULT_PAGE_CHARS),
+                        );
+                      }}
+                    />
+                    <span className="agent-editor__toolNote">
+                      Characters per page, after the markup is stripped out. About four characters
+                      to a token, so {String(Math.round(pageChars / 4000))}k tokens a page at this
+                      setting. Raise it for long documents; lower it to spend less.
+                    </span>
+                  </div>
+
+                  {needsSites && egressMode === 'allowlist' && (
                     <p className="brief__warn" data-testid="brief-sites-warning">
                       {webSteps.join(' and ')}{' '}
                       {webSteps.length === 1 ? 'can use the web' : 'can use the web'}, and no sites

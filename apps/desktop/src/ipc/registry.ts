@@ -189,6 +189,8 @@ const briefSchema = z.object({
     .optional(),
   // Hosts this automation's tools may reach. Empty means none.
   egressAllowlist: z.array(z.string()).optional(),
+  egressMode: z.enum(['allowlist', 'browse', 'open']).optional(),
+  maxPageChars: z.number().int().positive().optional(),
   // Steps whose author has agreed they may act irreversibly without a gate.
   preauthorised: z.array(z.string()).optional(),
   // Where each node sits on the canvas. Not part of the run, but part of what

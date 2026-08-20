@@ -169,7 +169,10 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
     await tools.registerServer(
       'http',
       await connectInProcess(
-        createHttpServer({ egressAllowlist: definition.egressAllowlist ?? [] }),
+        createHttpServer({
+          egressAllowlist: definition.egressAllowlist ?? [],
+          egressMode: definition.egressMode ?? 'browse',
+        }),
       ),
     );
     await tools.registerServer(
@@ -178,6 +181,7 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
         createBrowserServer({
           page: pageForWorkspace(),
           egressAllowlist: definition.egressAllowlist ?? [],
+          egressMode: definition.egressMode ?? 'browse',
         }),
       ),
     );

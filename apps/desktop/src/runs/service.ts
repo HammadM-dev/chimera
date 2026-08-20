@@ -298,7 +298,13 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   // default-closed rule the browser server gets, for the same reason.
   await tools.registerServer(
     'http',
-    await connectInProcess(createHttpServer({ egressAllowlist: brief.egressAllowlist ?? [] })),
+    await connectInProcess(
+      createHttpServer({
+        egressAllowlist: brief.egressAllowlist ?? [],
+        egressMode: brief.egressMode ?? 'browse',
+        ...(brief.maxPageChars === undefined ? {} : { maxPageChars: brief.maxPageChars }),
+      }),
+    ),
   );
 
   // Every mailbox the workspace holds, each under its own server id so an
@@ -340,6 +346,7 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       createBrowserServer({
         page: pageForWorkspace(),
         egressAllowlist: brief.egressAllowlist ?? [],
+        egressMode: brief.egressMode ?? 'browse',
         screenshotSink: screenshotSinkFor(runId),
       }),
     ),
