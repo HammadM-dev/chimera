@@ -1647,6 +1647,17 @@ function CanvasInner({
             // honours one of them is broken for half the people using it.
             deleteKeyCode={['Delete', 'Backspace']}
             onNodesDelete={onNodesDelete}
+            // Reaching for the next line cancels the arrangement waiting to
+            // happen. The settle timer stops a layout landing in the middle of
+            // a drag; this stops one landing between two, which on a slow
+            // machine is the same thing — the node you are aiming at moves
+            // while you are on your way to it.
+            onConnectStart={() => {
+              if (tidyTimer.current !== null) {
+                clearTimeout(tidyTimer.current);
+                tidyTimer.current = null;
+              }
+            }}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
