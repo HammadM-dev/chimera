@@ -20,6 +20,11 @@ test('a web-using agent with no allowed sites is flagged before the run, not dur
     const page = await app.firstWindow();
     await goTo(page, 'build');
 
+    // Allowlist mode, where the list is the whole rule and an empty one means
+    // nothing is reachable. Under the default, `browse`, reading needs no list
+    // and there is nothing to warn about.
+    await page.getByTestId('brief-egress-mode').selectOption('allowlist');
+
     // The summariser has no web tools, so nothing is said.
     await page.getByTestId('palette-summariser').click();
     await expect(page.getByTestId('brief-sites-warning')).toHaveCount(0);
@@ -38,6 +43,11 @@ test('a web-using agent with no allowed sites is flagged before the run, not dur
     // And taking the sites away brings it back.
     await page.getByTestId('brief-sites').fill('');
     await expect(page.getByTestId('brief-sites-warning')).toBeVisible();
+
+    // Switching to browse answers it a different way: reading the open web
+    // needs no list, so there is nothing left to warn about.
+    await page.getByTestId('brief-egress-mode').selectOption('browse');
+    await expect(page.getByTestId('brief-sites-warning')).toHaveCount(0);
   } finally {
     await app.close();
     removeProfile(profile);
