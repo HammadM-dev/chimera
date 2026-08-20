@@ -397,6 +397,9 @@ let nodeSeq = 0;
  *
  * Both halves below work on one grid: columns are the order things run in,
  * rows are the things that run at the same time. */
+/** How long the canvas waits, after the last join, before arranging itself. */
+const TIDY_SETTLE_MS = 450;
+
 const COLUMN_PITCH = 264;
 const ROW_PITCH = 108;
 const ORIGIN_X = 48;
@@ -1366,6 +1369,20 @@ function CanvasInner({
    * user's and moving their nodes out from under them would be rude. */
   const arrangedByHand = useRef(false);
 
+  /** Pending layout, so a burst of joins settles into one arrangement. */
+  const tidyTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** The edges as they are now, for a layout that runs after the last join. */
+  const edgesRef = useRef(edges);
+  edgesRef.current = edges;
+
+  useEffect(
+    () => () => {
+      if (tidyTimer.current !== null) clearTimeout(tidyTimer.current);
+    },
+    [],
+  );
+
   /**
    * A step is gone, and so is everything that referred to it.
    *
@@ -1415,24 +1432,29 @@ function CanvasInner({
         ),
       );
       if (arrangedByHand.current) return;
-      setNodes((current) => {
-        const layout = tidyPositions(current, [
-          ...edges,
-          { source: connection.source, target: connection.target },
-        ]);
-        return current.map((node) => ({
-          ...node,
-          position: layout.get(node.id) ?? node.position,
-        }));
-      });
-      // No animation on this one. The nodes have just moved under a pointer
-      // that may be about to draw the next line, and a viewport still sliding
-      // when the next drag starts drops it in the wrong place.
-      requestAnimationFrame(() => {
+
+      // Laid out once the drawing stops, not after every line.
+      //
+      // Re-tidying on each connect moves every node the instant an edge lands
+      // — including the one the pointer is on its way to for the next join.
+      // Somebody joining three steps in a row watched the graph jump twice
+      // under their hand, and a test doing the same thing dropped its second
+      // line on a node that was no longer there.
+      if (tidyTimer.current !== null) clearTimeout(tidyTimer.current);
+      tidyTimer.current = setTimeout(() => {
+        tidyTimer.current = null;
+        if (arrangedByHand.current) return;
+        setNodes((current) => {
+          const layout = tidyPositions(current, edgesRef.current);
+          return current.map((node) => ({
+            ...node,
+            position: layout.get(node.id) ?? node.position,
+          }));
+        });
         void fitView({ padding: 0.24, maxZoom: 1 });
-      });
+      }, TIDY_SETTLE_MS);
     },
-    [setEdges, setNodes, edges, fitView],
+    [setEdges, setNodes, fitView],
   );
 
   /**
