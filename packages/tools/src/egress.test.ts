@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ToolExecutionError } from '@chimera/errors';
-import { assertEgressAllowed, isPrivateHost } from './servers/http.ts';
+import { assertEgressAllowed, assertResolvesPublic, isPrivateHost } from './servers/http.ts';
 import { htmlToText } from './html.ts';
 
 // How far an automation may reach.
@@ -86,6 +86,47 @@ test('the refusal says what to do rather than inviting another guess', () => {
     assert.match(message, /may only send/);
     assert.match(message, /api\.mycrm\.test/);
   }
+});
+
+test('every spelling of a private address is refused, not just the plain one', () => {
+  // A background security review found these. WHATWG parsing normalises the
+  // decimal, octal and hex forms of an IPv4 address, so those arrive here
+  // already dotted — but IPv6 arrives bracketed, and an IPv4 address can be
+  // written inside one. `[::ffff:169.254.169.254]` is the cloud metadata
+  // endpoint wearing an IPv6 hat, and the first version of this check waved it
+  // through.
+  const hostOf = (url: string): string => new URL(url).hostname;
+
+  for (const url of [
+    'http://[::1]/',
+    'http://[::ffff:127.0.0.1]/',
+    'http://[::ffff:169.254.169.254]/',
+    'http://[fe80::1]/',
+    'http://[fd00::1]/',
+    'http://2130706433/',
+    'http://0177.0.0.1/',
+    'http://0x7f000001/',
+    'http://127.1/',
+    'http://100.64.0.1/',
+    'http://169.254.169.254/latest/meta-data/',
+  ]) {
+    assert.equal(isPrivateHost(hostOf(url)), true, url);
+  }
+
+  // And the public internet is still the public internet.
+  for (const url of ['https://example.com/', 'https://8.8.8.8/', 'https://[2606:4700::1111]/']) {
+    assert.equal(isPrivateHost(hostOf(url)), false, url);
+  }
+});
+
+test('a name that resolves somewhere private is refused, however it is spelt', async () => {
+  // The other half: an ordinary public hostname whose A record points inside.
+  // localhost is the one name that reliably resolves that way on any machine.
+  await assert.rejects(() => assertResolvesPublic('localhost'), refused);
+
+  // A name that does not resolve is left to fail on its own terms rather than
+  // being turned into a refusal that says the wrong thing.
+  await assertResolvesPublic('nothing-here-9f2c.invalid');
 });
 
 test('private-address detection covers the ranges and leaves public ones alone', () => {

@@ -47,21 +47,64 @@ const READ_METHODS = ['GET', 'HEAD'];
  * the allowlist is always permitted, because they typed it on purpose.
  */
 export function isPrivateHost(host: string): boolean {
-  const target = host.toLowerCase();
-  if (target === 'localhost' || target.endsWith('.localhost') || target.endsWith('.internal')) {
-    return true;
-  }
-  if (target === '::1' || target.startsWith('fc') || target.startsWith('fd')) return true;
+  // WHATWG URL parsing already normalises the decimal, octal, hex and short
+  // forms of an IPv4 address — `http://2130706433/` arrives here as
+  // "127.0.0.1" — so those need no handling. IPv6 does: it arrives bracketed,
+  // and an IPv4 address can be written inside one.
+  const target = host.toLowerCase().replace(/^\[|\]$/g, '');
 
+  if (target === '' || target === 'localhost') return true;
+  if (target.endsWith('.localhost') || target.endsWith('.internal')) return true;
+  if (target.endsWith('.local')) return true;
+
+  if (target.includes(':')) return isPrivateIpv6(target);
+  return isPrivateIpv4(target);
+}
+
+function isPrivateIpv4(target: string): boolean {
   const parts = target.split('.');
-  if (parts.length !== 4 || parts.some((part) => !/^[0-9]{1,3}$/.test(part))) return false;
-  const [a, b] = parts.map(Number);
-  if (a === undefined || b === undefined) return false;
-  if (a === 127 || a === 10 || a === 0) return true;
+  if (parts.length !== 4) return false;
+  const octets = parts.map((part) => (/^[0-9]{1,3}$/.test(part) ? Number(part) : Number.NaN));
+  if (octets.some((octet) => Number.isNaN(octet) || octet > 255)) return false;
+  const [a, b] = octets as [number, number, number, number];
+
+  if (a === 0 || a === 127) return true;
+  if (a === 10) return true;
   if (a === 192 && b === 168) return true;
+  // 169.254.0.0/16 — link-local, and the address a cloud instance's metadata
+  // service answers on. Reading it is how an SSRF turns into stolen
+  // credentials, which makes it the single most important entry here.
   if (a === 169 && b === 254) return true;
   if (a === 172 && b >= 16 && b <= 31) return true;
+  // Carrier-grade NAT and the benchmarking range: not the public internet.
+  if (a === 100 && b >= 64 && b <= 127) return true;
+  if (a === 198 && (b === 18 || b === 19)) return true;
+  if (a >= 224) return true;
   return false;
+}
+
+function isPrivateIpv6(target: string): boolean {
+  if (target === '::' || target === '::1') return true;
+  // Unique-local (fc00::/7) and link-local (fe80::/10).
+  if (/^f[cd]/.test(target)) return true;
+  if (/^fe[89ab]/.test(target)) return true;
+
+  // An IPv4 address wearing an IPv6 hat. `::ffff:127.0.0.1` is loopback, and
+  // Node normalises it to `::ffff:7f00:1`, so both spellings have to be read —
+  // this is the form that walked past the first version of this check.
+  const mapped = /^::ffff:(.+)$/.exec(target);
+  if (!mapped) return false;
+  const rest = mapped[1] ?? '';
+  if (rest.includes('.')) return isPrivateIpv4(rest);
+
+  const groups = rest.split(':');
+  if (groups.length !== 2) return false;
+  const high = Number.parseInt(groups[0] ?? '', 16);
+  const low = Number.parseInt(groups[1] ?? '', 16);
+  if (Number.isNaN(high) || Number.isNaN(low)) return false;
+  return isPrivateIpv4(
+    [high >> 8, high & 0xff, low >> 8, low & 0xff].map((octet) => String(octet)).join('.'),
+  );
 }
 
 export interface HttpServerOptions {
@@ -104,6 +147,46 @@ export function isHostAllowed(host: string, allowlist: readonly string[]): boole
     }
     return target === candidate;
   });
+}
+
+/**
+ * Refuses a name that points somewhere private.
+ *
+ * The check above reads the address as written, which stops every literal form
+ * of it. It does nothing about a name: `intranet.attacker.test` can be an
+ * ordinary public hostname with an A record pointing at 169.254.169.254, and a
+ * page telling an agent to fetch it is exactly the injection this product
+ * expects. So a host reached by browsing is resolved, and refused if what it
+ * resolves to is somewhere this automation may not go.
+ *
+ * A named host skips this: somebody typed it deliberately, and a company whose
+ * internal API is on a private address should be able to say so.
+ *
+ * Known limit, and it is inherent rather than an oversight: the name is
+ * resolved here and connected to a moment later, so a record that changes
+ * between the two — DNS rebinding — is not covered. Closing that needs the
+ * connection itself pinned to the address that was checked, which is a change
+ * to how requests are made rather than to how they are authorised. Recorded in
+ * docs/SECURITY.md 4.1.
+ */
+export async function assertResolvesPublic(host: string): Promise<void> {
+  const { lookup } = await import('node:dns/promises');
+  let addresses: { address: string }[];
+  try {
+    addresses = await lookup(host, { all: true });
+  } catch {
+    // A name that does not resolve is not a name that reaches anything. Let
+    // the request fail on its own terms rather than inventing a refusal.
+    return;
+  }
+
+  const offender = addresses.find((entry) => isPrivateHost(entry.address));
+  if (offender) {
+    throw new ToolExecutionError(
+      `"${host}" resolves to ${offender.address}, an address inside this machine or its local network. Browsing may not reach it. If you meant it, add the host to the automation's allowed sites.`,
+      { host, resolved: offender.address },
+    );
+  }
 }
 
 /**
@@ -257,6 +340,21 @@ export function createHttpServer(options: HttpServerOptions): McpServer {
           ],
           isError: true as const,
         };
+      }
+
+      // Reached by browsing rather than by being named, so where the name
+      // actually points matters as much as how it is spelt.
+      if (!isHostAllowed(target.hostname, options.egressAllowlist)) {
+        try {
+          await assertResolvesPublic(target.hostname);
+        } catch (err) {
+          return {
+            content: [
+              { type: 'text' as const, text: err instanceof Error ? err.message : String(err) },
+            ],
+            isError: true as const,
+          };
+        }
       }
 
       const response = await transport(target.toString(), {
