@@ -508,6 +508,15 @@
   color: var(--semantic-warning);
 }
 
+/* Something that will go wrong if it is left as it is — said where it can be
+ * acted on, and not so loud that a brief looks like an error. */
+.brief__warn {
+  margin: var(--space-1) 0 0;
+  font-size: var(--type-floor);
+  line-height: var(--line-height-prose);
+  color: var(--semantic-warning);
+}
+
 .brief__note {
   margin: 0;
   font-size: var(--type-floor);

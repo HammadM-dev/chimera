@@ -153,7 +153,9 @@ test('a host outside the allowlist is refused before the browser moves', options
   try {
     const refused = await h.call('browser.navigate', { url: server.origin });
     assert.equal(refused.isError, true);
-    assert.match(refused.text, /egress allowlist/);
+    // The meaning, not the wording: this refusal names what may be reached
+    // and tells the agent not to keep guessing.
+    assert.match(refused.text, /not allowed|no allowed sites/);
     // The browser never went: the page is still where it started, so nothing
     // was resolved, connected to, or loaded.
     assert.equal(h.page.url(), 'about:blank');

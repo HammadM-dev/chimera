@@ -132,7 +132,7 @@ test('an HTTP request to a host outside the allowlist makes no outbound call', a
       FULL_ACCESS,
     );
     assert.equal(result.isError, true);
-    assert.match(result.text, /not in this workflow's egress allowlist/);
+    assert.match(result.text, /not allowed|no allowed sites/);
     assert.equal(outbound, 0, 'a request left the process for a host outside the allowlist');
   } finally {
     await registry.close();

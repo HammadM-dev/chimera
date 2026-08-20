@@ -1435,6 +1435,28 @@ function CanvasInner({
     [setEdges, setNodes, edges, fitView],
   );
 
+  /**
+   * Steps that can reach the web, when nothing is reachable.
+   *
+   * Not a reason to block the run — plenty of automations never touch a site —
+   * but a reason to say so first. Hammad's researcher spent 101,848 tokens and
+   * twelve iterations discovering it one refused host at a time.
+   */
+  const webSteps = useMemo(
+    () =>
+      sites.trim() !== ''
+        ? []
+        : nodes
+            .filter((node) =>
+              (node.data.role?.toolAllowlist ?? []).some(
+                (tool) => tool.startsWith('http.') || tool.startsWith('browser.'),
+              ),
+            )
+            .map((node) => node.data.role?.name ?? 'A step'),
+    [nodes, sites],
+  );
+  const needsSites = webSteps.length > 0;
+
   const selected = nodes.find((node) => node.id === selectedId);
 
   const bind = useCallback(
@@ -1826,16 +1848,33 @@ function CanvasInner({
 
                 {attachNote !== '' && <p className="brief__note">{attachNote}</p>}
 
-                <input
-                  className="control brief__sites"
-                  data-testid="brief-sites"
-                  aria-label="Sites this automation may use"
-                  placeholder="Sites it may use, comma separated — nothing else is reachable"
-                  value={sites}
-                  onChange={(event) => {
-                    setSites(event.target.value);
-                  }}
-                />
+                <div className="field">
+                  <label className="field__label" htmlFor="brief-sites">
+                    Sites this automation may use
+                  </label>
+                  <input
+                    id="brief-sites"
+                    className="control brief__sites"
+                    data-testid="brief-sites"
+                    placeholder="example.com, api.example.com — nothing else is reachable"
+                    value={sites}
+                    onChange={(event) => {
+                      setSites(event.target.value);
+                    }}
+                  />
+                  {/* Said before the run rather than discovered during it. An
+                      agent that can use the web, in an automation that allows
+                      no sites, spends its whole iteration budget being refused
+                      one address at a time. */}
+                  {needsSites && (
+                    <p className="brief__warn" data-testid="brief-sites-warning">
+                      {webSteps.join(' and ')}{' '}
+                      {webSteps.length === 1 ? 'can use the web' : 'can use the web'}, and no sites
+                      are allowed — every address will be refused. Name the sites here, or the run
+                      will spend its whole budget finding that out.
+                    </p>
+                  )}
+                </div>
 
                 <div className="brief__actions">
                   <div className="brief__left">

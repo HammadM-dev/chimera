@@ -69,8 +69,15 @@ export function assertEgressAllowed(url: string, allowlist: readonly string[]): 
   }
 
   if (!isHostAllowed(parsed.hostname, allowlist)) {
+    // The message tells the agent what to do next, because otherwise it keeps
+    // guessing. An automation with an empty allowlist can reach nothing, and a
+    // researcher that was refused one host simply tried another, and another,
+    // until it hit the iteration limit — a hundred thousand tokens spent
+    // discovering, one host at a time, that the door was locked.
     throw new ToolExecutionError(
-      `"${parsed.hostname}" is not in this workflow's egress allowlist.`,
+      allowlist.length === 0
+        ? `This automation has no allowed sites, so no address can be reached and trying another will not help. Say that you need a site added to the automation's allowed sites, and stop.`
+        : `"${parsed.hostname}" is not allowed. This automation may only reach: ${allowlist.join(', ')}. Do not try other addresses.`,
       { url, host: parsed.hostname, allowlist: [...allowlist] },
     );
   }
@@ -84,7 +91,10 @@ export function createHttpServer(options: HttpServerOptions): McpServer {
   server.registerTool(
     'request',
     {
-      description: 'Makes an HTTP request to a host in the workflow egress allowlist.',
+      description:
+        options.egressAllowlist.length === 0
+          ? 'Makes an HTTP request — but this automation has no allowed sites, so every address will be refused. Do not call this tool; say that a site needs adding to the automation.'
+          : `Makes an HTTP request. This automation may only reach: ${options.egressAllowlist.join(', ')}.`,
       inputSchema: {
         url: z.string(),
         method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD']).default('GET'),
