@@ -154,7 +154,7 @@ export async function dismissOnboarding(page: Page): Promise<void> {
  * person avoids without thinking, by waiting for the graph to settle before
  * reaching for the next port.
  */
-export async function waitForCanvasStill(page: Page, timeoutMs = 5_000): Promise<void> {
+export async function waitForCanvasStill(page: Page, timeoutMs = 1_500): Promise<void> {
   const positions = async (): Promise<string> =>
     page.evaluate(() =>
       Array.from(document.querySelectorAll('.react-flow__node'))
@@ -165,10 +165,12 @@ export async function waitForCanvasStill(page: Page, timeoutMs = 5_000): Promise
         .join('|'),
     );
 
+  // Only ever as long as the canvas's own settle delay needs; a graph that is
+  // genuinely still answers on the second read, in a tenth of a second.
   const deadline = Date.now() + timeoutMs;
   let last = await positions();
   while (Date.now() < deadline) {
-    await page.waitForTimeout(120);
+    await page.waitForTimeout(60);
     const now = await positions();
     if (now === last && now !== '') return;
     last = now;

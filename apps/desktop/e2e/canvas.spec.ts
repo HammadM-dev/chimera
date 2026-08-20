@@ -27,6 +27,11 @@ async function startGateway(
   };
 }
 
+// Places four steps, joins them and binds each to a model — more separate
+// interactions than the 60s default was sized for once joins began verifying
+// themselves.
+test.setTimeout(150_000);
+
 test('agents are placed on the canvas, joined, and bound to a model', async () => {
   const gateway = await startGateway(['claude-haiku-4-5', 'llama-3.3-70b']);
   const profile = freshProfile();
