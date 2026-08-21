@@ -132,6 +132,13 @@
   min-height: 0;
   min-width: 0;
   background: var(--surface-canvas);
+  /* And it keeps to itself. Without this the graph paints outside its own box:
+   * the comment above records it covering the brief below, and a step laid out
+   * near the top could end up behind the view's header — visible, and
+   * unclickable, because the header takes the pointer. Panning and fitting are
+   * how you reach what is off-screen; painting over the app's own chrome is
+   * not. */
+  overflow: hidden;
 }
 
 .canvas__empty {
