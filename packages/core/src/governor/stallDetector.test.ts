@@ -212,3 +212,80 @@ test('a real stalled run halts through the agent loop', async () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+// Making no progress, without repeating yourself.
+//
+// The detector was written for the agent that asks the same thing over and
+// over. The other way to get nowhere is to try something different every time
+// and have all of it refused — which never trips a similarity check, because
+// each attempt genuinely is new. Observed live: a browsing agent worked through
+// selector after selector, tool after tool, and spent its entire 200,000-token
+// budget being told no.
+
+test('a node whose every tool call fails is stalled, even when it never repeats', () => {
+  const detector = new StallDetector();
+
+  for (const [index, tool] of ['browser.read', 'browser.extract', 'browser.html'].entries()) {
+    detector.record({
+      nodeId: 'n1',
+      iteration: index,
+      text: `Trying ${tool} instead, since the last one did not work.`,
+      toolSignatures: [`${tool}({"selector":"#a${String(index)}"})`],
+      failedTools: 1,
+    });
+  }
+
+  assert.equal(detector.verdict('n1').stalled, true);
+});
+
+test('a node whose calls succeed is not stalled for trying different things', () => {
+  const detector = new StallDetector();
+
+  for (const [index, tool] of ['browser.read', 'browser.extract', 'browser.html'].entries()) {
+    detector.record({
+      nodeId: 'n2',
+      iteration: index,
+      text: `Reading a different part of the page with ${tool}.`,
+      toolSignatures: [`${tool}({"selector":"#a${String(index)}"})`],
+      failedTools: 0,
+    });
+  }
+
+  assert.equal(detector.verdict('n2').stalled, false);
+});
+
+test('one failure among several does not count as everything failing', () => {
+  const detector = new StallDetector();
+
+  for (let index = 0; index < 3; index += 1) {
+    detector.record({
+      nodeId: 'n3',
+      iteration: index,
+      text: `Two calls, one of which worked. Attempt ${String(index)}.`,
+      toolSignatures: [
+        `browser.read({"n":${String(index)}})`,
+        `browser.html({"n":${String(index)}})`,
+      ],
+      failedTools: 1,
+    });
+  }
+
+  assert.equal(detector.verdict('n3').stalled, false);
+});
+
+test('a node that calls no tools at all is judged on what it said, not on failures', () => {
+  const detector = new StallDetector();
+
+  for (let index = 0; index < 3; index += 1) {
+    detector.record({
+      nodeId: 'n4',
+      iteration: index,
+      text: `A completely different sentence number ${String(index)} about ${'abcdef'[index] ?? 'x'}.`,
+      toolSignatures: [],
+    });
+  }
+
+  // No tool calls means the all-failing rule does not apply — otherwise every
+  // writing step would be stalled by definition.
+  assert.equal(detector.verdict('n4').stalled, false);
+});

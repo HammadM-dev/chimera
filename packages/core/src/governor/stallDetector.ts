@@ -28,6 +28,16 @@ export interface IterationOutcome {
   text: string;
   /** Tool calls this iteration made, as `toolId(canonical arguments)`. */
   toolSignatures: readonly string[];
+  /**
+   * How many of those calls came back an error.
+   *
+   * Repeating yourself is one way to make no progress; the other is trying
+   * something different every time and having all of it fail. A browsing agent
+   * asked for something its tools could not do worked through selector after
+   * selector, tool after tool — never repeating, so never stalling — and spent
+   * two hundred thousand tokens before its budget stopped it.
+   */
+  failedTools?: number;
 }
 
 /** Words, lowercased, punctuation dropped. Enough to compare what was said. */
@@ -123,8 +133,19 @@ export class StallDetector {
       if (score >= this.policy.similarityThreshold && !introducedNewTool) repeats += 1;
     }
 
+    // Every call in the window tried something and every one of them failed.
+    // Variety is not progress: an agent that has been refused three different
+    // ways is not about to be granted a fourth.
+    const allFailing =
+      window.length >= this.policy.windowSize &&
+      window.every(
+        (entry) =>
+          entry.toolSignatures.length > 0 &&
+          (entry.failedTools ?? 0) >= entry.toolSignatures.length,
+      );
+
     return {
-      stalled: repeats >= this.policy.windowSize - 1,
+      stalled: allFailing || repeats >= this.policy.windowSize - 1,
       repeats,
       lastSimilarity,
     };
