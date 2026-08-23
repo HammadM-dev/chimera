@@ -262,8 +262,19 @@ const BUILT_IN_TOOLS = [
   { id: 'browser.read', description: 'Reads the text of a page.' },
   { id: 'browser.click', description: 'Clicks something on a page.' },
   { id: 'browser.type', description: 'Types into a field on a page.' },
-  { id: 'browser.extract', description: 'Pulls out every element matching a selector.' },
+  {
+    id: 'browser.extract',
+    description: 'Pulls out every element matching a selector, and the fields you name from each.',
+  },
+  {
+    id: 'browser.html',
+    description: 'Reads the markup of a page, for when the answer is in an attribute.',
+  },
   { id: 'browser.screenshot', description: 'Takes a picture of the page.' },
+  {
+    id: 'search.web',
+    description: 'Searches the web and returns titles, links and snippets to fetch.',
+  },
 ];
 
 /**
@@ -273,6 +284,9 @@ const BUILT_IN_TOOLS = [
  * starting all of them — an agent editor that spawned six processes to draw a
  * checklist would be unusable.
  */
+/** The ids the editor offers, so a test can hold this list against the one the build ships. */
+export const BUILT_IN_TOOL_IDS: readonly string[] = BUILT_IN_TOOLS.map((tool) => tool.id);
+
 export function listTools(): {
   tools: { id: string; serverId: string; description: string; irreversible: boolean }[];
 } {

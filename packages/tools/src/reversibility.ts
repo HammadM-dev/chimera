@@ -83,7 +83,15 @@ export function isIrreversible(toolId: string, args: Record<string, unknown> = {
 }
 
 /** Every tool this build ships and can therefore vouch for. */
-const KNOWN: readonly string[] = [...ALWAYS, ...CONTAINED, 'http.request'];
+/**
+ * Every tool id this build ships, whatever its reversibility.
+ *
+ * Exported so the list a person picks from can be checked against it. That list
+ * lives in the desktop app and is written by hand, and it had silently fallen
+ * two tools behind: `browser.html` and `search.web` both existed, were both
+ * registered, and could not be granted to an agent by anybody using the editor.
+ */
+export const KNOWN: readonly string[] = [...ALWAYS, ...CONTAINED, 'http.request'];
 
 /**
  * Allowlist entries that are irreversible however they are called.

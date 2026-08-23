@@ -25,6 +25,7 @@ export {
   DEFAULT_MAX_PAGE_CHARS,
 } from './servers/http.ts';
 export type { EgressMode } from './servers/http.ts';
+export { KNOWN as KNOWN_TOOL_IDS } from './reversibility.ts';
 export { createSearchServer, unwrapBing, DEFAULT_MAX_RESULTS } from './servers/search.ts';
 export type { SearchServerOptions, SearchResult } from './servers/search.ts';
 export { htmlToText } from './html.ts';
