@@ -41,6 +41,33 @@ export function vaultHandlesAt(dbPath: string): string[] {
       }
     }
 
+    if (tables.has('workspace_settings')) {
+      // Whatever JSON blobs the settings row holds. Read by scanning rather
+      // than by naming `search_json`, so the next setting that stores a handle
+      // is collected the day it is added instead of the day somebody notices
+      // the keychain filling up again.
+      const columns = (
+        db.prepare('PRAGMA table_info(workspace_settings)').all() as { name: string }[]
+      )
+        .map((row) => row.name)
+        .filter((name) => name.endsWith('_json'));
+
+      if (columns.length > 0) {
+        const row = db
+          .prepare(`SELECT ${columns.join(', ')} FROM workspace_settings WHERE id = 1`)
+          .get() as Record<string, unknown> | undefined;
+        for (const value of Object.values(row ?? {})) {
+          if (typeof value !== 'string') continue;
+          // The handle's own shape, found wherever in the blob it sits: these
+          // are small, flat settings objects and a regex over the text needs no
+          // knowledge of which key holds it.
+          for (const handle of value.match(/vault:[a-z]+:[0-9a-f-]{36}/g) ?? []) {
+            handles.add(handle);
+          }
+        }
+      }
+    }
+
     if (tables.has('plugins')) {
       for (const row of db.prepare('SELECT env_json, headers_json FROM plugins').all() as {
         env_json: string;

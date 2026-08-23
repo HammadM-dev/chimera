@@ -19,7 +19,10 @@ export type {
   WorkspaceSettings,
   CachePolicySettings,
   TelemetrySettings,
+  SearchSettings,
+  SearchProvider,
 } from './repositories/settings.ts';
+export { SEARCH_PROVIDERS } from './repositories/settings.ts';
 export * as rolesRepository from './repositories/roles.ts';
 export type { RoleRecord, UpsertRoleInput } from './repositories/roles.ts';
 export * as nodeStatesRepository from './repositories/nodeStates.ts';

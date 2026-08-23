@@ -186,6 +186,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'model_tiers_json',
     'cache_policy_json',
     'telemetry_json',
+    'search_json',
   ],
   // Added by 0003 for M2-5's role registry. Workspace-level configuration:
   // roles are shared by every workflow in a workspace, so tightening one

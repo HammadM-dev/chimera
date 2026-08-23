@@ -600,6 +600,36 @@ export const telemetrySet = defineInvokeChannel({
   responseSchema: z.object({ telemetry: telemetrySchema }),
 });
 
+// Which search service the agents use. The key travels one way only: in on
+// `set`, never back out on `get` — the panel is told whether one is stored.
+const searchProviderSchema = z.enum(['none', 'brave', 'tavily', 'serper']);
+const searchStateSchema = z.object({
+  provider: searchProviderSchema,
+  region: z.string(),
+  hasKey: z.boolean(),
+});
+
+export const searchGet = defineInvokeChannel({
+  channel: 'search:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: searchStateSchema,
+});
+
+export const searchSet = defineInvokeChannel({
+  channel: 'search:set',
+  v: 1,
+  // Carries an API key on the way in.
+  sensitive: true,
+  requestSchema: z.object({
+    provider: searchProviderSchema,
+    region: z.string(),
+    apiKey: z.string().optional(),
+  }),
+  responseSchema: searchStateSchema,
+});
+
 export const telemetryTest = defineInvokeChannel({
   channel: 'telemetry:test',
   v: 1,

@@ -7,6 +7,7 @@ import { Confirm } from '../shell/Confirm.tsx';
 import { PluginsPanel } from './PluginsPanel.tsx';
 import { FileGrantsPanel } from './FileGrantsPanel.tsx';
 import { EmailAccountsPanel } from './EmailAccountsPanel.tsx';
+import { SearchPanel } from './SearchPanel.tsx';
 import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './views.css';
 
@@ -128,6 +129,10 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
 
         <div>
           <EmailAccountsPanel />
+        </div>
+        <div className="panel">
+          <h3 className="panel__title">Web search</h3>
+          <SearchPanel refreshToken={refreshToken} />
         </div>
         <div className="panel">
           <h3 className="panel__title">Reusing answers</h3>

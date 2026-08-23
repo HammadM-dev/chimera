@@ -18,6 +18,8 @@ import {
   setCachePolicy,
   getTelemetry,
   setTelemetry,
+  getSearch,
+  setSearch,
 } from '../providers/service.ts';
 import { detect, importCatalogue } from '../providers/omniroute.ts';
 import {
@@ -177,6 +179,8 @@ registerHandler(channels.cacheSet, (payload) => setCachePolicy(payload.policy));
 registerHandler(channels.telemetryGet, () => getTelemetry());
 registerHandler(channels.telemetrySet, (payload) => setTelemetry(payload.telemetry));
 registerHandler(channels.telemetryTest, (payload) => exportRun(payload.runId));
+registerHandler(channels.searchGet, () => getSearch());
+registerHandler(channels.searchSet, (payload) => setSearch(payload));
 
 registerHandler(channels.controlGet, () => ({
   session: controlSession(),

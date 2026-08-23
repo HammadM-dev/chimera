@@ -80,17 +80,38 @@ const TELEMETRY_DEFAULT: TelemetrySettings = {
   includePayloads: false,
 };
 
+/**
+ * Search services an agent can be pointed at.
+ *
+ * `none` is not "no search" — it is the built-in keyless one, which needs no
+ * configuration and is what a fresh workspace uses. The others are named APIs
+ * the workspace has a key for.
+ */
+export const SEARCH_PROVIDERS = ['none', 'brave', 'tavily', 'serper'] as const;
+export type SearchProvider = (typeof SEARCH_PROVIDERS)[number];
+
+export interface SearchSettings {
+  provider: SearchProvider;
+  /** Vault handle for the key. Empty for `none`. Never the key itself. */
+  authRef: string;
+  /** Region hint for results, e.g. `uk`. Empty means no hint. */
+  region: string;
+}
+
+const SEARCH_DEFAULT: SearchSettings = { provider: 'none', authRef: '', region: '' };
+
 export interface WorkspaceSettings {
   localOnlyMode: boolean;
   modelTiers: ModelTiers;
   cache: CachePolicySettings;
   telemetry: TelemetrySettings;
+  search: SearchSettings;
 }
 
 export function read(db: Database.Database): WorkspaceSettings {
   const row = db
     .prepare(
-      `SELECT local_only_mode, model_tiers_json, cache_policy_json, telemetry_json
+      `SELECT local_only_mode, model_tiers_json, cache_policy_json, telemetry_json, search_json
        FROM workspace_settings WHERE id = 1`,
     )
     .get() as
@@ -99,6 +120,7 @@ export function read(db: Database.Database): WorkspaceSettings {
         model_tiers_json: string;
         cache_policy_json: string;
         telemetry_json: string;
+        search_json: string;
       }
     | undefined;
 
@@ -132,8 +154,34 @@ export function read(db: Database.Database): WorkspaceSettings {
     telemetry = TELEMETRY_DEFAULT;
   }
 
+  let search = SEARCH_DEFAULT;
+  try {
+    const parsed = { ...SEARCH_DEFAULT, ...(JSON.parse(row?.search_json ?? '{}') as object) };
+    // A provider name this build does not know is not a provider. Falling back
+    // to the keyless one keeps research working rather than switching it off.
+    search = {
+      ...parsed,
+      provider: SEARCH_PROVIDERS.includes(parsed.provider) ? parsed.provider : 'none',
+    };
+  } catch {
+    search = SEARCH_DEFAULT;
+  }
+
   // SQLite has no boolean type; 0/1 is the storage convention.
-  return { localOnlyMode: (row?.local_only_mode ?? 0) === 1, modelTiers, cache, telemetry };
+  return {
+    localOnlyMode: (row?.local_only_mode ?? 0) === 1,
+    modelTiers,
+    cache,
+    telemetry,
+    search,
+  };
+}
+
+export function setSearch(db: Database.Database, search: SearchSettings): void {
+  db.prepare('UPDATE workspace_settings SET search_json = ? WHERE id = 1').run(
+    JSON.stringify(search),
+  );
+  notifyChanged(db);
 }
 
 export function setCachePolicy(db: Database.Database, policy: CachePolicySettings): void {

@@ -9,7 +9,8 @@ export { isIrreversible, alwaysIrreversibleTools } from './reversibility.ts';
 export type { AllowlistedRole } from './allowlist.ts';
 export { createSandbox, destroySandbox, sweepSandboxes } from './sandbox.ts';
 export type { Sandbox } from './sandbox.ts';
-export { createFilesystemServer } from './servers/filesystem.ts';
+export { createFilesystemServer, DEFAULT_MAX_READ_BYTES } from './servers/filesystem.ts';
+export type { FilesystemServerOptions } from './servers/filesystem.ts';
 export { createShellServer, runInSandbox } from './servers/shell.ts';
 export { createBrowserServer } from './servers/browser.ts';
 export { createEmailServer } from './servers/email.ts';
@@ -24,6 +25,8 @@ export {
   DEFAULT_MAX_PAGE_CHARS,
 } from './servers/http.ts';
 export type { EgressMode } from './servers/http.ts';
+export { createSearchServer, unwrapBing, DEFAULT_MAX_RESULTS } from './servers/search.ts';
+export type { SearchServerOptions, SearchResult } from './servers/search.ts';
 export { htmlToText } from './html.ts';
 export type { HttpServerOptions, HttpTransport } from './servers/http.ts';
 export { createMemoryServer } from './servers/memory.ts';

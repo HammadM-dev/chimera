@@ -1,0 +1,14 @@
+-- Which search service the workspace's agents use, if any.
+--
+-- Search itself is keyless by default and works without this. It is also
+-- scraped, and a scraped search engine decides how much it likes you: measured
+-- from a datacentre address, Bing answered "best selling electric car UK 2026"
+-- with three dictionary definitions of the word "best", and every public
+-- SearXNG instance tried returned 429. From a home connection the keyless path
+-- is usually fine, which is why it stays the default — but a workspace that
+-- needs research to work every time can name a real search API here and paste
+-- its key, exactly as it does for a model provider.
+--
+-- The key is not in this column. It is in the OS keychain, and this holds the
+-- handle (CLAUDE.md: "Secrets never leave the vault").
+ALTER TABLE workspace_settings ADD COLUMN search_json TEXT NOT NULL DEFAULT '{}';

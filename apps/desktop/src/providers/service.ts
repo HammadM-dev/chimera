@@ -7,6 +7,7 @@ import {
   setSecret,
   settingsRepository,
   type AuthRef,
+  type SearchProvider,
   type CachePolicySettings,
   type ModelTiers,
   type TelemetrySettings,
@@ -384,6 +385,57 @@ export function getCachePolicy(): { policy: CachePolicySettings } {
 export function setCachePolicy(policy: CachePolicySettings): { policy: CachePolicySettings } {
   settingsRepository.setCachePolicy(getStore(), policy);
   return getCachePolicy();
+}
+
+/**
+ * The search service this workspace uses, and whether it has a key.
+ *
+ * Returns `hasKey`, never the key. A settings panel needs to show whether one
+ * is set; it has no business being able to read it back (CLAUDE.md: "Secrets
+ * never leave the vault").
+ */
+export function getSearch(): { provider: SearchProvider; region: string; hasKey: boolean } {
+  const search = settingsRepository.read(getStore()).search;
+  return { provider: search.provider, region: search.region, hasKey: search.authRef !== '' };
+}
+
+export function setSearch(input: {
+  provider: SearchProvider;
+  region: string;
+  /** The key, when the user has just typed one. Absent leaves the stored one alone. */
+  apiKey?: string;
+}): { provider: SearchProvider; region: string; hasKey: boolean } {
+  const db = getStore();
+  const existing = settingsRepository.read(db).search;
+
+  let authRef = existing.authRef;
+  if (input.provider === 'none') {
+    // Switching back to the built-in search drops the key rather than leaving
+    // it in the keychain for a service nothing will call again.
+    if (authRef !== '') {
+      try {
+        deleteSecret(authRef as AuthRef);
+      } catch {
+        // Already gone, or a keychain that will not talk to us. Either way the
+        // handle is being dropped from the settings on the next line.
+      }
+    }
+    authRef = '';
+  } else if (input.apiKey !== undefined && input.apiKey !== '') {
+    // Replacing a key means removing the old one, not stacking a second entry
+    // beside it — that is how a keychain fills up with dead handles.
+    if (authRef !== '') {
+      try {
+        deleteSecret(authRef as AuthRef);
+      } catch {
+        // See above.
+      }
+    }
+    authRef = setSecret('search', input.apiKey);
+  }
+
+  settingsRepository.setSearch(db, { provider: input.provider, region: input.region, authRef });
+  return getSearch();
 }
 
 export function getTelemetry(): { telemetry: TelemetrySettings } {

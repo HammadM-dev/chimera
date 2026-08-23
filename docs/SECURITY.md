@@ -178,6 +178,10 @@ Rationale, and it is a revision of the fail-closed decision above rather than an
 
 The risk the original decision was protecting against is exfiltration, and exfiltration is a *send*. An agent that has read a mailbox, a granted folder or an attachment, and can POST anywhere, is a data-loss path — and a hostile page telling it to do exactly that is the injection scenario §2 exists to survive. That path stays closed by default: under `browse`, a POST to a host nobody named is refused with a message that says so. Fetching a page carries none of that risk, so it is permitted.
 
+**Search sits under the same rule, and is a read.** `search.web` sends a query to one of a handful of engines named in `packages/tools/src/servers/search.ts` — the model never names the host, so there is no SSRF surface on this tool at all. It is refused under `allowlist`: an automation locked to named hosts has said it does not want its agents wandering, and finding new hosts is exactly wandering. It exists because the researcher could fetch a page and could not find one, which meant the research was done by hand and the agent did the reading.
+
+When the workspace has configured a search API, the key is read from the vault by the main process, handed to the server as a value, and put in a request header. It is never returned in a result, never logged, and never reaches a prompt. A rejected search API echoes the request back — which carries the key — so only the HTTP status of such a failure is reported, never the body.
+
 Two properties hold in every mode:
 
 - **A named host is always permitted**, whatever the method and whatever the mode, because somebody typed it deliberately.
