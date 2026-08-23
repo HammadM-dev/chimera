@@ -2,6 +2,8 @@ import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: 'e2e',
+  // Refuses to start against a bundle older than the source. See the file.
+  globalSetup: './e2e/support/globalSetup.ts',
   // An Electron cold start is seconds, not milliseconds, and the splash suite
   // launches the app twice in one test. 30s is a web-test default that this
   // suite has no business inheriting.
