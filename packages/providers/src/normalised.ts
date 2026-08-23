@@ -152,8 +152,35 @@ export function toContentParts(content: string | ContentPart[]): ContentPart[] {
 
 /** Concatenates every text part, ignoring images. The common "just give me the answer" read. */
 export function textOf(response: NormalisedResponse): string {
-  return response.content
-    .filter((part): part is TextContent => part.type === 'text')
-    .map((part) => part.text)
-    .join('');
+  return withoutReasoning(
+    response.content
+      .filter((part): part is TextContent => part.type === 'text')
+      .map((part) => part.text)
+      .join(''),
+  );
+}
+
+/**
+ * Removes a model's private reasoning from its answer.
+ *
+ * Several open-weight families — DeepSeek, Qwen, gpt-oss — emit their working
+ * inside `<think>` tags in the ordinary content field rather than in a separate
+ * channel. Left in, it is what the user reads: a run finished and showed them
+ * "Perhaps the correct approach is... Not possible... Let's try a different
+ * approach... </think>" followed, eventually, by the answer.
+ *
+ * Both shapes are handled. A properly closed block goes whole; a reply that
+ * begins mid-thought and only closes — which is what arrives when a provider
+ * has already trimmed the opening tag — loses everything up to the close.
+ * Nothing is removed from a reply with no closing tag at all, since that is
+ * either an ordinary answer or a truncated one, and cutting an ordinary answer
+ * because it mentions the word would be worse than leaving a stray tag.
+ */
+export function withoutReasoning(text: string): string {
+  let cleaned = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+
+  const close = cleaned.toLowerCase().lastIndexOf('</think>');
+  if (close !== -1) cleaned = cleaned.slice(close + '</think>'.length);
+
+  return cleaned.trim();
 }

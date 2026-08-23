@@ -10,7 +10,7 @@ export type {
   UnusableConnection,
 } from './registry.ts';
 export type { ProviderAdapter, AdapterCallOptions } from './adapter.ts';
-export { toContentParts, textOf } from './normalised.ts';
+export { toContentParts, textOf, withoutReasoning } from './normalised.ts';
 export type {
   JsonSchema,
   MessageRole,
