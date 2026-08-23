@@ -19,13 +19,15 @@ Every one is optional, so a version 1 definition loads unchanged.
 4. Data flows through named ports. No implicit "previous node output" magic — it makes debugging impossible at forty nodes.
 5. The schema is forward-compatible: unknown fields are preserved on load and round-tripped on save, so an older build doesn't destroy a newer workflow.
 
+**Version history.** `1` — the original. `2` and `3` — written by the build without this note; the document said `1` throughout while `packages/store` wrote `3`, which is the drift this line exists to stop repeating. `4` — adds `policy.maxPageChars` and `policy.maxFileBytes`, the two limits on how much a tool may read in one go. Both are optional and both have defaults, so a version written before `4` loads unchanged. Nothing branches on this number; it identifies what wrote a version rather than gating what can read it.
+
 ---
 
 ## Top level
 
 ```jsonc
 {
-  "schemaVersion": 1,
+  "schemaVersion": 4,
   "id": "wf_7bd21c",
   "name": "Invoice triage",
   "version": 12,
@@ -45,8 +47,11 @@ Every one is optional, so a version 1 definition loads unchanged.
 
   "policy": {
     "egressAllowlist": ["api.company.com"],
+    "egressMode": "browse",
     "requireApprovalFor": ["email.send", "fs.delete", "native.input"],
-    "localModelsOnly": false
+    "localModelsOnly": false,
+    "maxPageChars": 40000,
+    "maxFileBytes": 1000000
   },
 
   "defaults": {

@@ -122,7 +122,10 @@ export function save(
   db.prepare(
     `INSERT INTO workflow_versions
        (id, workflow_id, version_number, schema_version, definition_json, created_at, created_by)
-     VALUES (?, ?, ?, 3, ?, ?, 'user')`,
+     -- 4 adds the two reading limits to policy: maxPageChars and maxFileBytes.
+     -- Nothing reads this column and branches on it; it is here so a version
+     -- written by an older build can be identified rather than guessed at.
+     VALUES (?, ?, ?, 4, ?, ?, 'user')`,
   ).run(versionId, workflowId, versionNumber, input.definitionJson, now);
 
   db.prepare(

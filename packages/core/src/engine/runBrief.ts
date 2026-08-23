@@ -81,6 +81,15 @@ export interface RunBrief {
    */
   maxPageChars?: number;
   /**
+   * The largest file a tool will read, in bytes. Defaults to 1,000,000.
+   *
+   * A cap the user sets rather than one they hit: an automation reading
+   * contracts or exports raises it, and one that should never be handed a
+   * hundred-megabyte log lowers it. The default is there so nobody has to
+   * think about it, not so nobody can change it.
+   */
+  maxFileBytes?: number;
+  /**
    * What starts this automation when nobody presses Run.
    *
    * Part of the saved definition rather than of a settings screen: a trigger is

@@ -24,6 +24,7 @@ import {
   connectInProcess,
   createBrowserServer,
   createHttpServer,
+  createSearchServer,
   createFilesystemServer,
   createMemoryServer,
   createSandbox,
@@ -154,7 +155,13 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
     const tools = createToolRegistry({ secrets: pluginSecrets });
     await tools.registerServer(
       'filesystem',
-      await connectInProcess(createFilesystemServer(sandbox)),
+      await connectInProcess(
+        createFilesystemServer(sandbox, {
+          ...(definition.maxFileBytes === undefined
+            ? {}
+            : { maxReadBytes: definition.maxFileBytes }),
+        }),
+      ),
     );
     await tools.registerServer('shell', await connectInProcess(createShellServer(sandbox)));
     await tools.registerServer(
@@ -174,6 +181,13 @@ export async function runEvals(workflowId: string): Promise<EvalReport> {
           egressMode: definition.egressMode ?? 'browse',
         }),
       ),
+    );
+    // Search, alongside the fetcher rather than inside it: finding a page and
+    // sending to one are different permissions, and a role can be granted the
+    // first without the second.
+    await tools.registerServer(
+      'search',
+      await connectInProcess(createSearchServer({ egressMode: definition.egressMode ?? 'browse' })),
     );
     await tools.registerServer(
       'browser',

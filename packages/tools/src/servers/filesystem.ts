@@ -16,8 +16,13 @@ import type { Sandbox } from '../sandbox.ts';
 // writes use `resolve`, which never does. Granting a folder makes it readable
 // and nothing else — there is no argument to `writeFile` that reaches one.
 
-/** Files larger than this are refused rather than read into a prompt. */
-const MAX_READ_BYTES = 1_000_000;
+/** Files larger than this are refused rather than read into a prompt, unless the automation says otherwise. */
+export const DEFAULT_MAX_READ_BYTES = 1_000_000;
+
+export interface FilesystemServerOptions {
+  /** The automation's own read limit. Absent means `DEFAULT_MAX_READ_BYTES`. */
+  maxReadBytes?: number;
+}
 
 function failure(message: string): { content: { type: 'text'; text: string }[]; isError: true } {
   // MCP's protocol-level error: the tool ran and could not do the job. Returned
@@ -63,7 +68,11 @@ function readDescription(sandbox: Sandbox, verb: string): string {
   return `${verb} from the run's workspace, or from these folders the user has granted read access to: ${sandbox.readable.join(', ')}.`;
 }
 
-export function createFilesystemServer(sandbox: Sandbox): McpServer {
+export function createFilesystemServer(
+  sandbox: Sandbox,
+  options: FilesystemServerOptions = {},
+): McpServer {
+  const maxReadBytes = options.maxReadBytes ?? DEFAULT_MAX_READ_BYTES;
   const server = new McpServer({ name: 'chimera-filesystem', version: '0.0.0' });
 
   server.registerTool(
@@ -81,9 +90,9 @@ export function createFilesystemServer(sandbox: Sandbox): McpServer {
         const resolved = sandbox.resolveForRead(requested);
         const stat = fs.statSync(resolved);
         if (stat.isDirectory()) return failure(`"${requested}" is a directory.`);
-        if (stat.size > MAX_READ_BYTES) {
+        if (stat.size > maxReadBytes) {
           return failure(
-            `"${requested}" is ${String(stat.size)} bytes, over the ${String(MAX_READ_BYTES)}-byte read limit.`,
+            `"${requested}" is ${String(stat.size)} bytes, over this automation’s ${String(maxReadBytes)}-byte read limit. Raise the file size limit on the automation if this file is meant to be read.`,
           );
         }
         return ok(fs.readFileSync(resolved, 'utf8'));

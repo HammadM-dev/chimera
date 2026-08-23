@@ -4,10 +4,12 @@ import os from 'node:os';
 import path from 'node:path';
 import { Governor, createRoleRegistry, runAutomation, type RunBrief } from '@chimera/core';
 import {
+  getSecret,
   nodeStatesRepository,
   runsRepository,
   settingsRepository,
   tracesRepository,
+  type AuthRef,
 } from '@chimera/store';
 import { adapterFor } from '@chimera/providers';
 import {
@@ -15,6 +17,7 @@ import {
   createEmailServer,
   createBrowserServer,
   createHttpServer,
+  createSearchServer,
   createFilesystemServer,
   createSandbox,
   createMemoryServer,
@@ -278,7 +281,14 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
   // so a revoke takes effect on the next one rather than the next restart.
   const sandbox = createSandbox(path.join(os.tmpdir(), 'chimera-runs'), runId, readableFolders());
   const tools = createToolRegistry({ secrets: () => [...pluginSecrets(), ...emailSecrets()] });
-  await tools.registerServer('filesystem', await connectInProcess(createFilesystemServer(sandbox)));
+  await tools.registerServer(
+    'filesystem',
+    await connectInProcess(
+      createFilesystemServer(sandbox, {
+        ...(brief.maxFileBytes === undefined ? {} : { maxReadBytes: brief.maxFileBytes }),
+      }),
+    ),
+  );
   await tools.registerServer('shell', await connectInProcess(createShellServer(sandbox)));
   // Memory is per-run only in its attribution: what is written is workspace-wide
   // and outlives the run, which is the entire point of it.
@@ -303,6 +313,37 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
         egressAllowlist: brief.egressAllowlist ?? [],
         egressMode: brief.egressMode ?? 'browse',
         ...(brief.maxPageChars === undefined ? {} : { maxPageChars: brief.maxPageChars }),
+      }),
+    ),
+  );
+
+  // Search, alongside the fetcher rather than inside it: finding a page and
+  // sending to one are different permissions, and a role can now be given the
+  // first without the second.
+  //
+  // The key is read here and handed to the server as a value. It goes no
+  // further: the server puts it in a request header, and nothing that comes
+  // back to the model has been anywhere near it.
+  const searchSettings = settingsRepository.read(db).search;
+  let searchKey = '';
+  if (searchSettings.provider !== 'none' && searchSettings.authRef !== '') {
+    try {
+      searchKey = getSecret(searchSettings.authRef as AuthRef) ?? '';
+    } catch {
+      // A key the keychain will not give back is a key this run does not have.
+      // Search falls back to the keyless engines rather than the run failing
+      // over a setting that is only ever an improvement.
+      searchKey = '';
+    }
+  }
+  await tools.registerServer(
+    'search',
+    await connectInProcess(
+      createSearchServer({
+        egressMode: brief.egressMode ?? 'browse',
+        provider: searchSettings.provider,
+        ...(searchKey === '' ? {} : { apiKey: searchKey }),
+        ...(searchSettings.region === '' ? {} : { region: searchSettings.region }),
       }),
     ),
   );

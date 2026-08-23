@@ -408,6 +408,8 @@ const TIDY_SETTLE_MS = 450;
  * one checking headlines wants far less.
  */
 const DEFAULT_PAGE_CHARS = 40_000;
+/** Bytes. The same figure `packages/tools` defaults to, and the same reason: a default, not a ceiling. */
+const DEFAULT_FILE_BYTES = 1_000_000;
 
 const COLUMN_PITCH = 264;
 const ROW_PITCH = 108;
@@ -584,6 +586,7 @@ function CanvasInner({
   const [sites, setSites] = useState('');
   const [egressMode, setEgressMode] = useState<'allowlist' | 'browse' | 'open'>('browse');
   const [pageChars, setPageChars] = useState(DEFAULT_PAGE_CHARS);
+  const [fileBytes, setFileBytes] = useState(DEFAULT_FILE_BYTES);
   const [triggers, setTriggers] = useState<TriggerWire[]>([]);
   const [evals, setEvals] = useState<EvalCaseWire[]>([]);
   const [evalOutcomes, setEvalOutcomes] = useState<EvalOutcomeWire[]>([]);
@@ -735,6 +738,7 @@ function CanvasInner({
             egressAllowlist?: string[];
             egressMode?: 'allowlist' | 'browse' | 'open';
             maxPageChars?: number;
+            maxFileBytes?: number;
             triggers?: TriggerWire[];
             evals?: EvalCaseWire[];
             layout?: { nodeId: string; x: number; y: number }[];
@@ -865,6 +869,7 @@ function CanvasInner({
         setSites((loaded.definition.egressAllowlist ?? []).join(', '));
         setEgressMode(loaded.definition.egressMode ?? 'browse');
         setPageChars(loaded.definition.maxPageChars ?? DEFAULT_PAGE_CHARS);
+        setFileBytes(loaded.definition.maxFileBytes ?? DEFAULT_FILE_BYTES);
         setTriggers(loaded.definition.triggers ?? []);
         setEvals(loaded.definition.evals ?? []);
         setAttachments(loaded.definition.attachments);
@@ -1153,6 +1158,7 @@ function CanvasInner({
         .filter((entry) => entry !== ''),
       egressMode,
       maxPageChars: pageChars,
+      maxFileBytes: fileBytes,
       // Positions are not part of the run, but they are part of the thing the
       // user arranged. Losing the layout on reload would make saving feel like
       // it half-worked.
@@ -1963,6 +1969,31 @@ function CanvasInner({
                       Characters per page, after the markup is stripped out. About four characters
                       to a token, so {String(Math.round(pageChars / 4000))}k tokens a page at this
                       setting. Raise it for long documents; lower it to spend less.
+                    </span>
+                  </div>
+
+                  <div className="field">
+                    <label className="field__label" htmlFor="brief-file-bytes">
+                      Largest file to read
+                    </label>
+                    <input
+                      id="brief-file-bytes"
+                      className="control"
+                      type="number"
+                      min={1000}
+                      step={100000}
+                      data-testid="brief-file-bytes"
+                      value={fileBytes}
+                      onChange={(event) => {
+                        setFileBytes(
+                          Math.max(1000, Number(event.target.value) || DEFAULT_FILE_BYTES),
+                        );
+                      }}
+                    />
+                    <span className="agent-editor__toolNote">
+                      Bytes. A file over this is refused rather than read, which is about{' '}
+                      {String(Math.round(fileBytes / 1000))}k characters at this setting. Raise it
+                      for long contracts and exports.
                     </span>
                   </div>
 
