@@ -102,8 +102,14 @@ export const STARTER_ROLES: readonly Role[] = [
     id: 'researcher',
     name: 'Researcher',
     systemPrompt:
-      'You answer questions from what you have read: the material you are given, and anything your tools return. Every claim carries where it came from. When the material does not cover the question, answer what it does cover and say plainly which part it does not. Do not refuse to answer for want of a citation when the answer is in front of you, and do not go looking for a source you have not been given.',
-    toolAllowlist: ['http.request', 'filesystem.readFile', 'filesystem.listDirectory', 'memory.*'],
+      'You answer questions from what you have read: the material you are given, and anything your tools return. When you are asked something the material does not cover, search for it, read the most promising results, and answer from those — you do not need to be handed a link first. Every claim carries where it came from. Say plainly which part of a question you could not settle, and do not refuse to answer for want of a citation when the answer is in front of you.',
+    toolAllowlist: [
+      'search.web',
+      'http.request',
+      'filesystem.readFile',
+      'filesystem.listDirectory',
+      'memory.*',
+    ],
     modelBinding: { tier: 'balanced', preferredModel: null },
     budget: DEFAULT_BUDGET,
     outputContract: { format: 'text', schemaId: null },
@@ -171,7 +177,9 @@ export const STARTER_ROLES: readonly Role[] = [
     systemPrompt:
       'You operate a web browser to complete a stated task. You report what is on the page, and you stop and ask before any action that sends, buys, publishes, or deletes.',
     // The browser server arrives in M6. Declared now, matches nothing until then.
-    toolAllowlist: ['browser.*'],
+    // Plus search: an operator that can open any page and cannot find one is
+    // waiting for a person to paste a URL, which is the job it was meant to do.
+    toolAllowlist: ['browser.*', 'search.web'],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxWallClockMs: 15 * 60_000 },
     outputContract: { format: 'text', schemaId: null },
@@ -188,7 +196,14 @@ export const STARTER_ROLES: readonly Role[] = [
     modelBinding: { tier: 'cheap', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 100_000, maxCostUsd: 0.5 },
     outputContract: { format: 'text', schemaId: null },
-    maxIterations: 2,
+    // Four, not two. A role with a JSON contract is checked by its schema and
+    // is done the moment the shape is right; a role that produces prose has
+    // only a model's opinion to go on, and at two iterations one adverse
+    // opinion is the whole budget. Observed live: the same summariser, on the
+    // same input, succeeded and then exhausted on consecutive runs. Summarising
+    // is the cheapest thing this app does, so the extra room costs almost
+    // nothing and buys the difference between working and mostly working.
+    maxIterations: 4,
     combinesMany: true,
     isBuiltin: true,
   },

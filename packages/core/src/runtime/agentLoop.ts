@@ -13,8 +13,14 @@ import type { Governor } from '../governor/Governor.ts';
 import { toolSignature } from '../governor/stallDetector.ts';
 import type { CallPurpose, Denied, ModelCallRequest } from '../governor/types.ts';
 import type { Role } from './roleRegistry.ts';
-import { assemblePrompt, type ToolObservation } from './promptAssembly.ts';
-import { BUILTIN_SCHEMAS, enforceOutputContract, type OnInvalid } from './outputContract.ts';
+import { assemblePrompt, type StepPlacement, type ToolObservation } from './promptAssembly.ts';
+import {
+  BUILTIN_SCHEMAS,
+  enforceOutputContract,
+  extractJson,
+  type OnInvalid,
+} from './outputContract.ts';
+import { validateAgainstSchema } from './jsonSchema.ts';
 import { assertMemoryAvailable, type MemoryConfig } from './memory/vectorStore.ts';
 import { NULL_TRACE_SINK, type TraceSink } from './trace.ts';
 import type { SpendMeter } from '../governor/spendMeter.ts';
@@ -123,6 +129,13 @@ export interface AgentTask {
   model: string;
   /** Nesting depth, for the Governor's recursion limit. */
   depth?: number;
+  /**
+   * Where this step sits in the automation, for the system message.
+   *
+   * Absent when the loop is run on its own, which is what the runtime's own
+   * tests do.
+   */
+  placement?: StepPlacement;
   /**
    * Whether a person has already agreed to what this node may do — an approval
    * node upstream of it was granted, or the automation pre-authorises it.
@@ -262,10 +275,70 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-const VERIFY_INSTRUCTION =
+const VERIFY_PREAMBLE =
   'Has the task been achieved? Answer only with a JSON object: ' +
-  '{"verified": true or false, "evidence": "what you actually observed that shows this"}. ' +
-  'Cite what the tools returned. If you cannot point at evidence, answer false.';
+  '{"verified": true or false, "evidence": "what you actually observed that shows this"}. ';
+
+/**
+ * What counts as evidence, which depends on what the step was asked to do.
+ *
+ * There was one instruction — "cite what the tools returned; if you cannot
+ * point at evidence, answer false" — and for a step that uses tools it is the
+ * right one. For a step that produces *writing* it is impossible to satisfy: a
+ * planner breaking a goal into steps, a summariser drawing three answers
+ * together, an agent asked to draft a note. None of them call anything, so
+ * there is nothing to cite, so the honest answer to that instruction is always
+ * false, and the run fails after burning its iterations. It only ever passed
+ * when the model disregarded what it was told — which is why the same
+ * automation failed and then, run again unchanged, worked.
+ *
+ * So the question matches the work. Did you use tools? Then cite them. Did you
+ * write something? Then the writing is the evidence, and the question is
+ * whether it does what was asked.
+ */
+function verifyInstruction(usedTools: boolean, placement: StepPlacement | undefined): string {
+  // Which question is being asked, and it is a narrower one than it reads.
+  //
+  // "Has the task been achieved?" invites a step to check the *automation's*
+  // goal rather than its own share of it, and a step near the front of a chain
+  // will always answer no, because most of the work has not happened yet.
+  //
+  // Observed live, and it is the planner failure that was reported: the planner
+  // produced a correct, complete plan in its first turn, and its verifier
+  // answered "No tool outputs were provided; the steps have not been executed
+  // to retrieve the current Base Rate" — grading the planner on whether the
+  // plan had been *carried out*, which is the next agent's job and which the
+  // planner's own system prompt says it does not do. Three iterations later it
+  // exhausted, having been right the whole time.
+  const scope =
+    placement === undefined || placement.downstream.length === 0
+      ? ''
+      : ` You are checking this step only, not the automation. The steps after you — ${placement.downstream.join(', ')} — do their own parts, and none of that is yours to have finished. Producing what this step was asked for *is* achieving the task.`;
+
+  return usedTools
+    ? `${VERIFY_PREAMBLE}Cite what the tools returned. If you cannot point at evidence, answer false.${scope}`
+    : `${VERIFY_PREAMBLE}You are checking your own last answer above. This step works from the material it was given, so no tool was needed and the absence of one is not a problem: quote the part of your answer that does what was asked. Answer false only if the answer is missing, empty, or does not address the task — never because it did not come from a tool.${scope}`;
+}
+
+/**
+ * Whether this role's answer already satisfies the shape it was required to
+ * take.
+ *
+ * False for a role with no JSON contract, which is most of them — there is
+ * nothing here to check and the model's verification is the only one available.
+ */
+function outputMeetsContract(role: Role, output: string): boolean {
+  const contract = role.outputContract;
+  if (contract.format !== 'json' || contract.schemaId === null) return false;
+
+  const schema = BUILTIN_SCHEMAS[contract.schemaId];
+  if (!schema) return false;
+
+  const parsed = extractJson(output);
+  if (!parsed.ok) return false;
+
+  return validateAgainstSchema(parsed.value, schema).length === 0;
+}
 
 export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promise<LoopResult> {
   // Before anything else, and before any money is spent: a node asking for a
@@ -497,7 +570,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       instructions: {
         role: task.role,
         task: task.task,
-        availableTools: [...available],
+        availableTools: grantedTools.map((tool) => ({
+          id: tool.id,
+          description: tool.description,
+        })),
+        ...(task.placement ? { placement: task.placement } : {}),
       },
       history: [...history, ...extraMessages],
       observations,
@@ -673,16 +750,13 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     const acted = await callModel('act', [], true);
     if ('denied' in acted) return denialResult(acted.denied);
     const actText = record('act', acted.response);
-    // The Governor sees requests, not answers — this is how it learns whether
-    // the node is going in circles (M3-2). A permissive Governor ignores it.
-    governor.recordOutcome({
-      nodeId: task.nodeId,
-      iteration,
-      text: actText,
-      toolSignatures: acted.response.toolCalls.map((call) =>
-        toolSignature(fromWireName(call.name), call.arguments),
-      ),
-    });
+    const signatures = acted.response.toolCalls.map((call) =>
+      toolSignature(fromWireName(call.name), call.arguments),
+    );
+    // Counted as the tools return, and reported to the Governor after them:
+    // going in circles is one way to make no progress, and having everything
+    // you try refused is the other.
+    let failedThisIteration = 0;
     if (actText !== '') output = actText;
     // Two assistant turns saying the same thing are one assistant turn saying
     // it twice, as far as the next model call is concerned. On a task simple
@@ -694,7 +768,20 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       acted.response.toolCalls.length === 0 &&
       history.at(-1)?.role === 'assistant' &&
       history.at(-1)?.content === actText;
-    if (!repeatsLastTurn) {
+    // Nothing to say and nothing to call is what a model does when it has
+    // already finished — it is the *absence* of a turn, not a turn. Recorded as
+    // one, it becomes the last thing in the history, and the verifier asked
+    // whether "the answer above" is any good is looking straight at it.
+    //
+    // Live, with a real model: the data extractor produced the whole correct
+    // record set in its planning turn, added nothing in the acting turn because
+    // there was nothing to add, and its verifier answered "the assistant's
+    // previous answer was not generated from a tool call, so there is no
+    // evidence" — then spent the rest of its iterations rummaging through an
+    // empty workspace looking for data that was already in its prompt, and
+    // exhausted. The correct answer existed at iteration zero.
+    const addsNothing = actText === '' && acted.response.toolCalls.length === 0;
+    if (!repeatsLastTurn && !addsNothing) {
       history.push({ role: 'assistant', content: actText, toolCalls: acted.response.toolCalls });
     }
     checkpoint('running');
@@ -738,6 +825,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
             ? `There is no tool called "${toolId}", and this agent has none available.`
             : `There is no tool called "${toolId}". The ones you can use are: ${[...available].join(', ')}.`;
         completedToolCalls[key] = { output: message, isError: true };
+        failedThisIteration += 1;
         observations.push({ callId: call.id, toolId, output: message, isError: true });
         trace.append({
           nodeId: task.nodeId,
@@ -793,6 +881,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       try {
         const result = await tools.invoke(toolId, call.arguments, { role: task.role });
         completedToolCalls[key] = { output: result.text, isError: result.isError };
+        if (result.isError) failedThisIteration += 1;
         observations.push({
           callId: call.id,
           toolId,
@@ -838,12 +927,60 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       checkpoint('running');
     }
 
+    // Now that the tools have answered. The Governor sees what was asked for
+    // and how much of it was refused, which is how it tells a node that is
+    // working from one that is being turned away in a new manner each time.
+    governor.recordOutcome({
+      nodeId: task.nodeId,
+      iteration,
+      text: actText,
+      toolSignatures: signatures,
+      failedTools: failedThisIteration,
+    });
+
     if (cancelled()) return halt('cancelled', 'cancelled');
 
     // ---- verify -----------------------------------------------------------
+    //
+    // A step whose answer has to take a stated shape has already been checked,
+    // by a schema, against a rule nobody can argue with. Asking a model on top
+    // of that does not add a check — it adds an opinion, and the opinion was
+    // reliably about the wrong thing.
+    //
+    // The planner is the clearest case and the one that was reported broken. Its
+    // job is to produce a plan; its contract says a plan is a non-empty list of
+    // steps each carrying an action and a check. Live, it produced exactly that
+    // on its first turn, three runs in a row — and its verifier answered "no
+    // tool outputs were examined; the steps were only listed and no actual data
+    // was retrieved", grading it on whether the plan had been *carried out*.
+    // That is the next agent's work, and the planner's own system prompt says
+    // it does not do it. It exhausted every time, having been right at
+    // iteration zero every time.
+    //
+    // So: a satisfied contract is the verification. It is stricter than the
+    // model's answer, it is free, and it cannot drift onto the wrong question.
+    // A step with no contract — the researcher, the summariser, anything
+    // producing prose — is verified as before, because there the model's
+    // reading is the only check there is.
+    const contractMet = outputMeetsContract(task.role, output);
+    if (contractMet) {
+      verification = {
+        verified: true,
+        evidence: `The answer matches the required ${task.role.outputContract.schemaId ?? 'output'} shape.`,
+      };
+      trace.append({
+        nodeId: task.nodeId,
+        eventType: 'decision',
+        payload: { decision: 'verified', iteration, evidence: verification.evidence },
+      });
+      const contracted = await applyOutputContract();
+      if (contracted !== null && 'denied' in contracted) return denialResult(contracted.denied);
+      return halt('succeeded', 'completed');
+    }
+
     const verified = await callModel(
       'verify',
-      [{ role: 'user', content: VERIFY_INSTRUCTION }],
+      [{ role: 'user', content: verifyInstruction(observations.length > 0, task.placement) }],
       false,
     );
     if ('denied' in verified) return denialResult(verified.denied);

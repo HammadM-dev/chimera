@@ -26,8 +26,52 @@ export interface InstructionSource {
   role: Role;
   /** The node's instruction, from the workflow definition. */
   task: string;
-  /** Names of the tools the model may call, from the role allowlist. */
-  availableTools: readonly string[];
+  /**
+   * The tools the model may call, from the role allowlist, each with the
+   * description its server gave it.
+   *
+   * A bare list of ids was what this used to be, and it read like a password
+   * list: `browser.extract, browser.html, http.fetch` tells a model nothing
+   * about which one to reach for. The schemas do travel separately in the
+   * request's `tools` field, but only for providers with native tool calling,
+   * and even there the system message is where a model looks to decide what it
+   * is equipped to attempt at all.
+   */
+  availableTools: readonly ToolSummary[];
+  /**
+   * Where this step sits in the automation it belongs to.
+   *
+   * Optional because a role can be run on its own — the agent loop's own tests
+   * do exactly that. Absent means the step is the whole job.
+   *
+   * Present, it is the difference between an automation and several chat
+   * windows open at once. Every step used to be handed its instruction and its
+   * inputs and nothing else: it did not know what it was called, what the
+   * automation as a whole was for, who had already worked on the material, or
+   * that anything was waiting on its answer. Agents wrote sign-offs nobody
+   * read, re-did the step before them, and asked the user questions no user was
+   * going to see, because as far as each one knew it was alone.
+   */
+  placement?: StepPlacement;
+}
+
+export interface ToolSummary {
+  id: string;
+  description: string;
+}
+
+export interface StepPlacement {
+  /** The automation's name, as the user saved it. */
+  automation: string;
+  /** What the automation as a whole is being asked to do. */
+  goal: string;
+  /** 1-based, over the steps that make model calls. */
+  position: number;
+  total: number;
+  /** The role names of the steps whose output arrives here. */
+  upstream: readonly string[];
+  /** The role names of the steps this answer is handed to. Empty means this is the end. */
+  downstream: readonly string[];
 }
 
 export interface ToolObservation {
@@ -124,21 +168,71 @@ export function renderObservation(observation: ToolObservation, nonce: string): 
  * difference between a rule and a hopeful prefix.
  */
 export function assembleSystemMessage(instructions: InstructionSource): string {
-  const toolLine =
+  const identity = `You are the ${instructions.role.name} in CHIMERA, an automation made of several agents working in order.`;
+
+  const toolLines =
     instructions.availableTools.length === 0
-      ? 'You have no tools. Answer from what you are given.'
-      : `You may call these tools, and no others: ${instructions.availableTools.join(', ')}.`;
+      ? ['You have no tools. Answer from what you are given.']
+      : [
+          'You may call these tools, and no others:',
+          ...instructions.availableTools.map((tool) =>
+            tool.description.trim() === ''
+              ? `- ${tool.id}`
+              : `- ${tool.id} — ${tool.description.trim()}`,
+          ),
+          'Use them. A step that could have checked something and guessed instead is a step that failed.',
+        ];
 
   return [
-    instructions.role.systemPrompt,
+    identity,
     '',
-    toolLine,
+    instructions.role.systemPrompt,
+    ...(placementLines(instructions.placement).length === 0
+      ? []
+      : ['', ...placementLines(instructions.placement)]),
+    '',
+    ...toolLines,
     ...(outputContractLine(instructions.role) === ''
       ? []
       : ['', outputContractLine(instructions.role)]),
     '',
     ENVELOPE_EXPLANATION,
   ].join('\n');
+}
+
+/**
+ * Tells the step what it is part of and who is on either side of it.
+ *
+ * Written as plain sentences rather than a labelled block because it is read by
+ * a model that will do better with prose than with a form, and because a user
+ * reading the trace should be able to see, in one glance, exactly what their
+ * agent was told about its own job.
+ */
+function placementLines(placement: StepPlacement | undefined): string[] {
+  if (!placement) return [];
+
+  const lines = [
+    `This automation is called "${placement.automation}". Its goal, in the user's words: ${placement.goal}`,
+    `You are step ${String(placement.position)} of ${String(placement.total)}.`,
+  ];
+
+  lines.push(
+    placement.upstream.length === 0
+      ? 'Nothing runs before you: you are working from the material in the task above.'
+      : `Working before you: ${placement.upstream.join(', ')}. Their output is in the task above — build on it rather than repeating it.`,
+  );
+
+  lines.push(
+    placement.downstream.length === 0
+      ? "Nothing runs after you. Your answer is the automation's final output, so give the finished thing, not a description of it."
+      : `Your answer is passed to: ${placement.downstream.join(', ')}. Write it for them: give them what they need to do their part, and leave their part to them.`,
+  );
+
+  lines.push(
+    'Nobody reads this between steps, so there is no one to ask. Where something is genuinely unresolvable, do the best version you can and say what you assumed.',
+  );
+
+  return lines;
 }
 
 /**

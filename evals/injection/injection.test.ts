@@ -78,14 +78,14 @@ for (const role of TOOL_ENABLED_ROLES) {
       const clean = assembleSystemMessage({
         role,
         task: 'Summarise the fetched document.',
-        availableTools: role.toolAllowlist,
+        availableTools: role.toolAllowlist.map((id) => ({ id, description: "" })),
       });
 
       const assembled = assemblePrompt({
         instructions: {
           role,
           task: 'Summarise the fetched document.',
-          availableTools: role.toolAllowlist,
+          availableTools: role.toolAllowlist.map((id) => ({ id, description: "" })),
         },
         observations: [
           { callId: 'call-1', toolId: 'http.request', output: payload.payload, isError: false },

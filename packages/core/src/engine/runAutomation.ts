@@ -238,9 +238,25 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
   // Who feeds each step, so a step whose every input was ruled out can be
   // ruled out too.
   const sources = new Map<string, string[]>();
+  /** And who each step feeds, for the same reason read the other way. */
+  const consumers = new Map<string, string[]>();
   for (const [from, to] of brief.edges) {
     sources.set(to, [...(sources.get(to) ?? []), from]);
+    consumers.set(from, [...(consumers.get(from) ?? []), to]);
   }
+
+  // What to call a neighbouring step when telling an agent who is on either
+  // side of it. A person reading the canvas sees "Researcher", so that is what
+  // the agent is told, not a node id it has no way to interpret.
+  const stepLabel = (nodeId: string): string => {
+    const step = byId.get(nodeId);
+    if (!step) return 'a step';
+    const type = step.type ?? 'agent';
+    if (type !== 'agent') return type;
+    return deps.roles.find((role) => role.id === step.roleId)?.name ?? step.roleId;
+  };
+  /** Agent steps only: the count a person would give if you asked how many agents this has. */
+  const agentSteps = brief.steps.filter((step) => (step.type ?? 'agent') === 'agent');
 
   // Every step's output, by node id, so a transform can reach back past the
   // step immediately before it and a condition can test a named one.
@@ -948,6 +964,17 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         nodeId: step.nodeId,
         role,
         task,
+        placement: {
+          automation: brief.name.trim() === '' ? 'this automation' : brief.name,
+          goal: brief.instruction.trim() === '' ? step.instruction : brief.instruction,
+          position: Math.max(
+            1,
+            agentSteps.findIndex((candidate) => candidate.nodeId === step.nodeId) + 1,
+          ),
+          total: agentSteps.length,
+          upstream: (sources.get(step.nodeId) ?? []).map(stepLabel),
+          downstream: (consumers.get(step.nodeId) ?? []).map(stepLabel),
+        },
         connectionId: binding.connectionId,
         model: binding.model,
         depth: deps.depth ?? 0,

@@ -43,7 +43,9 @@ export type {
   AssembleOptions,
   AssembledPrompt,
   InstructionSource,
+  StepPlacement,
   ToolObservation,
+  ToolSummary,
 } from './runtime/promptAssembly.ts';
 
 export { runAgentLoop, parseVerification } from './runtime/agentLoop.ts';

@@ -627,3 +627,275 @@ test('a tool the model invented is answered, not treated as a dangerous one', as
     await h.cleanup();
   }
 });
+
+// A step that finished during planning.
+//
+// Measured live, with gpt-oss:120b on a hosted gateway: the data extractor put
+// the complete, correct record set in its planning turn, had nothing to add in
+// its acting turn, and the model returned empty content with no tool calls.
+// Recorded as an assistant turn, that emptiness became the last thing in the
+// history — so the verifier, asked whether the answer above was any good, was
+// looking at nothing, answered false, and sent the step rummaging through an
+// empty workspace until it exhausted its iterations.
+
+test('an acting turn that adds nothing is not recorded as the answer', async () => {
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: '{"records":[{"title":"a","points":1}]}' },
+          // Nothing to say, nothing to call: the model has already finished.
+          { kind: 'text', content: '' },
+          VERIFIED,
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(taskFor(), {
+      governor: new RecordingGovernor(),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.equal(result.status, 'succeeded');
+    // The planning turn's answer survived rather than being buried.
+    assert.match(result.output, /"records"/);
+
+    // And the verifier was not shown an empty assistant turn to judge.
+    const verifyRequest = provider.requests.at(-1);
+    const assistantTurns = (verifyRequest?.messages ?? []).filter(
+      (message) => message.role === 'assistant',
+    );
+    assert.ok(assistantTurns.length > 0, 'the verifier should see the answer');
+    assert.equal(
+      assistantTurns.some((message) => message.content === ''),
+      false,
+      'an empty assistant turn reached the verifier',
+    );
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a step with no tools is not asked to prove itself with tools', async () => {
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'The summary.' },
+          { kind: 'text', content: 'The summary, finished.' },
+          VERIFIED,
+        ],
+      },
+    }),
+  );
+
+  try {
+    await runAgentLoop(taskFor(), {
+      governor: new RecordingGovernor(),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    const instruction = (provider.requests.at(-1)?.messages ?? [])
+      .filter((message) => message.role === 'user')
+      .map((message) => message.content)
+      .join('\n');
+
+    // The instruction that made this impossible to satisfy, and its successor.
+    assert.equal(instruction.includes('Cite what the tools returned'), false);
+    assert.match(instruction, /never because it did not come from a tool/);
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a step with work after it is told to grade itself, not the automation', async () => {
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'Step one, then step two.' },
+          { kind: 'text', content: 'The plan, written out.' },
+          VERIFIED,
+        ],
+      },
+    }),
+  );
+
+  try {
+    await runAgentLoop(
+      {
+        ...taskFor(),
+        placement: {
+          automation: 'Rate check',
+          goal: 'What is the base rate?',
+          position: 1,
+          total: 3,
+          upstream: [],
+          downstream: ['Researcher', 'Summariser'],
+        },
+      },
+      {
+        governor: new RecordingGovernor(),
+        provider,
+        tools: h.tools,
+        callOptions: CALL_OPTIONS,
+      },
+    );
+
+    const instruction = (provider.requests.at(-1)?.messages ?? [])
+      .filter((message) => message.role === 'user')
+      .map((message) => message.content)
+      .join('\n');
+
+    assert.match(instruction, /checking this step only, not the automation/);
+    assert.match(instruction, /Researcher, Summariser/);
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('the last step is not told that somebody else will finish the job', async () => {
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'The answer.' },
+          { kind: 'text', content: 'The finished answer.' },
+          VERIFIED,
+        ],
+      },
+    }),
+  );
+
+  try {
+    await runAgentLoop(
+      {
+        ...taskFor(),
+        placement: {
+          automation: 'Rate check',
+          goal: 'What is the base rate?',
+          position: 3,
+          total: 3,
+          upstream: ['Researcher'],
+          downstream: [],
+        },
+      },
+      {
+        governor: new RecordingGovernor(),
+        provider,
+        tools: h.tools,
+        callOptions: CALL_OPTIONS,
+      },
+    );
+
+    const instruction = (provider.requests.at(-1)?.messages ?? [])
+      .filter((message) => message.role === 'user')
+      .map((message) => message.content)
+      .join('\n');
+
+    assert.equal(instruction.includes('checking this step only'), false);
+  } finally {
+    await h.cleanup();
+  }
+});
+
+// A schema is a check; a model's opinion of whether the work is done is not.
+//
+// The planner produced a complete, valid plan on its first turn and its
+// verifier answered "the steps were only listed and no actual data was
+// retrieved" — grading it on whether the plan had been carried out, which is
+// the next agent's job. It exhausted every run, having been right every time.
+
+test('a step whose answer meets its schema is verified without asking a model', async () => {
+  const h = await harness();
+  const planner = STARTER_ROLES.find((role) => role.id === 'planner');
+  assert.ok(planner, 'the planner starter role is missing');
+
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          {
+            kind: 'text',
+            content: '{"steps":[{"action":"Read the page","check":"The rate is on it"}]}',
+          },
+          // Nothing to add, and no verify turn is scripted — reaching one would
+          // run off the end of the queue.
+          { kind: 'text', content: '' },
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(
+      { ...taskFor(), role: planner },
+      {
+        governor: new RecordingGovernor(),
+        provider,
+        tools: h.tools,
+        callOptions: CALL_OPTIONS,
+      },
+    );
+
+    assert.equal(result.status, 'succeeded');
+    assert.equal(result.verification?.verified, true);
+    // plan and act only. No verify call was made, and none was paid for.
+    assert.deepEqual(
+      result.steps.map((step) => step.purpose),
+      ['plan', 'act'],
+    );
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a step whose answer does not meet its schema is still put to a model', async () => {
+  const h = await harness();
+  const planner = STARTER_ROLES.find((role) => role.id === 'planner');
+  assert.ok(planner, 'the planner starter role is missing');
+
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'I will read the page and look for the rate.' },
+          { kind: 'text', content: 'Still thinking about it.' },
+          VERIFIED,
+          // The repair turn the contract asks for once the model says verified.
+          { kind: 'text', content: '{"steps":[{"action":"Read it","check":"It is there"}]}' },
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(
+      { ...taskFor(), role: planner },
+      {
+        governor: new RecordingGovernor(),
+        provider,
+        tools: h.tools,
+        callOptions: CALL_OPTIONS,
+      },
+    );
+
+    assert.equal(result.status, 'succeeded');
+    assert.ok(
+      result.steps.some((step) => step.purpose === 'verify'),
+      'prose that does not meet the schema should still be verified',
+    );
+  } finally {
+    await h.cleanup();
+  }
+});
