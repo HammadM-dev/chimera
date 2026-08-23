@@ -1,6 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
 import {
-  dragHandle,
   freshProfile,
   goTo,
   joinAllInto,

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { startStub } from './support/stub.ts';
 
 // The web tool, and the allowlist that is supposed to bound it.
 //
@@ -201,5 +202,55 @@ test('a host that is not on the list is refused, and never contacted', async () 
     expect(run.trace).toMatch(/not allowed|no allowed sites/);
   } finally {
     await run.done();
+  }
+});
+
+test('search is a tool an agent can actually be given', async () => {
+  // Not a test of what a search engine returns — that is somebody else's index
+  // on somebody else's day, and `packages/tools/src/servers/search.test.ts`
+  // covers the parsing against fixtures.
+  //
+  // What is worth proving end to end is the thing that has gone wrong before
+  // and gives no symptom worth the name: a server built, exported, tested, and
+  // registered nowhere. An agent granted a tool from a server that was never
+  // registered is not told the tool failed — it is told it has no tools, and
+  // then it improvises.
+  const stub = await startStub();
+  const profile = freshProfile();
+  const app = await launchApp({
+    profile,
+    env: { CHIMERA_OMNIROUTE_BASE_URL: stub.baseUrl },
+  });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 20_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 20_000,
+    });
+
+    await goTo(page, 'build');
+    await page.getByTestId('palette-add-agent').click();
+    await expect(page.getByTestId('agent-editor')).toBeVisible({ timeout: 20_000 });
+
+    // Offered in the list a person picks from, which means the registry knows
+    // about it — and described, so they can tell what it is for.
+    const searchTool = page.getByTestId('agent-tool-search.web');
+    await expect(searchTool).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('agent-tools')).toContainText('Searches the web');
+
+    // And it can be granted, which is the half that a registry listing alone
+    // does not prove.
+    await searchTool.check();
+    await expect(searchTool).toBeChecked();
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await stub.close();
   }
 });
