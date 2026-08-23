@@ -27,7 +27,13 @@ export interface BrowserPage {
    * browser API, and widening the lib to satisfy one signature would let DOM
    * globals compile everywhere else in the package by accident.
    */
-  $$eval<T>(selector: string, fn: (elements: PageElement[]) => T): Promise<T>;
+  $$eval<T, A = undefined>(
+    selector: string,
+    fn: (elements: PageElement[], argument: A) => T,
+    argument?: A,
+  ): Promise<T>;
+  /** The page's HTML. */
+  content(): Promise<string>;
   on(event: 'framenavigated', handler: (frame: { url(): string }) => void): void;
   /**
    * Request interception, where the page has it.
@@ -78,9 +84,20 @@ export interface BrowserServerOptions {
   actionTimeoutMs?: number;
 }
 
-/** What the extract tool reads off an element, and all it reads. */
+/**
+ * What the extract tool reads off an element.
+ *
+ * Was `textContent` and nothing else, which made half the jobs this agent
+ * exists for impossible: "collect the title, price and link for each listing"
+ * needs the link, and a link is an attribute. An agent asked for that spent two
+ * hundred thousand tokens looking for a way, correctly concluded there was
+ * none, and said so — after the budget was gone.
+ */
 export interface PageElement {
   textContent: string | null;
+  getAttribute(name: string): string | null;
+  querySelector(selector: string): PageElement | null;
+  outerHTML: string;
 }
 
 /** Page text longer than this is truncated rather than fed whole into a prompt. */
@@ -320,25 +337,92 @@ export function createBrowserServer(options: BrowserServerOptions): McpServer {
     'extract',
     {
       description:
-        'Pulls the text of every element matching a selector — a table column, a list of results.',
+        'Pulls data out of every element matching a selector — a table, a list of search results. ' +
+        'Give `fields` to read several things from each match (a sub-selector per field, and ' +
+        '`@href` or `@src` for an attribute), or leave it out for the text.',
       inputSchema: {
         selector: z.string(),
         limit: z.number().int().positive().max(500).default(100),
+        fields: z
+          .record(z.string(), z.string())
+          .optional()
+          .describe(
+            'name to sub-selector, e.g. { "title": "h3", "price": ".price", "url": "a@href" }. ' +
+              'A bare "@href" reads the attribute off the matched element itself.',
+          ),
       },
     },
-    async ({ selector, limit }) =>
+    async ({ selector, limit, fields }) =>
       guarded(async (page) => {
-        // `$$eval` is Playwright's DOM query — it runs the *fixed* function
-        // below inside the page, and nothing model-supplied is ever executed.
-        // The agent chooses the selector, which is a query, not code.
-        const rows = await page.$$eval(selector, (elements: PageElement[]) =>
-          elements.map((element) => (element.textContent ?? '').trim()),
+        // `$$eval` runs the *fixed* function below inside the page; nothing
+        // model-supplied is ever executed. The agent chooses selectors, which
+        // are queries, not code.
+        const spec = fields ?? {};
+        const rows = await page.$$eval(
+          selector,
+          (elements: PageElement[], plan: unknown) => {
+            const wanted = plan as Record<string, string>;
+            const names = Object.keys(wanted);
+
+            const readOne = (element: PageElement, expression: string): string => {
+              const at = expression.indexOf('@');
+              const where = at === -1 ? expression : expression.slice(0, at);
+              const attribute = at === -1 ? '' : expression.slice(at + 1);
+              const node = where === '' ? element : element.querySelector(where);
+              if (!node) return '';
+              const value =
+                attribute === '' ? (node.textContent ?? '') : (node.getAttribute(attribute) ?? '');
+              return value.trim().replace(/\s+/g, ' ');
+            };
+
+            return elements.map((element) => {
+              if (names.length === 0) {
+                return (element.textContent ?? '').trim().replace(/\s+/g, ' ');
+              }
+              const row: Record<string, string> = {};
+              for (const name of names) row[name] = readOne(element, wanted[name] ?? '');
+              return row;
+            });
+          },
+          spec,
         );
+
         const kept = rows.slice(0, limit ?? 100);
         return textResult(
           kept.length === 0
             ? `Nothing on the page matches ${selector}.`
             : JSON.stringify(kept, null, 2),
+        );
+      }),
+  );
+
+  server.registerTool(
+    'html',
+    {
+      description:
+        "The page's HTML, or one part of it. Use when the text is not enough — to see how a " +
+        'list is structured before extracting from it, or to reach an attribute nothing else exposes.',
+      inputSchema: {
+        selector: z
+          .string()
+          .optional()
+          .describe('Leave out for the whole page; give one to get just that element.'),
+      },
+    },
+    async ({ selector }) =>
+      guarded(async (page) => {
+        const markup =
+          selector === undefined || selector === ''
+            ? await page.content()
+            : await page.$$eval(selector, (elements: PageElement[]) =>
+                elements.map((element) => element.outerHTML).join('\n'),
+              );
+
+        if (markup === '') return textResult(`Nothing on the page matches ${selector ?? 'html'}.`);
+        return textResult(
+          markup.length > MAX_TEXT_CHARS
+            ? `${markup.slice(0, MAX_TEXT_CHARS)}\n[truncated at ${String(MAX_TEXT_CHARS)} characters — extract from a narrower selector for the rest]`
+            : markup,
         );
       }),
   );

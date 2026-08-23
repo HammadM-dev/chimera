@@ -42,7 +42,15 @@ const CONTAINED: readonly string[] = [
   'browser.navigate',
   'browser.read',
   'browser.extract',
+  // Reading the markup is reading. It exists because the text-only tools could
+  // not answer "collect the link for each result", which is most of what a
+  // browsing agent is asked to do.
+  'browser.html',
   'browser.screenshot',
+  // A query to a search engine. It leaves the machine and changes nothing at
+  // the far end — the same category as loading a page, and the reason a
+  // research agent does not need a gate to look something up.
+  'search.web',
   // Reading a mailbox changes nothing in it. Marking as read is not done here:
   // these fetch without touching flags, so a triage run leaves an inbox exactly
   // as it found it.
