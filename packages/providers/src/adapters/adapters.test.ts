@@ -5,6 +5,7 @@ import type { AuthRef } from '@chimera/store';
 import { AnthropicAdapter } from './anthropic.ts';
 import { OpenAiAdapter } from './openai.ts';
 import { GoogleAdapter } from './google.ts';
+import { errorForStatus, providerMessage } from './http.ts';
 import type { AdapterDependencies } from './http.ts';
 import type { ProviderAdapter } from '../adapter.ts';
 import type { NormalisedRequest, StreamEvent } from '../normalised.ts';
@@ -589,4 +590,53 @@ test('testConnection reports failure rather than throwing', async () => {
     assert.equal(result.ok, false, `${name} should report ok:false`);
     assert.ok(!(result.detail ?? '').includes(SECRET), `${name} leaked the key into detail`);
   }
+});
+
+// What a person actually reads when a call is refused.
+//
+// Both of these came from one live run on a real Ollama Cloud key: the
+// catalogue offered nineteen models, six of them ran, and picking one of the
+// other thirteen printed the gateway's JSON envelope on screen.
+
+test('a provider error is unwrapped to the sentence inside it', () => {
+  assert.equal(
+    providerMessage('{"error":{"message":"model not found","type":"api_error","param":null}}'),
+    'model not found',
+  );
+  // The other two envelopes in circulation.
+  assert.equal(providerMessage('{"error":"no such model"}'), 'no such model');
+  assert.equal(providerMessage('{"message":"context length exceeded"}'), 'context length exceeded');
+  // Not JSON at all, or JSON with nothing to unwrap: keep it rather than
+  // replacing a hard-to-read message with no message.
+  assert.equal(providerMessage('502 Bad Gateway'), '502 Bad Gateway');
+  assert.equal(providerMessage('{"detail":{"code":7}}'), '{"detail":{"code":7}}');
+  assert.equal(providerMessage('   '), '');
+});
+
+test('a model the plan does not cover is its own error, not a bad request', () => {
+  const body = JSON.stringify({
+    error: {
+      message: 'this model requires a subscription, upgrade for access: https://ollama.com/upgrade',
+      type: 'api_error',
+    },
+  });
+  const err = errorForStatus('Ollama Cloud', 400, new Headers(), body);
+
+  assert.ok(err instanceof ProviderError);
+  assert.equal(err.code, 'PROVIDER_MODEL_UNAVAILABLE');
+  // It says what to do, and it does not say it in brackets.
+  assert.match(err.message, /Pick a different model for this step/);
+  assert.equal(err.message.includes('"type"'), false);
+});
+
+test('an ordinary rejection still carries the provider’s reason', () => {
+  const err = errorForStatus(
+    'Ollama Cloud',
+    400,
+    new Headers(),
+    '{"error":{"message":"max_tokens is too large"}}',
+  );
+  assert.equal((err as ProviderError).code, 'PROVIDER_INVALID_REQUEST');
+  assert.match(err.message, /max_tokens is too large/);
+  assert.equal(err.message.includes('{'), false);
 });

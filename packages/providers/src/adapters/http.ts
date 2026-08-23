@@ -105,6 +105,43 @@ export function scrub(text: string, secrets: readonly string[]): string {
  * "model not found: gpt-5-turbo" is the entire diagnostic value of the failure
  * — but it is scrubbed first, because some providers echo the request back.
  */
+/**
+ * Digs the provider's own sentence out of its error envelope.
+ *
+ * Every OpenAI-compatible gateway wraps the useful part in at least one layer
+ * of JSON, and some in two. Dumping the envelope verbatim is what put
+ * `{"error":{"message":"...","type":"api_error","param":null,"code":null}}` on
+ * screen where a person was meant to read what went wrong — reported as "a shit
+ * ton of brackets", which is exactly what it was.
+ *
+ * Falls back to the raw body: a message that is hard to read beats no message.
+ */
+export function providerMessage(body: string): string {
+  const trimmed = body.trim();
+  if (trimmed === '') return '';
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return trimmed;
+  }
+
+  // Unwrap as far as the nesting goes: `{error: {message}}`, `{error: "..."}`,
+  // and bare `{message}` are all in circulation, sometimes from one vendor.
+  let node: unknown = parsed;
+  for (let depth = 0; depth < 4; depth += 1) {
+    if (typeof node === 'string') return node.trim();
+    if (typeof node !== 'object' || node === null) break;
+    const record = node as Record<string, unknown>;
+    const next = record['message'] ?? record['error'] ?? record['detail'];
+    if (next === undefined) break;
+    node = next;
+  }
+  if (typeof node === 'string') return node.trim();
+  return trimmed;
+}
+
 export function errorForStatus(
   provider: string,
   status: number,
@@ -112,7 +149,21 @@ export function errorForStatus(
   body: string,
   secrets: readonly string[] = [],
 ): Error {
-  const detail = scrub(body, secrets).slice(0, 500);
+  const detail = providerMessage(scrub(body, secrets)).slice(0, 500);
+
+  // A plan limit is not a bad request, whatever status the gateway gives it.
+  // The catalogue lists every model the vendor has; the key can run a subset,
+  // and nothing says which until you try. Measured on a real Ollama Cloud key:
+  // 19 models offered, 6 usable. Somebody picking one of the other 13 has made
+  // no mistake and needs to be told what to do, not shown a 400.
+  if (/subscription|upgrade for access|requires (?:both )?(?:a )?(?:pro|max|team)/i.test(detail)) {
+    return new ProviderError(
+      'PROVIDER_MODEL_UNAVAILABLE',
+      `${provider} lists this model but will not run it on your current plan. Pick a different model for this step, or upgrade the plan. The provider said: ${detail}`,
+      { provider, status, detail },
+    );
+  }
+
   if (status === 401 || status === 403) {
     return new ProviderAuthError(`${provider} rejected the credential. Check the API key.`, {
       provider,
