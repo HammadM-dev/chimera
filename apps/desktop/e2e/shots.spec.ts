@@ -2,7 +2,14 @@ import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import path from 'node:path';
-import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
+import {
+  freshProfile,
+  goTo,
+  joinSteps,
+  launchApp,
+  removeProfile,
+  waitForCanvasStill,
+} from './support/app.ts';
 
 // Not a test: a way to look at the product.
 //
@@ -104,6 +111,11 @@ test('every view, photographed', async () => {
     await place('researcher', 'Read the agreement and report the renewal terms.');
     await place('data-extractor', 'Pull every invoice number and amount.');
     await place('summariser', 'Write the note for the finance director.');
+    // Placing three steps schedules an arrangement. Joining before it lands
+    // aims at a handle that is still moving, and `hover` waits out its whole
+    // timeout on an element that keeps sliding away. This is the pause a
+    // debugging screenshot was accidentally providing.
+    await waitForCanvasStill(page);
     const join = async (from: string, to: string) => {
       await joinSteps(page, from, to);
     };
@@ -141,6 +153,21 @@ test('every view, photographed', async () => {
     await page.getByTestId('brief-save').click();
     await page.locator('.sidebar__saved').first().hover();
     await shot('sidebar-saved');
+
+    // And every view again in the light theme.
+    //
+    // A palette that passes a contrast audit can still look wrong — a border
+    // that vanishes, an icon drawn for a dark ground, a hover state that reads
+    // as pressed. The audit is arithmetic; this is the part a person has to
+    // look at, and a light theme nobody has looked at is a light theme that is
+    // broken somewhere.
+    await page.getByTestId('nav-theme').click();
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    for (const view of ['home', 'build', 'agents', 'runs', 'memory', 'providers'] as const) {
+      await goTo(page, view);
+      await shot(`light-${view}`);
+    }
   } finally {
     await app.close();
     removeProfile(profile);
