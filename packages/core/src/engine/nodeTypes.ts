@@ -15,7 +15,7 @@ export type NodeType =
   | 'subworkflow'
   | 'fanout'
   | 'aggregate'
-  | 'swarm';
+  | 'team';
 
 /**
  * Branches on what a previous step produced.
@@ -96,7 +96,7 @@ export interface FanoutConfig {
  * expensive way there is to repeat something, so it gets three ways to stop:
  * the goal being met, the rounds running out, and nothing changing.
  */
-export interface SwarmConfig {
+export interface TeamConfig {
   goal: string;
   orchestratorRoleId: string;
   agents: { roleId: string; instruction: string }[];
@@ -159,7 +159,7 @@ export type NodeConfig =
   | { type: 'subworkflow'; subworkflow: SubworkflowConfig }
   | { type: 'fanout'; fanout: FanoutConfig }
   | { type: 'aggregate'; aggregate: AggregateConfig }
-  | { type: 'swarm'; swarm: SwarmConfig };
+  | { type: 'team'; team: TeamConfig };
 
 /** Runs a declared comparison against a value. No evaluation, no code. */
 export function evaluateCondition(config: ConditionConfig, actual: string): boolean {

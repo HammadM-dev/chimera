@@ -75,7 +75,7 @@ export function costOf(
  *
  * Charges are committed *before* the call is dispatched, against the estimate.
  * Two reasons. The obvious one is that a cap enforced after the fact is not a
- * cap. The subtler one is that a run making concurrent calls (M5's swarm) would
+ * cap. The subtler one is that a run making concurrent calls (M5's team node) would
  * otherwise authorise several calls that are individually inside the budget and
  * collectively outside it. M3-4 reconciles the estimate against the provider's
  * reported usage once the call returns.

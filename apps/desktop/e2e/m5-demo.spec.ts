@@ -5,7 +5,7 @@ import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './suppo
 
 // M5-6, the milestone's exit criterion: a batch processed through fan-out on
 // budget, with a failure report — plus the two things M5 adds around it, a
-// swarm working through the blackboard and tiers making the automation
+// team working through the blackboard and tiers making the automation
 // portable.
 //
 // The gateway serves two model ids at different prices, so the blended-cost

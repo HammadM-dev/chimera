@@ -21,7 +21,7 @@ import { executionOrder, validateBrief, type BriefStep, type RunBrief } from './
 import { applyTransform, evaluateCondition } from './nodeTypes.ts';
 import { itemsFrom, runFanout } from './nodeRunners/fanout.ts';
 import { aggregateWithoutModel, chunk, itemsOf } from './nodeRunners/aggregate.ts';
-import { MAX_CONCURRENT_AGENTS, runSwarm } from './nodeRunners/swarm.ts';
+import { MAX_CONCURRENT_AGENTS, runTeam } from './nodeRunners/team.ts';
 
 // The executor. Runs a brief's steps in order, each as an agent, each through
 // the Governor, each journaled and traced.
@@ -535,10 +535,10 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
       };
     }
 
-    if (type === 'swarm' && step.config?.type === 'swarm') {
-      const config = step.config.swarm;
+    if (type === 'team' && step.config?.type === 'team') {
+      const config = step.config.team;
 
-      const swarmed = await runSwarm({
+      const teamed = await runTeam({
         db,
         runId,
         nodeId: step.nodeId,
@@ -586,25 +586,25 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         nodeId: step.nodeId,
         eventType: 'decision',
         payload: {
-          decision: `swarm:${swarmed.stopped}`,
-          reason: swarmed.reason,
-          rounds: swarmed.rounds.length,
-          peakConcurrentAgents: swarmed.peakConcurrentAgents,
+          decision: `team:${teamed.stopped}`,
+          reason: teamed.reason,
+          rounds: teamed.rounds.length,
+          peakConcurrentAgents: teamed.peakConcurrentAgents,
           // Stated rather than hidden: the workflow may ask for more, and the
           // engine will not give it more.
           engineCap: MAX_CONCURRENT_AGENTS,
         },
       });
 
-      outputs.set(step.nodeId, swarmed.output);
-      carried = swarmed.output;
+      outputs.set(step.nodeId, teamed.output);
+      carried = teamed.output;
 
       return {
         ...base,
-        iterations: swarmed.rounds.length,
-        status: swarmed.stopped === 'failed' ? 'denied' : 'succeeded',
-        haltCause: swarmed.stopped === 'failed' ? 'limit' : 'completed',
-        output: swarmed.stopped === 'failed' ? swarmed.reason : swarmed.output,
+        iterations: teamed.rounds.length,
+        status: teamed.stopped === 'failed' ? 'denied' : 'succeeded',
+        haltCause: teamed.stopped === 'failed' ? 'limit' : 'completed',
+        output: teamed.stopped === 'failed' ? teamed.reason : teamed.output,
       };
     }
 

@@ -79,8 +79,8 @@ const nodeConfigSchema = z.discriminatedUnion('type', [
     subworkflow: z.object({ workflowId: z.string(), version: z.string() }),
   }),
   z.object({
-    type: z.literal('swarm'),
-    swarm: z.object({
+    type: z.literal('team'),
+    team: z.object({
       goal: z.string(),
       orchestratorRoleId: z.string(),
       agents: z.array(z.object({ roleId: z.string(), instruction: z.string() })),
@@ -143,7 +143,7 @@ const briefSchema = z.object({
           'subworkflow',
           'fanout',
           'aggregate',
-          'swarm',
+          'team',
         ])
         .optional(),
       config: nodeConfigSchema.optional(),

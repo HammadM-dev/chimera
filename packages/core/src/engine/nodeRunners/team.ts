@@ -1,9 +1,9 @@
 import type Database from 'better-sqlite3';
 import { blackboardRepository } from '@chimera/store';
 import { evaluateCondition } from '../nodeTypes.ts';
-import type { SwarmConfig } from '../nodeTypes.ts';
+import type { TeamConfig } from '../nodeTypes.ts';
 
-// F5.2's collaborative swarm: an orchestrator and a set of specialists working
+// F5.2's collaborative team: an orchestrator and a set of specialists working
 // on one goal through the blackboard.
 //
 // The shape is deliberately not "agents talking to each other". Message-passing
@@ -19,14 +19,14 @@ export const MAX_CONCURRENT_AGENTS = 20;
 export const ORCHESTRATOR_SCOPE = 'orchestrator';
 export const WORKER_SCOPE = 'workers';
 
-export interface SwarmRoundResult {
+export interface TeamRoundResult {
   round: number;
   orchestrator: string;
   workers: { roleId: string; output: string; ok: boolean }[];
 }
 
-export interface SwarmOutcome {
-  rounds: SwarmRoundResult[];
+export interface TeamOutcome {
+  rounds: TeamRoundResult[];
   /** Why it stopped, in words a person reads in the trace. */
   stopped: 'goal' | 'max-rounds' | 'stalled' | 'failed';
   reason: string;
@@ -34,11 +34,11 @@ export interface SwarmOutcome {
   peakConcurrentAgents: number;
 }
 
-export interface SwarmDeps {
+export interface TeamDeps {
   db: Database.Database;
   runId: string;
   nodeId: string;
-  config: SwarmConfig;
+  config: TeamConfig;
   /** Runs one participant and returns what it said. */
   runAgent: (input: {
     roleId: string;
@@ -67,11 +67,11 @@ export function boardContext(
  * about anything that repeats, and a swarm is the most expensive way there is
  * to repeat something.
  */
-export async function runSwarm(deps: SwarmDeps): Promise<SwarmOutcome> {
+export async function runTeam(deps: TeamDeps): Promise<TeamOutcome> {
   const { db, runId, nodeId, config } = deps;
   const concurrency = Math.max(1, Math.min(config.maxConcurrentAgents, MAX_CONCURRENT_AGENTS));
 
-  const rounds: SwarmRoundResult[] = [];
+  const rounds: TeamRoundResult[] = [];
   let peakConcurrentAgents = 0;
   let stalledFor = 0;
   let previousBoard = '';
@@ -117,7 +117,7 @@ export async function runSwarm(deps: SwarmDeps): Promise<SwarmOutcome> {
 
     // 2. The specialists work, several at a time, each reading the same board.
     const workerContext = boardContext(db, runId, ['*']);
-    const results: SwarmRoundResult['workers'] = [];
+    const results: TeamRoundResult['workers'] = [];
     let cursor = 0;
     let inFlight = 0;
 

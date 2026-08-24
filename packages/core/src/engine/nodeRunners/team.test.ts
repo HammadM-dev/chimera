@@ -5,8 +5,8 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { blackboardRepository, openDatabase, runsRepository } from '@chimera/store';
-import { MAX_CONCURRENT_AGENTS, runSwarm } from './swarm.ts';
-import type { SwarmConfig } from '../nodeTypes.ts';
+import { MAX_CONCURRENT_AGENTS, runTeam } from './team.ts';
+import type { TeamConfig } from '../nodeTypes.ts';
 
 // M5-3. The three ways it stops, the cap it cannot exceed, and the board the
 // participants actually share.
@@ -29,7 +29,7 @@ function open(runId: string) {
   return { db, dir };
 }
 
-function config(over: Partial<SwarmConfig> = {}): SwarmConfig {
+function config(over: Partial<TeamConfig> = {}): TeamConfig {
   return {
     goal: 'Write the report.',
     orchestratorRoleId: 'planner',
@@ -47,10 +47,10 @@ function config(over: Partial<SwarmConfig> = {}): SwarmConfig {
 test('it stops when the orchestrator says the goal is met', async () => {
   const { db, dir } = open('run-1');
   try {
-    const outcome = await runSwarm({
+    const outcome = await runTeam({
       db,
       runId: 'run-1',
-      nodeId: 'swarm',
+      nodeId: 'team',
       config: config({
         goalPredicate: {
           source: '',
@@ -79,10 +79,10 @@ test('it stops when the rounds run out', async () => {
   const { db, dir } = open('run-2');
   let round = 0;
   try {
-    const outcome = await runSwarm({
+    const outcome = await runTeam({
       db,
       runId: 'run-2',
-      nodeId: 'swarm',
+      nodeId: 'team',
       config: config({ maxRounds: 3 }),
       runAgent: ({ roleId }) => {
         if (roleId === 'planner') round += 1;
@@ -103,10 +103,10 @@ test('it stops when the rounds run out', async () => {
 test('it stops when nothing changes, rather than paying for more of the same', async () => {
   const { db, dir } = open('run-3');
   try {
-    const outcome = await runSwarm({
+    const outcome = await runTeam({
       db,
       runId: 'run-3',
-      nodeId: 'swarm',
+      nodeId: 'team',
       config: config({ maxRounds: 50, stallRounds: 2 }),
       // Every participant says the same thing every round. The board stops
       // changing, and a swarm that cannot make progress should not spend fifty
@@ -128,10 +128,10 @@ test('the engine caps concurrent agents at 20, whatever the workflow asks for', 
   let peak = 0;
 
   try {
-    const outcome = await runSwarm({
+    const outcome = await runTeam({
       db,
       runId: 'run-4',
-      nodeId: 'swarm',
+      nodeId: 'team',
       config: config({
         maxRounds: 1,
         // A workflow asking for a hundred. Past twenty, coordination costs more
@@ -167,10 +167,10 @@ test('every participant reads the board, and every write is attributed and scope
   const seen: string[] = [];
 
   try {
-    await runSwarm({
+    await runTeam({
       db,
       runId: 'run-5',
-      nodeId: 'swarm',
+      nodeId: 'team',
       config: config({ maxRounds: 2 }),
       runAgent: ({ roleId, context }) => {
         seen.push(`${roleId}:${context === '' ? 'empty' : 'has-board'}`);
@@ -202,10 +202,10 @@ test('every participant reads the board, and every write is attributed and scope
 test('an orchestrator that fails stops the swarm rather than leaving it leaderless', async () => {
   const { db, dir } = open('run-6');
   try {
-    const outcome = await runSwarm({
+    const outcome = await runTeam({
       db,
       runId: 'run-6',
-      nodeId: 'swarm',
+      nodeId: 'team',
       config: config(),
       runAgent: ({ roleId }) =>
         Promise.resolve(

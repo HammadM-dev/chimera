@@ -809,8 +809,8 @@
   color: var(--text-secondary);
 }
 
-/* One specialist in a swarm: who, what they do, and a way to remove them. */
-.swarm__agent {
+/* One specialist in a team: who, what they do, and a way to remove them. */
+.team__agent {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: var(--space-1);

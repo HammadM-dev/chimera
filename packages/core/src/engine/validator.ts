@@ -86,7 +86,7 @@ export function validateForSave(brief: RunBrief, context: SaveContext): BriefPro
     const targetRole = context.roles.find((role) => role.id === targetStep.roleId);
     if (targetRole?.combinesMany === true) continue;
     // A fan-out, an aggregate or a swarm is a combiner by construction.
-    if (['aggregate', 'fanout', 'swarm'].includes(targetStep.type ?? 'agent')) continue;
+    if (['aggregate', 'fanout', 'team'].includes(targetStep.type ?? 'agent')) continue;
 
     const counts = new Map<string, number>();
     for (const from of feeders) {

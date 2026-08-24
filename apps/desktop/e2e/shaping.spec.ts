@@ -367,7 +367,7 @@ test('one automation runs another', async () => {
   }
 });
 
-test('a swarm works on one goal through the board', async () => {
+test('a team works on one goal through the board', async () => {
   const gateway = await startGateway();
   const profile = freshProfile();
   const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
@@ -377,20 +377,20 @@ test('a swarm works on one goal through the board', async () => {
     await connectProvider(page);
     await goTo(page, 'build');
 
-    await page.getByTestId('palette-swarm').click();
-    await expect(page.getByTestId('brief-blocked')).toContainText('swarm needs a goal');
+    await page.getByTestId('palette-team').click();
+    await expect(page.getByTestId('brief-blocked')).toContainText('team needs a goal');
 
-    await page.getByTestId('swarm-goal').fill('Work out what the report should say.');
-    await page.getByTestId('swarm-orchestrator').selectOption('planner');
-    await page.getByTestId('swarm-rounds').fill('2');
-    await page.getByTestId('swarm-stall').fill('0');
+    await page.getByTestId('team-goal').fill('Work out what the report should say.');
+    await page.getByTestId('team-orchestrator').selectOption('planner');
+    await page.getByTestId('team-rounds').fill('2');
+    await page.getByTestId('team-stall').fill('0');
 
-    await page.getByTestId('swarm-add-agent').click();
-    await page.getByTestId('swarm-agent-0').selectOption('researcher');
-    await page.getByTestId('swarm-agent-instruction-0').fill('Find the facts.');
-    await page.getByTestId('swarm-add-agent').click();
-    await page.getByTestId('swarm-agent-1').selectOption('reviewer');
-    await page.getByTestId('swarm-agent-instruction-1').fill('Check them.');
+    await page.getByTestId('team-add-agent').click();
+    await page.getByTestId('team-agent-0').selectOption('researcher');
+    await page.getByTestId('team-agent-instruction-0').fill('Find the facts.');
+    await page.getByTestId('team-add-agent').click();
+    await page.getByTestId('team-agent-1').selectOption('reviewer');
+    await page.getByTestId('team-agent-instruction-1').fill('Check them.');
 
     await page.getByTestId('node-model').selectOption({ label: 'OmniRoute · claude-haiku-4-5' });
     await page.getByTestId('brief-input').fill('Work out what the report should say.');
@@ -398,14 +398,14 @@ test('a swarm works on one goal through the board', async () => {
     await expect(page.getByTestId('brief-run')).toBeEnabled();
     await page.getByTestId('brief-run').click();
 
-    await expect(page.getByTestId('node-swarm')).toContainText('succeeded', { timeout: 120_000 });
+    await expect(page.getByTestId('node-team')).toContainText('succeeded', { timeout: 120_000 });
 
     // It ran the lead and both specialists, and it stopped for a stated reason
     // rather than going round forever.
     await goTo(page, 'runs');
     await page.getByTestId('trace-filter-decision').click();
-    await expect(page.getByTestId('trace-events')).toContainText('swarm:max-rounds');
-    await page.getByTestId('trace-events').getByText('swarm:max-rounds').first().click();
+    await expect(page.getByTestId('trace-events')).toContainText('team:max-rounds');
+    await page.getByTestId('trace-events').getByText('team:max-rounds').first().click();
     await expect(page.getByTestId('trace-payload')).toContainText('"rounds": 2');
     await expect(page.getByTestId('trace-payload')).toContainText('"engineCap": 20');
   } finally {

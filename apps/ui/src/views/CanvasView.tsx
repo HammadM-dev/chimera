@@ -45,7 +45,7 @@ export type StepKind =
   | 'subworkflow'
   | 'fanout'
   | 'aggregate'
-  | 'swarm';
+  | 'team';
 
 /**
  * Everything the shaping node types need, in one flat shape.
@@ -79,7 +79,7 @@ export interface StepSettings {
   strategy: 'concat' | 'json_merge' | 'reduce_with_agent' | 'vote' | 'template';
   separator: string;
   chunkSize: number;
-  /** Swarm: the goal, who leads, who works, and the three ways it stops. */
+  /** Team: the goal, who leads, who works, and the three ways it stops. */
   goal: string;
   orchestratorRoleId: string;
   agents: { roleId: string; instruction: string }[];
@@ -155,7 +155,7 @@ const KIND_LABEL: Record<StepKind, string> = {
   subworkflow: 'Automation',
   fanout: 'Fan out',
   aggregate: 'Combine',
-  swarm: 'Swarm',
+  team: 'Team',
 };
 
 const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
@@ -166,7 +166,7 @@ const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
   subworkflow: 'Runs another saved automation here',
   fanout: 'Runs the steps below it once per item, several at a time',
   aggregate: 'Turns many answers into one',
-  swarm: 'A team of agents on one goal, through a shared board',
+  team: 'A team of agents on one goal, through a shared board',
 };
 
 const STRATEGY_LABEL: Record<StepSettings['strategy'], string> = {
@@ -193,7 +193,7 @@ const FLOW_KINDS = [
   'loop',
   'fanout',
   'aggregate',
-  'swarm',
+  'team',
   'transform',
   'approval',
   'subworkflow',
@@ -219,7 +219,7 @@ function summarise(data: StepNodeData): string {
       return `${String(settings.concurrency)} at a time, up to ${String(settings.maxItems)}`;
     case 'aggregate':
       return STRATEGY_LABEL[settings.strategy];
-    case 'swarm':
+    case 'team':
       return settings.agents.length === 0
         ? 'No specialists yet'
         : `${String(settings.agents.length)} specialists, up to ${String(settings.maxRounds)} rounds`;
@@ -383,7 +383,7 @@ const NODE_TYPES = {
   subworkflow: ShapingNodeBody,
   fanout: ShapingNodeBody,
   aggregate: ShapingNodeBody,
-  swarm: ShapingNodeBody,
+  team: ShapingNodeBody,
 };
 
 let nodeSeq = 0;
@@ -813,8 +813,8 @@ function CanvasInner({
             settings.maxIterations = (config['loop'] as { maxIterations: number }).maxIterations;
           } else if (config && config['type'] === 'transform') {
             settings.template = (config['transform'] as { template: string }).template;
-          } else if (config && config['type'] === 'swarm') {
-            const swarm = config['swarm'] as {
+          } else if (config && config['type'] === 'team') {
+            const team = config['team'] as {
               goal: string;
               orchestratorRoleId: string;
               agents: { roleId: string; instruction: string }[];
@@ -823,13 +823,13 @@ function CanvasInner({
               stallRounds: number;
               goalPredicate?: { value: string };
             };
-            settings.goal = swarm.goal;
-            settings.orchestratorRoleId = swarm.orchestratorRoleId;
-            settings.agents = swarm.agents;
-            settings.maxRounds = swarm.maxRounds;
-            settings.maxConcurrentAgents = swarm.maxConcurrentAgents;
-            settings.stallRounds = swarm.stallRounds;
-            settings.goalContains = swarm.goalPredicate?.value ?? '';
+            settings.goal = team.goal;
+            settings.orchestratorRoleId = team.orchestratorRoleId;
+            settings.agents = team.agents;
+            settings.maxRounds = team.maxRounds;
+            settings.maxConcurrentAgents = team.maxConcurrentAgents;
+            settings.stallRounds = team.stallRounds;
+            settings.goalContains = team.goalPredicate?.value ?? '';
           } else if (config && config['type'] === 'aggregate') {
             const aggregate = config['aggregate'] as {
               source: string;
@@ -1097,12 +1097,12 @@ function CanvasInner({
               approval: { prompt: settings.prompt, showSource: settings.showSource },
             },
           };
-        case 'swarm':
+        case 'team':
           return {
             ...base,
             config: {
-              type: 'swarm',
-              swarm: {
+              type: 'team',
+              team: {
                 goal: settings.goal,
                 orchestratorRoleId: settings.orchestratorRoleId,
                 agents: settings.agents,
@@ -1338,7 +1338,7 @@ function CanvasInner({
   const agentNodes = nodes.filter((node) => node.data.kind === 'agent');
   // A subworkflow and a fan-out act too, by running agents of their own.
   const workNodes = nodes.filter((node) =>
-    ['agent', 'subworkflow', 'fanout', 'swarm'].includes(node.data.kind),
+    ['agent', 'subworkflow', 'fanout', 'team'].includes(node.data.kind),
   );
   const badShaping = nodes.find((node) => {
     const settings = node.data.settings;
@@ -1353,7 +1353,7 @@ function CanvasInner({
         return edges.every((edge) => edge.source !== node.id);
       case 'subworkflow':
         return settings.workflowId === '';
-      case 'swarm':
+      case 'team':
         return (
           settings.goal.trim() === '' ||
           settings.agents.length === 0 ||
@@ -1389,8 +1389,8 @@ function CanvasInner({
               ? 'An approval needs a question to ask.'
               : badShaping.data.kind === 'transform'
                 ? 'A reshape needs a template.'
-                : badShaping.data.kind === 'swarm'
-                  ? 'A swarm needs a goal, at least one specialist, a round limit and a model.'
+                : badShaping.data.kind === 'team'
+                  ? 'A team needs a goal, at least one specialist, a round limit and a model.'
                   : badShaping.data.kind === 'aggregate'
                     ? 'That combine step needs a model and a chunk size, or a template.'
                     : badShaping.data.kind === 'fanout'
@@ -2514,9 +2514,9 @@ function CanvasInner({
  * The model control.
  *
  * Shared, because the agent step is no longer the only thing that makes a model
- * call: a swarm's participants and an aggregate's reducing agent both spend
+ * call: a team's participants and an aggregate's reducing agent both spend
  * money, and a node that can spend money and cannot be bound to a model is a
- * node that cannot run. That was shipped, and the swarm's own E2E is what
+ * node that cannot run. That was shipped, and the team's own E2E is what
  * caught it.
  */
 function ModelPicker({
@@ -2690,7 +2690,7 @@ function ShapingInspector({
         </>
       )}
 
-      {(data.kind === 'swarm' ||
+      {(data.kind === 'team' ||
         (data.kind === 'aggregate' && data.settings.strategy === 'reduce_with_agent')) && (
         <>
           <p className="canvas__section">Model</p>
@@ -2698,12 +2698,12 @@ function ShapingInspector({
         </>
       )}
 
-      {data.kind === 'swarm' && (
+      {data.kind === 'team' && (
         <>
           <p className="canvas__section">Goal</p>
           <textarea
             className="canvas__instruction"
-            data-testid="swarm-goal"
+            data-testid="team-goal"
             value={settings.goal}
             placeholder="What are they all working on?"
             onChange={(event) => {
@@ -2714,7 +2714,7 @@ function ShapingInspector({
           <p className="canvas__section">Led by</p>
           <select
             className="control"
-            data-testid="swarm-orchestrator"
+            data-testid="team-orchestrator"
             value={settings.orchestratorRoleId}
             onChange={(event) => {
               onChange('orchestratorRoleId', event.target.value);
@@ -2729,10 +2729,10 @@ function ShapingInspector({
 
           <p className="canvas__section">Specialists</p>
           {settings.agents.map((agent, index) => (
-            <div key={`${agent.roleId}-${String(index)}`} className="swarm__agent">
+            <div key={`${agent.roleId}-${String(index)}`} className="team__agent">
               <select
                 className="control"
-                data-testid={`swarm-agent-${String(index)}`}
+                data-testid={`team-agent-${String(index)}`}
                 value={agent.roleId}
                 aria-label="Specialist"
                 onChange={(event) => {
@@ -2749,7 +2749,7 @@ function ShapingInspector({
               </select>
               <input
                 className="control"
-                data-testid={`swarm-agent-instruction-${String(index)}`}
+                data-testid={`team-agent-instruction-${String(index)}`}
                 value={agent.instruction}
                 aria-label="What they do"
                 placeholder="What this one does"
@@ -2762,7 +2762,7 @@ function ShapingInspector({
               <button
                 type="button"
                 className="button"
-                data-testid={`swarm-remove-${String(index)}`}
+                data-testid={`team-remove-${String(index)}`}
                 onClick={() => {
                   onChange(
                     'agents',
@@ -2777,7 +2777,7 @@ function ShapingInspector({
           <button
             type="button"
             className="button"
-            data-testid="swarm-add-agent"
+            data-testid="team-add-agent"
             onClick={() => {
               onChange('agents', [
                 ...settings.agents,
@@ -2794,7 +2794,7 @@ function ShapingInspector({
             type="number"
             min={1}
             max={20}
-            data-testid="swarm-rounds"
+            data-testid="team-rounds"
             aria-label="Rounds at most"
             value={settings.maxRounds}
             onChange={(event) => {
@@ -2808,7 +2808,7 @@ function ShapingInspector({
             type="number"
             min={1}
             max={20}
-            data-testid="swarm-concurrency"
+            data-testid="team-concurrency"
             aria-label="Working at once"
             value={settings.maxConcurrentAgents}
             onChange={(event) => {
@@ -2823,7 +2823,7 @@ function ShapingInspector({
           <p className="canvas__section">Stop early when the lead says</p>
           <input
             className="control"
-            data-testid="swarm-goal-contains"
+            data-testid="team-goal-contains"
             aria-label="Stop when the lead says"
             placeholder="DONE"
             value={settings.goalContains}
@@ -2837,7 +2837,7 @@ function ShapingInspector({
             className="control"
             type="number"
             min={0}
-            data-testid="swarm-stall"
+            data-testid="team-stall"
             aria-label="Rounds without change"
             value={settings.stallRounds}
             onChange={(event) => {

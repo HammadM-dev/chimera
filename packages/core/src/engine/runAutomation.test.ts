@@ -21,6 +21,7 @@ import { Governor } from '../governor/Governor.ts';
 import { STARTER_ROLES } from '../runtime/roleRegistry.ts';
 import { runAutomation } from './runAutomation.ts';
 import type { BriefStep, RunBrief } from './runBrief.ts';
+import { normaliseType } from './runBrief.ts';
 
 // The executor running a graph that is not a straight line: a branch, a
 // transform, and a gate that waits for a person.
@@ -787,4 +788,15 @@ test('the brief reaches every step nothing feeds, even when the step has its own
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });
   }
+});
+
+test('an automation saved when the node was called "swarm" still loads', () => {
+  // The rename freed the word for a genuine swarm — a simulated population —
+  // and a rename that breaks every file somebody already saved is not a rename,
+  // it is a deletion. The old spelling is accepted on read forever.
+  assert.equal(normaliseType('swarm'), 'team');
+  assert.equal(normaliseType('team'), 'team');
+  // Everything else is itself, and a step with no type is an agent.
+  assert.equal(normaliseType('fanout'), 'fanout');
+  assert.equal(normaliseType(undefined), 'agent');
 });

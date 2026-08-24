@@ -15,6 +15,20 @@ export interface BriefAttachment {
   note: string;
 }
 
+/**
+ * The node kind, with the one rename this schema has ever had applied.
+ *
+ * `team` was called `swarm` until a genuine swarm — a simulated population,
+ * MiroFish-style — needed the name. The old spelling is accepted on read
+ * forever rather than rewritten in the database: a read-time alias is one line
+ * and cannot corrupt anything, where rewriting every stored `definition_json`
+ * is a migration that can, over a rename that changes no behaviour.
+ */
+export function normaliseType(type: string | undefined): string {
+  if (type === undefined) return 'agent';
+  return type === 'swarm' ? 'team' : type;
+}
+
 export interface BriefStep {
   nodeId: string;
   /** What kind of node this is. Absent means `agent`, which is what every
@@ -140,7 +154,7 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   // A subworkflow does the work too — by running agents of its own. The rule is
   // that something in the graph must act, not that it must act directly.
   const workSteps = brief.steps.filter((step) =>
-    ['agent', 'subworkflow', 'fanout', 'swarm'].includes(step.type ?? 'agent'),
+    ['agent', 'subworkflow', 'fanout', 'team'].includes(normaliseType(step.type)),
   );
 
   if (brief.steps.length === 0) {
@@ -221,29 +235,29 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
       }
     }
 
-    if (type === 'swarm') {
-      const swarm = step.config?.type === 'swarm' ? step.config.swarm : undefined;
-      if (!swarm) {
-        problems.push({ nodeId: step.nodeId, message: 'This swarm has no goal or agents.' });
+    if (type === 'team') {
+      const team = step.config?.type === 'team' ? step.config.team : undefined;
+      if (!team) {
+        problems.push({ nodeId: step.nodeId, message: 'This team has no goal or specialists.' });
       } else {
         // The same rule as a loop, for the same reason: this repeats.
-        if (!Number.isFinite(swarm.maxRounds) || swarm.maxRounds < 1) {
+        if (!Number.isFinite(team.maxRounds) || team.maxRounds < 1) {
           problems.push({
             nodeId: step.nodeId,
-            message: 'This swarm needs a maximum number of rounds.',
+            message: 'This team needs a maximum number of rounds.',
             stops: 'save',
           });
         }
-        if (swarm.goal.trim() === '') {
-          problems.push({ nodeId: step.nodeId, message: 'Give this swarm a goal to work on.' });
+        if (team.goal.trim() === '') {
+          problems.push({ nodeId: step.nodeId, message: 'Give this team a goal to work on.' });
         }
-        if (swarm.agents.length === 0) {
+        if (team.agents.length === 0) {
           problems.push({ nodeId: step.nodeId, message: 'Add at least one specialist.' });
         }
-        if (!knownRoles.includes(swarm.orchestratorRoleId)) {
+        if (!knownRoles.includes(team.orchestratorRoleId)) {
           problems.push({ nodeId: step.nodeId, message: 'Choose an agent to orchestrate.' });
         }
-        for (const agent of swarm.agents) {
+        for (const agent of team.agents) {
           if (!knownRoles.includes(agent.roleId)) {
             problems.push({ nodeId: step.nodeId, message: `No agent called "${agent.roleId}".` });
           }

@@ -28,7 +28,7 @@ const KINDS = new Set([
   'subworkflow',
   'fanout',
   'aggregate',
-  'swarm',
+  'team',
 ]);
 
 test('there are templates, and they were read', () => {
