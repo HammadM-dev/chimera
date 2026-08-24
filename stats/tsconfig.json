@@ -13,6 +13,8 @@
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noEmit": true,
+    // Matches the rest of this repository's spelling of relative imports.
+    "allowImportingTsExtensions": true,
     "types": []
   },
   "include": ["src", "types.d.ts"]

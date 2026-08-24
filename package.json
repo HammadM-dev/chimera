@@ -28,7 +28,8 @@
     "docs:check-links": "node scripts/check-doc-links.mjs",
     "check:no-global-hotkey": "node scripts/check-no-global-hotkey.mjs",
     "check:contrast": "node scripts/check-contrast.mjs",
-    "typecheck:stats": "tsc --noEmit -p stats"
+    "typecheck:stats": "tsc --noEmit -p stats",
+    "test:stats": "node --test --experimental-strip-types stats/src/retention.test.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.19.0",

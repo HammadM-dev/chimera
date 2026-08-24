@@ -11,6 +11,8 @@
 //   GET  /stats  — the numbers. Behind a token, because they are commercial
 //                  information rather than a secret about anyone.
 
+import { renderDashboard, type DashboardData } from './dashboard.ts';
+
 export interface Env {
   DB: D1Database;
   /** Set with `wrangler secret put STATS_TOKEN`. Never in the repository. */
@@ -75,7 +77,8 @@ async function downloads(env: Env): Promise<{ total: number; note: string }> {
     const releases = (await response.json()) as { assets?: { download_count?: number }[] }[];
     const total = releases.reduce(
       (sum, release) =>
-        sum + (release.assets ?? []).reduce((inner, asset) => inner + (asset.download_count ?? 0), 0),
+        sum +
+        (release.assets ?? []).reduce((inner, asset) => inner + (asset.download_count ?? 0), 0),
       0,
     );
     return { total, note: '' };
@@ -124,6 +127,38 @@ async function handleStats(env: Env): Promise<Response> {
     .bind(since(30))
     .all();
 
+  // How many of each week's new installs are still running later.
+  //
+  // A first appearance is the earliest day an install id was ever seen, which
+  // the pings table already knows without a column for it. Retention is the
+  // number worth leading with: it says whether the thing is worth keeping, and
+  // its shape is far harder to invent convincingly than a total.
+  const retention = await env.DB.prepare(
+    `WITH first AS (
+       SELECT install_id, MIN(day) AS started FROM pings GROUP BY install_id
+     )
+     SELECT
+       DATE(first.started, 'weekday 0', '-6 days') AS cohort,
+       COUNT(DISTINCT first.install_id) AS size,
+       COUNT(DISTINCT CASE WHEN later.day >= DATE(first.started, '+7 days')
+                           THEN first.install_id END) AS day7,
+       COUNT(DISTINCT CASE WHEN later.day >= DATE(first.started, '+30 days')
+                           THEN first.install_id END) AS day30
+     FROM first
+     LEFT JOIN pings AS later ON later.install_id = first.install_id
+     GROUP BY cohort
+     ORDER BY cohort DESC
+     LIMIT 8`,
+  ).all();
+
+  const newThisMonth = await env.DB.prepare(
+    `SELECT COUNT(*) AS n FROM (
+       SELECT install_id FROM pings GROUP BY install_id HAVING MIN(day) >= ?
+     )`,
+  )
+    .bind(since(30))
+    .first<{ n: number }>();
+
   const download = await downloads(env);
 
   return Response.json({
@@ -131,6 +166,8 @@ async function handleStats(env: Env): Promise<Response> {
     activeThisWeek: number(1),
     activeThisMonth: number(2),
     installsEverSeen: number(3),
+    newThisMonth: newThisMonth?.n ?? 0,
+    retention: retention.results ?? [],
     downloads: download.total,
     downloadsNote: download.note,
     byVersion: byVersion.results,
@@ -146,6 +183,24 @@ export default {
 
     if (request.method === 'POST' && url.pathname === '/ping') {
       return handlePing(request, env);
+    }
+
+    // The page. Basic auth rather than a bearer token, because a browser can be
+    // prompted for Basic and cannot be asked for a header from the address bar.
+    if (request.method === 'GET' && (url.pathname === '/' || url.pathname === '/dashboard')) {
+      const offered = request.headers.get('authorization') ?? '';
+      const expected = `Basic ${btoa(`chimera:${env.STATS_TOKEN}`)}`;
+      if (env.STATS_TOKEN === '' || offered !== expected) {
+        return new Response('unauthorised', {
+          status: 401,
+          headers: { 'www-authenticate': 'Basic realm="CHIMERA stats"' },
+        });
+      }
+      const stats = await handleStats(env);
+      const data = (await stats.json()) as DashboardData;
+      return new Response(renderDashboard(data), {
+        headers: { 'content-type': 'text/html; charset=utf-8' },
+      });
     }
 
     if (request.method === 'GET' && url.pathname === '/stats') {

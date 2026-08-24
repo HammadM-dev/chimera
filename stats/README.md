@@ -69,6 +69,86 @@ sent, whatever the user's setting says.
 
 ## Reading the numbers
 
+Open the worker's URL in a browser. It asks for a username and password: the
+username is `chimera`, the password is your `STATS_TOKEN`.
+
+The page shows active installs today, this week and this month; new installs
+this month; installs ever seen; total downloads; a thirty-day chart of daily
+actives; retention by weekly cohort; and a breakdown by version and platform.
+
+The same figures as JSON, for anything that needs to read them programmatically:
+
+```sh
+curl -H "Authorization: Bearer $STATS_TOKEN" https://chimera-stats.<you>.workers.dev/stats
+```
+
+## Can users see any of this?
+
+No. `/stats` and the dashboard both require the token, and nothing in the app
+can reach either — CHIMERA only ever calls `/ping`, which returns `204` and no
+body. A user can see that their own copy pings, because the setup screen says
+so and the Providers panel repeats it, and they can switch it off. They cannot
+read anyone's numbers, including their own, and there is nothing to read: their
+install id is a UUID that means nothing on its own.
+
+## Proving the numbers to somebody
+
+Be straight about which figures are strong and which are not; the difference is
+about who controls them, and anybody doing diligence will ask.
+
+**Downloads are the strong ones.** They come from the GitHub releases API. An
+investor can read them without asking you, and you cannot change them. Lead
+with these.
+
+**Retention is the one worth knowing.** The share of each week's new installs
+still running at day 7 and day 30. It is what a serious investor asks for
+anyway, and its shape is far harder to invent convincingly than a total.
+
+**Active-install counts are the weak ones, and here is why.** `/ping` is public
+and unauthenticated. It has to be: a desktop app cannot hold a secret, so any
+credential shipped inside it can be read out of the binary by anybody who cares
+to. That means the count is trustworthy exactly to the extent that nobody has
+posted to the endpoint who is not running the app — which is true today and is
+not something this service can prove. Cloudflare rate-limiting rules on `/ping`
+raise the cost of abuse and do not change the argument.
+
+Anyone experienced will know this about *any* self-reported telemetry, yours or
+a competitor's. Saying it first is worth more than being asked.
+
+**What actually settles it,** when it comes to that: a source you do not
+control. Payment processor revenue, app-store installs, a customer who will take
+a reference call. Offer read access to this dashboard rather than a screenshot
+of it — a screenshot is the weakest possible form of a number.
+
+**On inflating the count.** It would be easy: post UUIDs to `/ping` and it goes
+up. Do not. Presenting invented user numbers to raise money is fraud, it is the
+specific thing diligence exists to catch, and a founder found to have done it is
+finished — the fabrication ends up mattering far more than whatever number it
+was covering for. If the honest number is small, the honest framing is that it
+is early; investors fund early things constantly and fund liars never.
+
+## Testing it before it is live
+
+Point a development build at your deployed worker and run it:
+
+```sh
+CHIMERA_USAGE_ENDPOINT=https://chimera-stats.<you>.workers.dev/ping \
+  npm run build --workspace @chimera/desktop
+```
+
+Your own machine then appears as one install, which is exactly what it is. If
+you want to see the dashboard populated before launch, insert rows locally
+against a local D1 and look at that — never against the deployed database, and
+never anything you would then quote:
+
+```sh
+wrangler d1 execute chimera-stats --local --command \
+  "INSERT INTO pings VALUES ('00000000-0000-4000-8000-000000000001','2026-08-24','0.1.0','linux','x64')"
+```
+
+`--local` is the whole point of that line: it writes to a SQLite file on your
+machine, not to the database the dashboard reads.
+
 ```sh
 curl -H "Authorization: Bearer $STATS_TOKEN" \
   https://chimera-stats.<you>.workers.dev/stats

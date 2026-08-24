@@ -27,6 +27,7 @@ jobs:
       # `stats/` is deployed by wrangler and built by nothing here, which is not
       # a reason to let it rot.
       - run: npm run typecheck:stats
+      - run: npm run test:stats
 
       - run: npm run check:boundaries
 
