@@ -177,3 +177,48 @@ test('a step joined to itself does not hang the run', async () => {
     await stub.close();
   }
 });
+
+test('both side panels fold away, and the inspector comes back when you click a step', async () => {
+  // The canvas gives 464px of a 1203px window to the two panels either side of
+  // the thing being built. Folding one is how somebody gets that back.
+  const stub = await startStub();
+  const profile = freshProfile();
+  const app = await launchApp({
+    profile,
+    env: { CHIMERA_OMNIROUTE_BASE_URL: stub.baseUrl },
+  });
+
+  try {
+    const page = await app.firstWindow();
+    await connect(page, stub.baseUrl);
+    await goTo(page, 'build');
+
+    const canvas = page.getByTestId('canvas-view');
+    await expect(canvas).toHaveAttribute('data-palette', 'open');
+    await expect(canvas).toHaveAttribute('data-inspector', 'open');
+
+    await page.getByTestId('palette-toggle').click();
+    await expect(canvas).toHaveAttribute('data-palette', 'closed');
+    // The handle stays where it was. A control that moves when you use it is
+    // one you have to find again.
+    await expect(page.getByTestId('palette-toggle')).toBeVisible();
+
+    await page.getByTestId('inspector-toggle').click();
+    await expect(canvas).toHaveAttribute('data-inspector', 'closed');
+
+    // Unfolding the palette to place a step, with the inspector still away.
+    await page.getByTestId('palette-toggle').click();
+    await expect(canvas).toHaveAttribute('data-palette', 'open');
+    await place(page, 'researcher', 'Read it.');
+
+    // Clicking a step is asking what it does, so the panel that answers comes
+    // back. Folding it was a request for room, not a decision never to see the
+    // settings again.
+    await expect(canvas).toHaveAttribute('data-inspector', 'open');
+    await expect(page.getByTestId('node-instruction')).toBeVisible();
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await stub.close();
+  }
+});
