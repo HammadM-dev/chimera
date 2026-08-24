@@ -11,6 +11,14 @@ import path from 'node:path';
 const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../..');
 const ALLOWED_DIR = path.join(repoRoot, 'packages', 'store', 'src');
 
+// `stats/` is not the application and does not touch the application's
+// database. It is a Cloudflare Worker over a D1 table that counts installs,
+// running in a different runtime, on a different database, with no access to
+// `packages/store` and no way to import it. CLAUDE.md's rule — "All SQLite
+// access through packages/store" — exists to keep the *workspace* store behind
+// one door; there is no workspace store here to keep behind anything.
+const UNRELATED_DIR = path.join(repoRoot, 'stats');
+
 const SKIP_DIRS = new Set(['node_modules', 'dist', 'build', 'out', 'release', '.git', 'coverage']);
 
 const SQL_PATTERNS = [
@@ -40,6 +48,7 @@ function findSourceFiles(dir, out = []) {
 const violations = [];
 
 for (const file of findSourceFiles(repoRoot)) {
+  if (file.startsWith(UNRELATED_DIR + path.sep)) continue;
   if (file.startsWith(ALLOWED_DIR)) continue;
   const content = readFileSync(file, 'utf8');
   const lines = content.split('\n');

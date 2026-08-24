@@ -1,0 +1,43 @@
+{
+  "id": "invoice-to-spreadsheet",
+  "name": "Turn a folder of invoices into one spreadsheet",
+  "audience": "Bookkeeping, expenses, anyone doing data entry from PDFs",
+  "summary": "Read every invoice in a folder, pull out the numbers that matter, and write one CSV with a row per invoice. Invoices it cannot read are listed at the end rather than guessed at.",
+  "needs": ["A folder of invoices, granted in Providers under Folders"],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "list",
+      "roleId": "researcher",
+      "instruction": "List every file in the granted invoices folder and report the full path of each one, as a JSON array of strings and nothing else."
+    },
+    {
+      "id": "each",
+      "kind": "fanout",
+      "roleId": "",
+      "instruction": "",
+      "settings": {
+        "concurrency": 4,
+        "maxItems": 500,
+        "parse": "json",
+        "onItemError": "continue",
+        "deadLetterLimit": 25
+      }
+    },
+    {
+      "id": "extract",
+      "roleId": "data-extractor",
+      "instruction": "Read the invoice at the path you were given and pull out one record: supplier, invoice number, date, currency, net, tax, total, and the purchase order if it names one. Copy every value exactly as printed. A field the invoice does not state is null — never a plausible guess, and never a total you worked out yourself."
+    },
+    {
+      "id": "sheet",
+      "roleId": "summariser",
+      "instruction": "Write a CSV of every record above. Header row first: supplier,invoice_number,date,currency,net,tax,total,po. One row per invoice, values exactly as extracted, empty cell where a field was null. After the CSV, list any invoice that could not be read and say why."
+    }
+  ],
+  "edges": [
+    ["list", "each"],
+    ["each", "extract"],
+    ["extract", "sheet"]
+  ]
+}

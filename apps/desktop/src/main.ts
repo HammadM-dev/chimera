@@ -2,6 +2,8 @@ import { app, BrowserWindow } from 'electron';
 import { createWindow } from './windows.ts';
 import { startUsageReporting, setAppVersion } from './telemetry/usageCount.ts';
 import { setProfileDirectory } from './settings/profile.ts';
+import { setTemplateDirectory } from './templates/service.ts';
+import path from 'node:path';
 import { registerIpcMainHandlers } from './ipc/mainDispatch.ts';
 import { openStore, closeStore } from './store/lifecycle.ts';
 import { setScreenshotRoot } from './runs/screenshots.ts';
@@ -10,7 +12,6 @@ import { reloadTriggers, stopTriggers } from './triggers/service.ts';
 import { registerPanicKey, unregisterPanicKey } from './control/panicKey.ts';
 import { startControlBroadcast } from './control/broadcast.ts';
 import os from 'node:os';
-import path from 'node:path';
 import { sweepSandboxes } from '@chimera/tools';
 
 // Electron derives `userData` from the app name, and unpackaged it reads that
@@ -31,6 +32,9 @@ const SANDBOX_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 
 void app.whenReady().then(() => {
   setProfileDirectory(app.getPath('userData'));
+  // Beside the migrations, copied into dist by the same step and for the same
+  // reason: the TypeScript is bundled, the data files are not.
+  setTemplateDirectory(path.join(import.meta.dirname, 'templates'));
   setAppVersion(app.getVersion());
   // Before any window exists: the store applies pending migrations on open,
   // and a renderer that came up first could invoke a channel whose handler

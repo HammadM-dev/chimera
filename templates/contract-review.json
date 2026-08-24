@@ -1,0 +1,29 @@
+{
+  "id": "contract-review",
+  "name": "Read a contract and flag what will bite",
+  "audience": "Anyone about to sign something without a lawyer on retainer",
+  "summary": "Read a contract and report the clauses that commit you to something: automatic renewal, notice periods, liability, price rises, termination, anything that survives the end. Quotes the clause rather than characterising it.",
+  "needs": ["The contract as an attachment on the run, or in a granted folder"],
+  "egressMode": "allowlist",
+  "steps": [
+    {
+      "id": "read",
+      "roleId": "researcher",
+      "instruction": "Read the contract. For each of these, quote the clause and give its number: automatic renewal, notice period to cancel, price increases, liability cap, indemnities, termination rights on each side, and anything stated to survive termination. Where the contract does not cover one, say so explicitly — a missing liability cap matters as much as a bad one."
+    },
+    {
+      "id": "check",
+      "roleId": "reviewer",
+      "instruction": "Review the findings against what an ordinary customer would expect. Report only what you can point at a clause for. For each: what the clause does, what it would cost or commit us to in practice, and how unusual it is. Change nothing and recommend nothing you cannot ground in the text."
+    },
+    {
+      "id": "brief",
+      "roleId": "summariser",
+      "instruction": "Write the note. Three sentences at the top: what this contract is, the single thing most worth negotiating, and the deadline that matters most. Then the findings in order of what they would cost. Keep every quoted clause and clause number exactly as given."
+    }
+  ],
+  "edges": [
+    ["read", "check"],
+    ["check", "brief"]
+  ]
+}

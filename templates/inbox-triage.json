@@ -1,0 +1,42 @@
+{
+  "id": "inbox-triage",
+  "name": "Triage the inbox and draft replies",
+  "audience": "Anyone whose morning starts with sixty unread emails",
+  "summary": "Read today's unread mail, sort it into what needs a reply, what needs a person, and what needs nothing, then draft the replies and wait for you to approve them before anything is sent.",
+  "needs": ["An email account connected in Providers"],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "read",
+      "roleId": "researcher",
+      "instruction": "List the unread messages in the inbox and read each one. For every message report: who it is from, the subject, what they actually want, and how urgent it is. Quote the sentence that tells you what they want. Do not reply to anything."
+    },
+    {
+      "id": "sort",
+      "roleId": "data-extractor",
+      "instruction": "Turn the messages above into records. One per message, with: sender, subject, what they want in one line, and a category of exactly \"reply\", \"person\" or \"none\". Use \"reply\" when a short answer would close it, \"person\" when it needs a decision or money, \"none\" for newsletters and receipts. Copy the values, do not guess them."
+    },
+    {
+      "id": "draft",
+      "roleId": "summariser",
+      "instruction": "For every message categorised \"reply\", write the reply. Match the sender's formality, answer the actual question, and keep it to four sentences. Where you cannot answer without information you do not have, say what is missing instead of inventing it. Put each draft under the subject it answers. List the \"person\" ones at the end under a heading saying they need a human."
+    },
+    {
+      "id": "gate",
+      "kind": "approval",
+      "roleId": "",
+      "instruction": "Send these replies?"
+    },
+    {
+      "id": "send",
+      "roleId": "researcher",
+      "instruction": "Send each approved draft as a reply to the message it answers. Send nothing that was not drafted above."
+    }
+  ],
+  "edges": [
+    ["read", "sort"],
+    ["sort", "draft"],
+    ["draft", "gate"],
+    ["gate", "send"]
+  ]
+}

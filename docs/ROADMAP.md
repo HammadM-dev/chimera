@@ -22,7 +22,7 @@ So the order has changed. Everything that makes the product usable — the canva
 
 **66 of 86 tickets.** Effort is the honest measure and it is lower — call it a third — because M4-5's canvas, M8's Rust sidecar and M7's licensing server are each larger than their ticket count suggests.
 
-Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time); **the first vertical**, which decides M4-10's shipped templates; and **a Rust toolchain**, which M8's sidecar binary needs and this machine does not have (`cargo` is not installed). M8's TypeScript half — the protocol, the bridge, the panic key, the grant — is built and tested against a stand-in process. 
+Blocked on Hammad: **M0-10** (Apple enrollment, Windows certificate — M7-3 and M10-2 wait on it, and enrollment has lead time); and **a Rust toolchain**, which M8's sidecar binary needs and this machine does not have (`cargo` is not installed). M8's TypeScript half — the protocol, the bridge, the panic key, the grant — is built and tested against a stand-in process. 
 
 ## Reshaped again, after the founder used the M9 build
 
@@ -1051,7 +1051,29 @@ Dependencies: M4-1.
 
 ### M4-10: Templates
 
-Description: Shipped automations to start from. **Blocked on the first-vertical decision.**
+STATUS: **done.** Eleven shipped automations, in `templates/`, offered in a
+gallery on the home screen and opening on the canvas as ordinary automations.
+
+DECISION: **shipped without waiting for the first-vertical decision, and
+deliberately across verticals rather than within one.** The block was real while
+the question was "which industry do we build for"; the founder's instruction was
+to research what people actually automate and build that. What the research
+shows is that the highest-volume work is the same everywhere — mail, invoices,
+lead research, reporting — so the library covers office work, finance, sales,
+marketing, support, management and engineering. A library of ten templates for
+developers is a library for developers, and the golden eval asserts the spread
+rather than trusting it.
+
+DECISION: **templates are JSON data read at runtime, not compiled-in
+TypeScript.** Somebody should be able to read one, copy it, and write their own
+without opening an editor that understands types. They ride into the bundle
+beside the migrations, through the same copy step and for the same reason: the
+TypeScript is bundled, the data files are not.
+
+DECISION: **a shipped template that sends anything must carry an approval node,
+enforced by the eval rather than by review.** A template is the one place a user
+has not read the instructions. One that emails strangers on their behalf without
+asking is our mistake, shipped, on their account.
 
 Dependencies: M4-9, M4-12.
 

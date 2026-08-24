@@ -95,24 +95,22 @@ test("the IPC schema's provider kinds match the providers package exactly", asyn
 // and the whole profile panel — before this test existed.
 
 test('every channel defined in this module is in the registry', () => {
-  const defined = Object.entries(registry).filter(
-    (entry): entry is [string, { channel: string }] => {
-      const value = entry[1];
-      return (
-        typeof value === 'object' &&
-        value !== null &&
-        'channel' in value &&
-        typeof (value as { channel: unknown }).channel === 'string'
-      );
-    },
-  );
+  const defined = Object.entries(registry)
+    .map(([name, value]) => {
+      const channel =
+        typeof value === 'object' && value !== null && 'channel' in value
+          ? (value as { channel: unknown }).channel
+          : undefined;
+      return { name, channel: typeof channel === 'string' ? channel : '' };
+    })
+    .filter((entry) => entry.channel !== '');
 
   assert.ok(defined.length > 20, 'the definitions were not found — has this module moved?');
 
   const listed = new Set(registry.listChannels().map((definition) => definition.channel));
   const missing = defined
-    .filter(([, definition]) => !listed.has(definition.channel))
-    .map(([name, definition]) => `${name} ("${definition.channel}")`);
+    .filter((entry) => !listed.has(entry.channel))
+    .map((entry) => `${entry.name} ("${entry.channel}")`);
 
   assert.deepEqual(
     missing,

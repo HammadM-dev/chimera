@@ -1,0 +1,35 @@
+{
+  "id": "code-review",
+  "name": "Review a change before anybody else sees it",
+  "audience": "Developers and technical founders",
+  "summary": "Read the changed code in a folder, run whatever checks the project has, and report defects with a file and a line. Reports what failed rather than describing the change as done.",
+  "needs": ["The repository folder, granted in Providers under Folders"],
+  "egressMode": "allowlist",
+  "steps": [
+    {
+      "id": "read",
+      "roleId": "researcher",
+      "instruction": "List the granted folder and read the files the brief names, plus the code immediately around them. Report what the change appears to do and which existing conventions it sits inside — naming, error handling, how similar code is tested. Quote what you are describing."
+    },
+    {
+      "id": "check",
+      "roleId": "qa",
+      "instruction": "Run the project's own checks — its test command, its typecheck, its linter, whichever exist. Report the output you actually saw, including the failures. Do not describe a check you did not run."
+    },
+    {
+      "id": "review",
+      "roleId": "reviewer",
+      "instruction": "Review the change against what it was meant to do. Report only defects you can point at a line for, and for each state what would fail and under what input. Ignore style the project does not enforce. Change nothing."
+    },
+    {
+      "id": "write",
+      "roleId": "summariser",
+      "instruction": "Write the review. Whether the checks passed, in one line, with the failing output if any. Then the findings most serious first, each with its file, line, and what would break. Keep the quoted code exactly as given."
+    }
+  ],
+  "edges": [
+    ["read", "check"],
+    ["check", "review"],
+    ["review", "write"]
+  ]
+}

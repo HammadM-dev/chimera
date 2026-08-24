@@ -600,6 +600,38 @@ export const telemetrySet = defineInvokeChannel({
   responseSchema: z.object({ telemetry: telemetrySchema }),
 });
 
+// The automations somebody can start from. Read-only: a template is data this
+// build ships, not something the renderer edits.
+export const templateList = defineInvokeChannel({
+  channel: 'template:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    templates: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        audience: z.string(),
+        summary: z.string(),
+        needs: z.array(z.string()),
+        steps: z.array(
+          z.object({
+            id: z.string().optional(),
+            kind: z.string().optional(),
+            roleId: z.string(),
+            instruction: z.string(),
+            settings: z.record(z.string(), z.unknown()).optional(),
+          }),
+        ),
+        edges: z.array(z.tuple([z.string(), z.string()])).optional(),
+        egressAllowlist: z.array(z.string()).optional(),
+        egressMode: z.enum(['allowlist', 'browse', 'open']).optional(),
+      }),
+    ),
+  }),
+});
+
 // Who is sitting in front of this copy, and how they like it to look.
 //
 // Device-local and never in SQLite: the name is for the home screen and nothing
@@ -1396,6 +1428,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   cacheSet,
   profileGet,
   profileSet,
+  templateList,
   searchGet,
   searchSet,
   telemetryGet,

@@ -1,0 +1,21 @@
+{
+  "id": "daily-news-brief",
+  "name": "A morning brief on your industry",
+  "audience": "Founders, analysts, anyone who should be reading more than they do",
+  "summary": "Search for what has happened in the areas you name, read the pieces worth reading, and write a brief with the facts and the links. Says when nothing much happened rather than padding.",
+  "needs": [],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "scan",
+      "roleId": "researcher",
+      "instruction": "For each topic in the brief, search for what has been published recently, open the three most substantial results, and read them. Report what actually happened — numbers, names, dates — with the URL for each. Skip anything that is an advertisement or a rewrite of a press release with nothing added. If a topic has nothing new, say so rather than reaching."
+    },
+    {
+      "id": "brief",
+      "roleId": "summariser",
+      "instruction": "Write the brief. Lead with the one thing most worth knowing, in a sentence. Then each topic as a short paragraph with its facts and links. Keep numbers, names and caveats exactly as reported. If a topic had nothing, say \"nothing new\" and move on — a brief that pads is one nobody reads twice."
+    }
+  ],
+  "edges": [["scan", "brief"]]
+}

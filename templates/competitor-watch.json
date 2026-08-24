@@ -1,0 +1,29 @@
+{
+  "id": "competitor-watch",
+  "name": "Watch what competitors are charging",
+  "audience": "Founders and marketers who keep meaning to check",
+  "summary": "Find the current public pricing for the companies you name, read the pages, and write a comparison with the figures and the links they came from. Says plainly where a price is not published rather than estimating one.",
+  "needs": [],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "find",
+      "roleId": "researcher",
+      "instruction": "For each company named in the brief, search for its current pricing page, open the most likely result, and read it. Report every plan: its name, its price, the billing period, and what the price includes. Give the URL each figure came from. Where a company does not publish prices, say so — do not estimate."
+    },
+    {
+      "id": "table",
+      "roleId": "data-extractor",
+      "instruction": "Turn the findings into records. One per plan, with: company, plan name, price as a number, currency, period, and source URL. Copy the values. A price that was not published is null."
+    },
+    {
+      "id": "write",
+      "roleId": "summariser",
+      "instruction": "Write the comparison. A table of every plan first, then three sentences on where the pricing sits relative to the others and anything that stands out — a free tier, a per-seat minimum, a plan that only quotes on request. Keep every figure and every caveat exactly as reported, and keep the source links."
+    }
+  ],
+  "edges": [
+    ["find", "table"],
+    ["table", "write"]
+  ]
+}

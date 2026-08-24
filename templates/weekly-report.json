@@ -1,0 +1,29 @@
+{
+  "id": "weekly-report",
+  "name": "Write the weekly update from what actually happened",
+  "audience": "Team leads and solo founders who write the same email every Friday",
+  "summary": "Read the week's notes, logs or exports from a folder and write the update: what shipped, what slipped, what needs a decision. Every claim points at the file it came from.",
+  "needs": ["A folder with the week's notes, granted in Providers under Folders"],
+  "egressMode": "allowlist",
+  "steps": [
+    {
+      "id": "gather",
+      "roleId": "researcher",
+      "instruction": "List the files in the granted folder, read the ones from this week, and report what they say happened. Group by what was finished, what moved but is not finished, and what is stuck. Name the file each item came from. Report only what the files state — a week with little in it is a quiet week, not a reason to fill space."
+    },
+    {
+      "id": "decide",
+      "roleId": "reviewer",
+      "instruction": "Review the gathered items for what needs somebody's decision this coming week. Report only items you can point at a source for, and for each say what the decision is and what happens if it waits."
+    },
+    {
+      "id": "write",
+      "roleId": "summariser",
+      "instruction": "Write the update. Three sentences at the top: the week in short. Then Shipped, In progress, Stuck, and Needs a decision — each a short list, each item pointing at its source file. Keep names, numbers and dates exactly as found. No filler under an empty heading; drop the heading instead."
+    }
+  ],
+  "edges": [
+    ["gather", "decide"],
+    ["decide", "write"]
+  ]
+}

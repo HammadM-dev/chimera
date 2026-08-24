@@ -1,0 +1,29 @@
+{
+  "id": "site-change-watch",
+  "name": "Tell me when a page changes",
+  "audience": "Anyone watching a competitor, a job board, a status page or a policy",
+  "summary": "Read the pages you name, compare them against what they said last time, and report only what actually changed. Silence when nothing did.",
+  "needs": [],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "fetch",
+      "roleId": "researcher",
+      "instruction": "Open each page named in the brief and read it. Report the parts that matter for what the brief says we are watching — the prices, the listings, the terms, whatever it names — as plain text, faithfully. Then recall what these pages said last time and report that too, side by side. Do not judge yet."
+    },
+    {
+      "id": "diff",
+      "roleId": "reviewer",
+      "instruction": "Compare this reading against the last one. Report only differences you can point at: what it said before, what it says now, and where. Ignore reordering, timestamps, cookie banners, and anything that changes on every load. If nothing of substance changed, say exactly that."
+    },
+    {
+      "id": "note",
+      "roleId": "summariser",
+      "instruction": "Write the note. If nothing changed, say so in one line and stop. Otherwise: one sentence on what changed and whether it matters, then each change with before, after and the page it is on. Remember today's reading so the next run has something to compare against."
+    }
+  ],
+  "edges": [
+    ["fetch", "diff"],
+    ["diff", "note"]
+  ]
+}

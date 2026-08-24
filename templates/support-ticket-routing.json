@@ -1,0 +1,50 @@
+{
+  "id": "support-ticket-routing",
+  "name": "Sort support mail and answer the easy ones",
+  "audience": "Small teams with a shared support address",
+  "summary": "Read the support inbox, answer the questions already covered by what you have written down, and route the rest to the right person with a summary. Nothing is sent without you seeing it first.",
+  "needs": ["An email account connected in Providers"],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "read",
+      "roleId": "researcher",
+      "instruction": "List the unread messages in the support inbox and read each one. For each, report the sender, what they are asking, and whether they are blocked right now. Quote the sentence that says what they need."
+    },
+    {
+      "id": "sort",
+      "roleId": "data-extractor",
+      "instruction": "One record per message: sender, subject, the question in one line, urgency of \"blocked\", \"waiting\" or \"whenever\", and a route of exactly \"answer\", \"engineering\", \"billing\" or \"sales\". Use \"answer\" only when the brief's own material already covers it. Copy the values."
+    },
+    {
+      "id": "split",
+      "kind": "condition",
+      "roleId": "",
+      "instruction": "",
+      "settings": { "test": "contains", "value": "\"route\": \"answer\"" }
+    },
+    {
+      "id": "reply",
+      "roleId": "summariser",
+      "instruction": "For each message routed \"answer\", write the reply using only what the brief's material says. Answer the question, link to the relevant part, keep it to four sentences. Where the material does not actually cover it, say so and mark it for a person instead of improvising."
+    },
+    {
+      "id": "gate",
+      "kind": "approval",
+      "roleId": "",
+      "instruction": "Send these replies and route the rest?"
+    },
+    {
+      "id": "send",
+      "roleId": "researcher",
+      "instruction": "Send each approved reply to the message it answers. Then, for everything not routed \"answer\", write one message per destination team listing the sender, the question and the urgency, and send it to the address the brief names for that team."
+    }
+  ],
+  "edges": [
+    ["read", "sort"],
+    ["sort", "split"],
+    ["split", "reply"],
+    ["reply", "gate"],
+    ["gate", "send"]
+  ]
+}

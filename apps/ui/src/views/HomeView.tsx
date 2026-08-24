@@ -4,7 +4,8 @@ import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
 import { useProfile } from '../useProfile.ts';
 import { greetingFor } from './greeting.ts';
-import type { AutomationTemplate } from './CanvasView.tsx';
+import type { AutomationTemplate, StepKind, StepSettings } from './CanvasView.tsx';
+import { useTemplates } from './useTemplates.ts';
 import './views.css';
 
 // The opening screen. One question, one input, and three ways in — because the
@@ -30,6 +31,7 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
   const [plan, setPlan] = useState<AutomationTemplate | null>(null);
   const [busy, setBusy] = useState(false);
   const { profile } = useProfile();
+  const templates = useTemplates();
   const [error, setError] = useState<string | null>(null);
 
   const design = useCallback(async () => {
@@ -160,6 +162,52 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
             >
               Open in Automations
             </button>
+          </div>
+        </section>
+      )}
+
+      {templates.length > 0 && (
+        <section className="gallery" data-testid="home-templates">
+          <h2 className="gallery__title">Or start from one of these</h2>
+          <p className="gallery__sub">
+            Each one opens on the canvas as an ordinary automation. Change anything.
+          </p>
+          <div className="gallery__grid">
+            {templates.map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                className="gallery__card"
+                data-testid={`template-${item.id}`}
+                onClick={() => {
+                  onDescribe(item.summary, {
+                    name: item.name,
+                    summary: item.summary,
+                    steps: item.steps.map((step) => ({
+                      ...(step.id === undefined ? {} : { id: step.id }),
+                      ...(step.kind === undefined ? {} : { kind: step.kind as StepKind }),
+                      roleId: step.roleId,
+                      instruction: step.instruction,
+                      ...(step.settings === undefined
+                        ? {}
+                        : { settings: step.settings as Partial<StepSettings> }),
+                    })),
+                    ...(item.edges === undefined ? {} : { edges: item.edges }),
+                    ...(item.egressAllowlist === undefined
+                      ? {}
+                      : { egressAllowlist: item.egressAllowlist }),
+                    ...(item.egressMode === undefined ? {} : { egressMode: item.egressMode }),
+                  });
+                }}
+              >
+                <span className="gallery__name">{item.name}</span>
+                <span className="gallery__audience">{item.audience}</span>
+                <span className="gallery__summary">{item.summary}</span>
+                {item.needs.length > 0 && (
+                  <span className="gallery__needs">Needs: {item.needs.join('; ')}</span>
+                )}
+              </button>
+            ))}
           </div>
         </section>
       )}

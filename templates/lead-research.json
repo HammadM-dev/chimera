@@ -1,0 +1,43 @@
+{
+  "id": "lead-research",
+  "name": "Research a list of leads before you call them",
+  "audience": "Sales, business development, anyone with a list and no time",
+  "summary": "Take a list of company names, find out what each one does, how big it is and who runs it, and produce a table with a note on why they might want what you sell. Says \"not found\" rather than filling gaps.",
+  "needs": [],
+  "egressMode": "browse",
+  "steps": [
+    {
+      "id": "each",
+      "kind": "fanout",
+      "roleId": "",
+      "instruction": "",
+      "settings": {
+        "concurrency": 3,
+        "maxItems": 200,
+        "parse": "lines",
+        "onItemError": "continue",
+        "deadLetterLimit": 20
+      }
+    },
+    {
+      "id": "look",
+      "roleId": "researcher",
+      "instruction": "Research the company you were given. Find its website and read the front page and the about page. Report: what it sells in one sentence, roughly how many people work there, where it is based, the industry, and the name and title of whoever runs it if the site says. Give the URL for each fact. Anything the sources do not state is \"not found\" — do not infer it from the company name."
+    },
+    {
+      "id": "record",
+      "roleId": "data-extractor",
+      "instruction": "Turn the research into one record: company, website, what they do, headcount, location, industry, leader name, leader title, sources. Copy the values. Anything reported as not found is null."
+    },
+    {
+      "id": "table",
+      "roleId": "summariser",
+      "instruction": "Write a CSV of every company: company,website,what_they_do,headcount,location,industry,leader,source. Then, underneath, one line per company saying what about them suggests they would or would not care about what the brief says we sell — grounded in something the research actually found, or \"nothing found either way\"."
+    }
+  ],
+  "edges": [
+    ["each", "look"],
+    ["look", "record"],
+    ["record", "table"]
+  ]
+}

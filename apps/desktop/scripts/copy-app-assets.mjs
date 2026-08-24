@@ -31,6 +31,12 @@ const copies = [
     to: path.join(desktopRoot, 'dist', 'migrations'),
     hint: 'packages/store/src/migrations is missing from the working tree.',
   },
+  {
+    label: 'templates',
+    from: path.resolve(repoRoot, 'templates'),
+    to: path.join(desktopRoot, 'dist', 'templates'),
+    hint: 'The templates/ directory is missing from the working tree.',
+  },
 ];
 
 for (const { label, from, to, hint } of copies) {

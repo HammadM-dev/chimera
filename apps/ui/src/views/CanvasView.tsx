@@ -503,12 +503,32 @@ export interface Attachment {
   note: string;
 }
 
+export interface TemplateStep {
+  id?: string;
+  /**
+   * Any node the canvas can build, not only the two the planner emits.
+   *
+   * It was `'agent' | 'approval'`, which was right for a plan a model writes
+   * and wrong for a shipped template: an invoice run is a fan-out, a triage run
+   * is a branch, and neither could be expressed. A template that cannot say
+   * "do this for each of them" is a template for a demo.
+   */
+  kind?: StepKind;
+  roleId: string;
+  instruction: string;
+  /** Per-kind settings: the fan-out's concurrency, the branch's test, the loop's cap. */
+  settings?: Partial<StepSettings>;
+}
+
 export interface AutomationTemplate {
   name: string;
   summary: string;
-  steps: { id?: string; kind?: 'agent' | 'approval'; roleId: string; instruction: string }[];
+  steps: TemplateStep[];
   /** [from, to] over step ids. Absent means the steps run in the order given. */
   edges?: [string, string][];
+  /** Hosts this automation may send to. Reading the public web needs no list. */
+  egressAllowlist?: string[];
+  egressMode?: 'allowlist' | 'browse' | 'open';
 }
 
 /** The wire shape of one saved or runnable step. */
@@ -659,27 +679,32 @@ function CanvasInner({
     const nodeIdFor = new Map<string, string>();
 
     template.steps.forEach((step, index) => {
-      const approval = step.kind === 'approval';
-      const role = approval
-        ? null
-        : (roles.find((candidate) => candidate.id === step.roleId) ?? null);
-      if (!approval && role === null) return;
+      const kind: StepKind = step.kind ?? 'agent';
+      const isAgent = kind === 'agent';
+      const role = isAgent
+        ? (roles.find((candidate) => candidate.id === step.roleId) ?? null)
+        : null;
+      // A template naming an agent this workspace does not have is skipped
+      // rather than built empty — the same rule the planner's output follows.
+      if (isAgent && role === null) return;
 
       nodeSeq += 1;
-      const nodeId = `${approval ? 'approval' : role?.id}-${String(nodeSeq)}`;
+      const nodeId = `${isAgent ? role?.id : kind}-${String(nodeSeq)}`;
       nodeIdFor.set(step.id ?? `step-${String(index)}`, nodeId);
       built.push({
         id: nodeId,
-        type: approval ? 'approval' : 'agent',
+        type: kind,
         position: { x: ORIGIN_X + index * COLUMN_PITCH, y: ORIGIN_Y },
         data: {
-          kind: approval ? 'approval' : 'agent',
+          kind,
           role,
           binding: null,
-          instruction: approval ? '' : step.instruction,
-          settings: approval
-            ? { ...DEFAULT_SETTINGS, prompt: step.instruction }
-            : { ...DEFAULT_SETTINGS },
+          instruction: isAgent ? step.instruction : '',
+          settings: {
+            ...DEFAULT_SETTINGS,
+            ...(kind === 'approval' ? { prompt: step.instruction } : {}),
+            ...(step.settings ?? {}),
+          },
         },
       });
     });
@@ -714,6 +739,8 @@ function CanvasInner({
     );
     setNodes(built.map((node) => ({ ...node, position: layout.get(node.id) ?? node.position })));
 
+    if (template.egressMode !== undefined) setEgressMode(template.egressMode);
+    if (template.egressAllowlist !== undefined) setSites(template.egressAllowlist.join(', '));
     setBrief(template.summary);
     setSelectedId(built[0]?.id ?? null);
     requestAnimationFrame(() => {

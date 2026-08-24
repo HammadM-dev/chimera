@@ -533,3 +533,79 @@
   font-size: var(--type-floor);
   color: var(--text-muted);
 }
+
+/* The template gallery.
+ *
+ * Cards rather than a list because the choice is made by scanning, and the
+ * three lines on each are the three questions somebody asks in order: what is
+ * it, is it for me, and what does it do. "Needs" is last and quiet — it is a
+ * warning, not a selling point, and it only appears when there is one. */
+.gallery {
+  margin-top: 32px;
+}
+
+.gallery__title {
+  margin: 0;
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  color: var(--text-primary);
+}
+
+.gallery__sub {
+  margin: 4px 0 16px;
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+}
+
+.gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(268px, 1fr));
+  gap: 12px;
+}
+
+.gallery__card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  text-align: left;
+  font: inherit;
+  color: var(--text-primary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  cursor: pointer;
+}
+
+.gallery__card:hover {
+  background: var(--surface-raised);
+  border-color: var(--border-strong);
+}
+
+.gallery__card:focus-visible {
+  outline: var(--border-width) solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.gallery__name {
+  font-size: var(--type-body);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-ui);
+}
+
+.gallery__audience {
+  font-size: var(--type-floor);
+  color: var(--accent-primary);
+}
+
+.gallery__summary {
+  font-size: var(--type-meta);
+  color: var(--text-secondary);
+  line-height: var(--line-height-prose);
+}
+
+.gallery__needs {
+  margin-top: 2px;
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}

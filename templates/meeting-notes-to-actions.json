@@ -1,0 +1,21 @@
+{
+  "id": "meeting-notes-to-actions",
+  "name": "Turn meeting notes into who does what by when",
+  "audience": "Anyone who runs meetings and loses the follow-ups",
+  "summary": "Read a transcript or a page of notes and pull out every commitment somebody made: what, who, and by when. Things nobody owned are listed separately rather than assigned to whoever spoke last.",
+  "needs": ["The notes as an attachment on the run, or in a granted folder"],
+  "egressMode": "allowlist",
+  "steps": [
+    {
+      "id": "pull",
+      "roleId": "data-extractor",
+      "instruction": "Read the notes and pull out every action somebody committed to. One record per action: what was agreed, who owns it, the deadline, and the sentence it came from. Copy the owner's name exactly as written. If nobody was named, the owner is null — do not assign it to whoever was speaking. If no date was given, the deadline is null."
+    },
+    {
+      "id": "write",
+      "roleId": "summariser",
+      "instruction": "Write the follow-up. A short list of what was decided, then the actions grouped by owner with deadlines. Put actions with no owner under a heading saying they need one, and actions with no deadline under a heading saying they need a date. Quote the source sentence beside each action."
+    }
+  ],
+  "edges": [["pull", "write"]]
+}
