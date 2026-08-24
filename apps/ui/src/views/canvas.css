@@ -89,11 +89,18 @@
   gap: var(--space-2);
 }
 
+/* The extra padding is the room the fold handle sits in. Without it the handle
+ * is drawn over the top of the first card in the palette and over the opening
+ * words of the inspector — "Select a step" rendered as "elect a step", with the
+ * S behind a button. An absolutely positioned control still has to be given
+ * space by something. */
 .canvas__palette {
+  padding-right: 30px;
   border-right: var(--border-width) solid var(--border-hairline);
 }
 
 .canvas__inspector {
+  padding-left: 30px;
   border-left: var(--border-width) solid var(--border-hairline);
   gap: var(--space-3);
 }
