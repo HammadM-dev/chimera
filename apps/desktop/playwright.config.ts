@@ -5,9 +5,19 @@ export default defineConfig({
   // Refuses to start against a bundle older than the source. See the file.
   globalSetup: './e2e/support/globalSetup.ts',
   // An Electron cold start is seconds, not milliseconds, and the splash suite
-  // launches the app twice in one test. 30s is a web-test default that this
-  // suite has no business inheriting.
-  timeout: 60_000,
+  // launches the app twice in one test. 30s was a web-test default this suite
+  // had no business inheriting, and 60s became the same thing as the suite grew
+  // past a hundred tests: measured 2026-08-24, the only failures in two
+  // otherwise-green full runs were `m1-demo` and two splash specs, all of them
+  // "test timeout exceeded" rather than a failed assertion, and all of them
+  // passing on their own a minute later. By the eighty-fifth Electron launch a
+  // cold start is not what it was at the first.
+  //
+  // This hides nothing: a genuinely broken test fails on an assertion, not by
+  // taking two minutes. What it stops is a suite that reports the machine being
+  // busy as the product being broken — which is the failure mode that gets a
+  // real failure ignored.
+  timeout: 120_000,
   retries: 0,
   reporter: [['list']],
   fullyParallel: false, // one Electron app instance per test file, avoid launch contention
