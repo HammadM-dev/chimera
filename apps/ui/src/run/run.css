@@ -419,3 +419,9 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+/* How many times a line repeated. Quiet: the line is the information and this
+   is a footnote on it. */
+.doing__times {
+  color: var(--text-muted);
+}

@@ -36,6 +36,39 @@ interface StepView {
   activity: Activity[];
 }
 
+/**
+ * Consecutive identical lines, collapsed with a count.
+ *
+ * Not cosmetic tidying: a step that used a tool now verifies, finds it has said
+ * nothing yet, speaks, and verifies again — so "Checked its own work and moved
+ * on" legitimately appears twice on almost every step. Both are true, and two
+ * identical lines in a row read as a rendering fault rather than as two checks.
+ * Counting them keeps the fact and drops the stutter.
+ *
+ * Only *consecutive* ones. The same line an hour apart is two things happening,
+ * and collapsing those would hide a loop going round.
+ */
+function collapse(activity: Activity[]): { activity: Activity; times: number }[] {
+  const rows: { activity: Activity; times: number }[] = [];
+  for (const line of activity) {
+    const last = rows.at(-1);
+    if (
+      last !== undefined &&
+      last.activity.text === line.text &&
+      last.activity.kind === line.kind &&
+      last.activity.artifact === undefined &&
+      last.activity.image === undefined &&
+      line.artifact === undefined &&
+      line.image === undefined
+    ) {
+      last.times += 1;
+      continue;
+    }
+    rows.push({ activity: line, times: 1 });
+  }
+  return rows;
+}
+
 /** The mark beside a line of activity. Enough to scan by, not a decoration. */
 const KIND_MARK: Record<Activity['kind'], string> = {
   thinking: '…',
@@ -408,13 +441,16 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
 
                 {expanded.has(step.nodeId) && (
                   <ol className="doing" data-testid={`moment-activity-${step.nodeId}`}>
-                    {step.activity.map((activity, index) => (
+                    {collapse(step.activity).map(({ activity, times }, index) => (
                       <li key={`${String(activity.at)}-${String(index)}`} className="doing__row">
                         <span className={`doing__mark doing__mark--${activity.kind}`}>
                           {KIND_MARK[activity.kind]}
                         </span>
                         <div className="doing__body">
-                          <span className="doing__text">{activity.text}</span>
+                          <span className="doing__text">
+                            {activity.text}
+                            {times > 1 && <span className="doing__times"> ×{String(times)}</span>}
+                          </span>
                           {activity.image !== undefined && (
                             <img className="doing__image" src={activity.image} alt="" />
                           )}

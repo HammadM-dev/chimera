@@ -209,6 +209,14 @@ test('a running step can be opened out to show what it is doing', async () => {
     await expect(research).not.toContainText('http.request');
 
     const filing = await open('filer-2');
+
+    // Photographed when asked for, the same way `shots.spec.ts` does the rest.
+    // This is the one surface in the app that is a live feed, and a live feed
+    // is worth looking at rather than only asserting about:
+    //   CHIMERA_SHOTS=1 npx playwright test e2e/liveActivity.spec.ts
+    if (process.env['CHIMERA_SHOTS'] === '1') {
+      await monitor.screenshot({ path: 'test-results/shots/run-activity.png' });
+    }
     // The file is offered back the moment it exists, with an icon for what it
     // is and the name the agent chose. A run writes into a sandbox that gets
     // swept, so without this it is something you watch appear and then lose.
