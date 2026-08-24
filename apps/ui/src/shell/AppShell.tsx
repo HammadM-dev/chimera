@@ -11,6 +11,7 @@ import { StatusBar } from './StatusBar.tsx';
 import { Confirm } from './Confirm.tsx';
 import { bridge } from '../chat/useChimera.ts';
 import './shell.css';
+import { useProfile } from '../useProfile.ts';
 
 // CHIMERA is a place you build automations, so the frame is a sidebar of places
 // and one surface that changes — not a chat window with settings around it.
@@ -114,20 +115,9 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   },
 };
 
-interface ShellProps {
-  /**
-   * Replays the first-run experience: the splash, then the setup guide.
-   *
-   * Reachable at any time. The alternative — the one this repository actually
-   * shipped for two days — was telling a user to delete a directory, and both
-   * screens are gated on state that a working install has already moved past:
-   * the splash on `hasSeenSplash`, the guide on having no connections. Neither
-   * could be seen again by the person who built them.
-   */
-  onRunSetup: () => void;
-}
-
-export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
+export function AppShell(): JSX.Element {
+  const { profile, save } = useProfile();
+  const theme = profile?.theme ?? 'dark';
   const [view, setView] = useState<View>('home');
   const [goal, setGoal] = useState('');
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
@@ -251,13 +241,20 @@ export function AppShell({ onRunSetup }: ShellProps): JSX.Element {
         <div className="sidebar__spacer" />
 
         <div className="sidebar__footer">
+          {/* What used to be here was "Replay intro", which answered a question
+              nobody in the middle of their work was asking. The footer is prime
+              space in a rail somebody looks at all day; a light switch earns it
+              and a rewind button does not. */}
           <button
             type="button"
             className="button button--ghost sidebar__setup"
-            data-testid="nav-setup"
-            onClick={onRunSetup}
+            data-testid="nav-theme"
+            aria-pressed={theme === 'light'}
+            onClick={() => {
+              void save({ theme: theme === 'dark' ? 'light' : 'dark' });
+            }}
           >
-            Replay intro
+            {theme === 'dark' ? 'Light mode' : 'Dark mode'}
           </button>
           <span className="chip chip--ok">Local</span>
         </div>

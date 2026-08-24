@@ -73,10 +73,6 @@ export function App(): JSX.Element {
   const [monitor] = useState(runWindow);
   const [splashDone, setSplashDone] = useState(!shouldPlaySplash());
   const [setupDone, setSetupDone] = useState(!needsOnboarding());
-  // An explicit replay outranks the workspace check below. Without this, asking
-  // to watch the intro on a set-up workspace showed it for one frame and then
-  // dismissed it — the check doing its job to the wrong question.
-  const [replaying, setReplaying] = useState(false);
   const visible = useDocumentVisible();
 
   // The URL's answer is from window creation. A reload keeps that URL, so a
@@ -85,7 +81,7 @@ export function App(): JSX.Element {
   // against the live workspace on mount, which is the same question asked at
   // the moment it matters.
   useEffect(() => {
-    if (setupDone || replaying) return;
+    if (setupDone) return;
     void (async () => {
       try {
         const chimera = (
@@ -101,30 +97,19 @@ export function App(): JSX.Element {
         // cannot be read is not one to declare set up.
       }
     })();
-  }, [setupDone, replaying]);
+  }, [setupDone]);
 
   if (monitor !== null) return <RunMonitor runId={monitor.runId} name={monitor.name} />;
 
   return (
     <>
-      <AppShell
-        onRunSetup={() => {
-          // The whole first-run experience, not just the guide: splash, then
-          // welcome. Both are things a person builds and then wants to watch
-          // again, and the only way to do that was deleting a directory —
-          // which meant the author could not check their own work either.
-          setReplaying(true);
-          setSplashDone(false);
-          setSetupDone(false);
-        }}
-      />
+      <AppShell />
       {/* Setup waits for the splash: two things animating in at once is one
           too many, and the guide's entrance is the first thing it says. */}
       {splashDone && !setupDone && (
         <Onboarding
           onDone={() => {
             setSetupDone(true);
-            setReplaying(false);
           }}
         />
       )}

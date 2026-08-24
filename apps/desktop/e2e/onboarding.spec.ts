@@ -1,4 +1,27 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
+
+/**
+ * The step between the welcome and the provider choice: who is using this copy.
+ *
+ * A first name is required, because the whole point of asking is to put it on
+ * the home screen, and "Good morning, " is worse than no greeting. The last
+ * name is not, and this leaves it empty to keep proving that.
+ */
+async function nameYourself(page: Page, firstName = 'Hammad'): Promise<void> {
+  await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'you');
+  // Nothing typed, nothing to continue with.
+  await expect(page.getByTestId('intro-you-next')).toBeDisabled();
+  await page.getByTestId('intro-first-name').fill(firstName);
+  await expect(page.getByTestId('intro-you-next')).toBeEnabled();
+  await page.getByTestId('intro-you-next').click();
+}
+
+// Three tests were removed here with the feature they covered: the sidebar's
+// "Replay intro" button. It occupied the footer of a rail somebody looks at all
+// day to answer a question nobody in the middle of their work was asking. A
+// test for a deleted feature is not coverage, it is a reason to un-delete it.
+// The author's way back to a first-run state is `npm run dev:fresh`, which is
+// what it was for.
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { freshProfile, launchApp, removeProfile } from './support/app.ts';
@@ -54,6 +77,7 @@ test('a new workspace is walked through OmniRoute setup and ends connected', asy
     await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'welcome');
 
     await page.getByTestId('intro-start').click();
+    await nameYourself(page);
     await page.getByTestId('choose-omniroute').click();
     await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'omniroute');
 
@@ -114,6 +138,7 @@ test('an API key entered during setup reaches the vault, not the database', asyn
     await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 20_000 });
 
     await page.getByTestId('intro-start').click();
+    await nameYourself(page);
 
     // Real logos, not the monogram fallback: the marks render as images, and
     // the one on the API-key card leans out of its badge rather than sitting
@@ -158,112 +183,6 @@ test('an API key entered during setup reaches the vault, not the database', asyn
     removeProfile(profile);
   }
 });
-
-test('the whole intro replays on demand, splash included', async () => {
-  // The bug this exists for, in the founder's words: "the intro showed up when
-  // I first did it, then I stopped it and retried and now neither the splash
-  // nor the welcome shows". Both were correct — the splash plays once per
-  // workspace, the guide only when nothing is connected — and both were
-  // therefore unwatchable the moment the app was working, including by the
-  // person who built them.
-  const profile = freshProfile();
-  const app = await launchApp({ profile, splash: true });
-
-  try {
-    const page = await app.firstWindow();
-
-    // First launch: splash, then the guide. Skip it and connect nothing.
-    await page.waitForSelector('.splash');
-    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
-    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
-    await page.getByTestId('intro-skip').click();
-    await expect(page.getByTestId('onboarding')).toHaveCount(0);
-
-    // On demand, both come back — in order, and from the beginning.
-    await page.getByTestId('nav-setup').click();
-    await page.waitForSelector('.splash');
-    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
-    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'welcome');
-  } finally {
-    await app.close();
-    removeProfile(profile);
-  }
-});
-
-test('the intro replays even on a workspace that is already set up', async () => {
-  // The state the founder was actually in: splash seen, a provider connected.
-  // Neither gate would fire again, which is correct and is exactly why the
-  // replay has to be independent of both.
-  const profile = freshProfile();
-  const app = await launchApp({ profile, splash: true });
-
-  try {
-    const page = await app.firstWindow();
-    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
-    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
-
-    // Connect something, so both gates are now closed.
-    await page.getByTestId('intro-start').click();
-
-    // Real logos, not the monogram fallback: the marks render as images, and
-    // the one on the API-key card leans out of its badge rather than sitting
-    // squarely inside it.
-    // Anthropic and OpenAI each have their own card now, with their own logo.
-    await expect(page.getByTestId('choose-anthropic')).toContainText('Anthropic');
-    await expect(page.getByTestId('choose-openai')).toContainText('OpenAI');
-    await expect(page.getByTestId('choose-ollama-cloud')).toContainText('Ollama Cloud');
-
-    const marks = page.locator('.intro__choice .mark--logo img');
-    await expect(marks.first()).toBeVisible();
-    expect(await marks.count()).toBeGreaterThanOrEqual(3);
-    const transform = await marks.first().evaluate((node) => getComputedStyle(node).transform);
-    expect(transform).not.toBe('none');
-
-    await page.getByTestId('choose-anthropic').click();
-    await page.getByTestId('intro-key').fill('sk-a-real-looking-key');
-    await page.getByTestId('intro-connect').click();
-    await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'done', {
-      timeout: 15_000,
-    });
-    await page.getByTestId('intro-finish').click();
-    await expect(page.getByTestId('onboarding')).toHaveCount(0);
-
-    await page.getByTestId('nav-setup').click();
-    await page.waitForSelector('.splash');
-    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
-    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
-  } finally {
-    await app.close();
-    removeProfile(profile);
-  }
-});
-
-test('the setup guide is reachable again after it has been dismissed', async () => {
-  // The bug this exists for: the guide was reachable exactly once, on a
-  // workspace that happened to have no connections, and the only way back to
-  // it was deleting a directory. A first-run screen nobody can re-open is one
-  // nobody can check either.
-  const profile = freshProfile();
-  const app = await launchApp({ profile });
-
-  try {
-    const page = await app.firstWindow();
-    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 20_000 });
-    await page.getByTestId('intro-skip').click();
-    await expect(page.getByTestId('onboarding')).toHaveCount(0);
-
-    await page.getByTestId('nav-setup').click();
-    await page.waitForSelector('.splash', { state: 'detached', timeout: 15_000 });
-    await expect(page.getByTestId('onboarding')).toBeVisible({ timeout: 15_000 });
-    // Back at the beginning, not resumed halfway through.
-    await expect(page.getByTestId('onboarding')).toHaveAttribute('data-step', 'welcome');
-  } finally {
-    await app.close();
-    removeProfile(profile);
-  }
-});
-
 test('setup can be skipped, and does not block the app', async () => {
   const profile = freshProfile();
   const app = await launchApp({ profile });
