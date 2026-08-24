@@ -25,6 +25,7 @@ import {
 import { getStore } from '../store/lifecycle.ts';
 import { getChannel } from '../ipc/registry.ts';
 import { EVENT_CHANNEL } from '../ipc/channelNames.ts';
+import { Governor } from '@chimera/core';
 
 // The main process's provider surface: what the IPC handlers call. Kept out of
 // registry.ts so the channel definitions stay importable by the sandboxed
@@ -222,6 +223,30 @@ export function startChat(webContents: WebContents, request: ChatRequest): { str
   const adapter = adapterFor(connection.kind);
   const streamId = randomUUID();
 
+  // CLAUDE.md: "Every model call and every tool call goes through the Governor.
+  // There is no bypass path." This one did not, and had not since it was
+  // written — a raw prompt straight to `streamChat`, no authorisation, no
+  // record. It is a diagnostic panel rather than an agent, so what it needs
+  // from the Governor is the capability check and the refusal, not a budget: a
+  // model that cannot take a plain prompt should be turned away here rather
+  // than a hundred tokens later, and a run reading the trace should be able to
+  // tell "checked and permitted" from "never checked".
+  const governor = new Governor('permissive');
+  const authorization = governor.authorizeModelCall({
+    runId: streamId,
+    nodeId: 'chat',
+    roleId: 'chat',
+    iteration: 0,
+    depth: 0,
+    purpose: 'act',
+    connectionId: request.connectionId,
+    model: request.model,
+    // Four characters to a token, the same rough constant the agent loop uses.
+    estimatedInputTokens: Math.ceil(request.prompt.length / 4),
+    estimatedOutputTokens: 512,
+    requiredCapabilities: [],
+  });
+
   const options = {
     authRef: connection.authRef,
     ...(connection.baseUrl === null ? {} : { baseUrl: connection.baseUrl }),
@@ -242,6 +267,15 @@ export function startChat(webContents: WebContents, request: ChatRequest): { str
   };
 
   void (async () => {
+    if (authorization.decision === 'deny') {
+      push({
+        type: 'error',
+        errorCode: authorization.code,
+        errorMessage: authorization.message,
+      });
+      return;
+    }
+
     try {
       for await (const event of adapter.streamChat(
         { model: request.model, messages: [{ role: 'user', content: request.prompt }] },
