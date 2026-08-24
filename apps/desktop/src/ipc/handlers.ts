@@ -70,6 +70,7 @@ import * as channels from './registry.ts';
 import { grantFolder, listGrants, revokeFolder } from '../files/grants.ts';
 import { readProfile, updateProfile, type Profile } from '../settings/profile.ts';
 import { listTemplates } from '../templates/service.ts';
+import { saveArtifact } from '../runs/artifacts.ts';
 import { listAccounts, removeAccount, saveAccount, testAccount } from '../email/service.ts';
 
 // Most channels are still stubs: real business logic arrives with the
@@ -204,6 +205,7 @@ function publicProfile(profile: Profile): {
 }
 
 registerHandler(channels.templateList, () => listTemplates());
+registerHandler(channels.runSaveArtifact, (payload) => saveArtifact(payload));
 registerHandler(channels.profileGet, () => publicProfile(readProfile()));
 registerHandler(channels.profileSet, (payload) => publicProfile(updateProfile(payload)));
 registerHandler(channels.searchGet, () => getSearch());

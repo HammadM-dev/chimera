@@ -298,3 +298,124 @@
     animation: none;
   }
 }
+
+/* "Show more" — what the agent is actually doing.
+ *
+ * Folded away by default because most of the time the step's name and its
+ * state are the whole answer. Opened, it is the difference between watching a
+ * spinner and watching work: which site was opened, what was searched for,
+ * what was written. */
+.moment__more {
+  margin: 4px 0 0;
+  padding: 0;
+  font: inherit;
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.moment__more:hover {
+  color: var(--text-primary);
+}
+
+.moment__more:focus-visible {
+  outline: var(--border-width) solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+.doing {
+  margin: 8px 0 0;
+  padding: 0 0 0 2px;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-left: var(--border-width) solid var(--border-hairline);
+}
+
+.doing__row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  padding-left: 8px;
+}
+
+.doing__mark {
+  font-size: var(--type-floor);
+  line-height: 1.5;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.doing__mark--problem {
+  color: var(--semantic-danger);
+}
+
+.doing__mark--done {
+  color: var(--semantic-success);
+}
+
+.doing__mark--search,
+.doing__mark--web {
+  color: var(--accent-primary);
+}
+
+.doing__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.doing__text {
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* Capped rather than full-bleed: a screenshot is context for the line above it,
+   not the subject of the window. */
+.doing__image {
+  max-width: 100%;
+  max-height: 240px;
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  object-fit: contain;
+  object-position: left top;
+}
+
+/* Something the run made, offered the moment it exists rather than at the end.
+   The icon is by file type because that is what somebody scanning for their
+   spreadsheet is looking for. */
+.artifact {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.artifact__mark {
+  font-size: var(--type-body);
+  line-height: 1;
+}
+
+.artifact__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--type-meta);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.artifact__size {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+  white-space: nowrap;
+}

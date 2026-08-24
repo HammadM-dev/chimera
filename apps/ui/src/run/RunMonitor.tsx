@@ -15,6 +15,15 @@ import './run.css';
 
 type Phase = 'waiting' | 'running' | 'succeeded' | 'failed' | 'needs-approval' | 'skipped';
 
+interface Activity {
+  nodeId: string;
+  at: number;
+  text: string;
+  kind: 'thinking' | 'search' | 'web' | 'file' | 'mail' | 'tool' | 'done' | 'problem';
+  artifact?: { path: string; name: string; bytes: number | null };
+  image?: string;
+}
+
 interface StepView {
   nodeId: string;
   label: string;
@@ -23,6 +32,38 @@ interface StepView {
   output: string;
   startedAt: number | null;
   endedAt: number | null;
+  /** Everything this step has done, newest last. Shown behind "Show more". */
+  activity: Activity[];
+}
+
+/** The mark beside a line of activity. Enough to scan by, not a decoration. */
+const KIND_MARK: Record<Activity['kind'], string> = {
+  thinking: '…',
+  search: '⌕',
+  web: '↗',
+  file: '▤',
+  mail: '✉',
+  tool: '⚙',
+  done: '✓',
+  problem: '!',
+};
+
+/**
+ * The icon for a thing a run produced.
+ *
+ * By what it is, because that is what somebody scanning for their spreadsheet
+ * is looking for — not by which agent made it.
+ */
+function artifactMark(name: string): string {
+  const extension = name.includes('.') ? (name.split('.').pop() ?? '').toLowerCase() : '';
+  if (extension === '') return '🗀';
+  if (['zip', 'tar', 'gz', '7z'].includes(extension)) return '🗜';
+  if (['csv', 'tsv', 'xlsx', 'xls', 'ods'].includes(extension)) return '▦';
+  if (['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(extension)) return '🖼';
+  if (['pdf'].includes(extension)) return '🗎';
+  if (['doc', 'docx', 'odt', 'md', 'txt', 'rtf'].includes(extension)) return '🗏';
+  if (['ppt', 'pptx', 'odp'].includes(extension)) return '🗔';
+  return '🗎';
 }
 
 const PHASE_WORD: Record<Phase, string> = {
@@ -88,6 +129,7 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
             output: '',
             startedAt: null,
             endedAt: null,
+            activity: [],
             ...patch,
           },
         ];
@@ -120,8 +162,26 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
               output: '',
               startedAt: null,
               endedAt: null,
+              activity: [],
             })),
           );
+          return;
+        }
+
+        if (event.type === 'activity') {
+          const activity = event.data as Activity;
+          setSteps((current) => {
+            const at = current.findIndex((step) => step.nodeId === activity.nodeId);
+            if (at === -1) return current;
+            const next = [...current];
+            const step = next[at] as StepView;
+            // Capped. A step that loops for an hour would otherwise grow this
+            // window's memory without bound, and nobody scrolls back past the
+            // last hundred lines of anything.
+            const kept = [...step.activity, activity].slice(-200);
+            next[at] = { ...step, activity: kept, detail: activity.text };
+            return next;
+          });
           return;
         }
 
@@ -186,6 +246,7 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
           startedAt: string;
           endedAt: string;
           steps: { nodeId: string; label: string; status: string }[];
+          activity: Activity[];
         };
       }>('run:subscribe', { runId })
       .then((result) => {
@@ -202,9 +263,32 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
                   output: '',
                   startedAt: null,
                   endedAt: null,
+                  // The feed, caught up from the trace.
+                  //
+                  // Live events go out as they happen, so a window that is not
+                  // open yet gets none of them — which is every window for the
+                  // first moment of a run, and *all* of a run that finishes in
+                  // two seconds. Attached here, where the steps are built,
+                  // because a map over steps that do not exist yet produces
+                  // nothing at all: the first version of this ran before this
+                  // block and quietly did nothing.
+                  activity: snapshot.activity.filter((line) => line.nodeId === step.nodeId),
                 })),
           );
         }
+
+        // A window that *was* open already has these lines from the live feed;
+        // one that opened mid-run has some of them. Fill only the gaps.
+        setSteps((current) =>
+          current.map((step) =>
+            step.activity.length > 0
+              ? step
+              : {
+                  ...step,
+                  activity: snapshot.activity.filter((line) => line.nodeId === step.nodeId),
+                },
+          ),
+        );
         // The run's own clock, not this window's. A monitor that opened after
         // the run finished was timing itself, and reported "0s".
         if (snapshot.startedAt !== '') {
@@ -234,6 +318,33 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
     if (status !== 'running') return;
     tail.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
   }, [steps, status]);
+
+  // Which steps are opened out. A set rather than a flag on the step: a person
+  // watching a five-agent run opens the one they are curious about, and it
+  // stays open while the rest keep moving.
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [saved, setSaved] = useState<Record<string, string>>({});
+
+  const save = useCallback(
+    async (artifact: NonNullable<Activity['artifact']>) => {
+      setSaved((current) => ({ ...current, [artifact.path]: 'Saving…' }));
+      try {
+        const result = await bridge().invoke<{ saved: boolean; path: string; reason: string }>(
+          'run:saveArtifact',
+          { runId, path: artifact.path, name: artifact.name },
+        );
+        setSaved((current) => ({
+          ...current,
+          // Cancelling the dialog is not a failure and must not read as one:
+          // the control simply goes back to offering.
+          [artifact.path]: result.saved ? 'Saved' : result.reason === '' ? 'Save' : result.reason,
+        }));
+      } catch {
+        setSaved((current) => ({ ...current, [artifact.path]: 'Could not save' }));
+      }
+    },
+    [runId],
+  );
 
   const elapsed = useMemo(() => seconds(startedAt.current, now), [now]);
   const done = status === 'succeeded' || status === 'failed';
@@ -272,6 +383,70 @@ export function RunMonitor({ runId, name }: { runId: string; name: string }): JS
                   <span className="moment__phase">{PHASE_WORD[step.phase]}</span>
                 </p>
                 {step.detail !== '' && <p className="moment__detail">{step.detail}</p>}
+                {step.activity.length > 0 && (
+                  <button
+                    type="button"
+                    className="moment__more"
+                    data-testid={`moment-more-${step.nodeId}`}
+                    aria-expanded={expanded.has(step.nodeId)}
+                    onClick={() => {
+                      setExpanded((current) => {
+                        const next = new Set(current);
+                        if (next.has(step.nodeId)) next.delete(step.nodeId);
+                        else next.add(step.nodeId);
+                        return next;
+                      });
+                    }}
+                  >
+                    {expanded.has(step.nodeId)
+                      ? 'Show less'
+                      : `Show more · ${String(step.activity.length)} step${
+                          step.activity.length === 1 ? '' : 's'
+                        }`}
+                  </button>
+                )}
+
+                {expanded.has(step.nodeId) && (
+                  <ol className="doing" data-testid={`moment-activity-${step.nodeId}`}>
+                    {step.activity.map((activity, index) => (
+                      <li key={`${String(activity.at)}-${String(index)}`} className="doing__row">
+                        <span className={`doing__mark doing__mark--${activity.kind}`}>
+                          {KIND_MARK[activity.kind]}
+                        </span>
+                        <div className="doing__body">
+                          <span className="doing__text">{activity.text}</span>
+                          {activity.image !== undefined && (
+                            <img className="doing__image" src={activity.image} alt="" />
+                          )}
+                          {activity.artifact !== undefined && (
+                            <span className="artifact">
+                              <span className="artifact__mark" aria-hidden="true">
+                                {artifactMark(activity.artifact.name)}
+                              </span>
+                              <span className="artifact__name">{activity.artifact.name}</span>
+                              {activity.artifact.bytes !== null && (
+                                <span className="artifact__size">
+                                  {activity.artifact.bytes.toLocaleString()} bytes
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                className="button button--quiet"
+                                data-testid={`artifact-save-${activity.artifact.name}`}
+                                onClick={() => {
+                                  void save(activity.artifact as NonNullable<Activity['artifact']>);
+                                }}
+                              >
+                                {saved[activity.artifact.path] ?? 'Save'}
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      </li>
+                    ))}
+                  </ol>
+                )}
+
                 {step.output !== '' && (
                   <p className="moment__output" title={step.output}>
                     {step.output}

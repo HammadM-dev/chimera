@@ -27,6 +27,7 @@ import {
 import { getStore } from '../store/lifecycle.ts';
 import { connectionFor } from '../providers/service.ts';
 import { emitRunEvent, subscribe } from './subscriptions.ts';
+import { createActivityReader, type Activity } from './activity.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
@@ -226,11 +227,20 @@ export function runSnapshot(runId: string): {
   startedAt: string;
   endedAt: string;
   steps: { nodeId: string; label: string; status: string }[];
+  activity: Activity[];
 } {
   const db = getStore();
   const record = runsRepository.get(db, runId);
   if (!record) {
-    return { status: '', output: '', errorSummary: '', startedAt: '', endedAt: '', steps: [] };
+    return {
+      status: '',
+      output: '',
+      errorSummary: '',
+      startedAt: '',
+      endedAt: '',
+      steps: [],
+      activity: [],
+    };
   }
 
   // The names the steps were given, out of the brief the run was started with.
@@ -254,12 +264,39 @@ export function runSnapshot(runId: string): {
 
   const over = record.status !== 'running' && record.status !== AWAITING;
 
+  // Replayed from the stored trace rather than remembered from the live feed.
+  //
+  // The live events go out as they happen, and a window that is not open yet
+  // gets none of them — which is every window for the first moment of a run,
+  // and *all* of a run that finishes in two seconds. Reading the trace back is
+  // what makes the feed the same whether you were watching from the start,
+  // opened the window late, or came back to a run that ended yesterday.
+  const activity: Activity[] = [];
+  try {
+    const reader = createActivityReader();
+    for (const event of tracesRepository.listForRun(db, runId)) {
+      const line = reader.read(
+        {
+          nodeId: event.nodeId,
+          eventType: event.eventType,
+          payload: JSON.parse(event.payloadJson) as Record<string, unknown>,
+        },
+        Date.parse(event.ts),
+      );
+      if (line !== null) activity.push(line);
+    }
+  } catch {
+    // A trace that will not read back costs the feed and nothing else; the
+    // steps and the answer are read from their own tables.
+  }
+
   return {
     status: record.status,
     output: record.output,
     errorSummary: record.errorSummary ?? '',
     startedAt: record.startedAt,
     endedAt: record.endedAt ?? '',
+    activity,
     steps: nodeStatesRepository.listForRun(db, runId).map((state) => ({
       nodeId: state.nodeId,
       label: labels.get(state.nodeId) ?? state.nodeId,
@@ -424,6 +461,8 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
     })),
   });
 
+  const activityReader = createActivityReader();
+
   try {
     const outcome = await runAutomation({
       db,
@@ -451,6 +490,13 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       ...(cache ? { cache } : {}),
       onStep: (event) => {
         emitRunEvent(runId, `step:${event.phase}`, event);
+      },
+      // The live feed the run window reads. Most trace events are machinery and
+      // become nothing; the ones that survive are what a person would say the
+      // agent is doing.
+      onTraceEvent: (event) => {
+        const activity = activityReader.read(event);
+        if (activity !== null) emitRunEvent(runId, 'activity', activity);
       },
       onSpend: (snapshot) => {
         emitRunEvent(runId, 'spend', snapshot);

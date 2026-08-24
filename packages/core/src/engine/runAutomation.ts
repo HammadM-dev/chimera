@@ -13,6 +13,7 @@ import {
 } from '../runtime/agentLoop.ts';
 import { createCheckpointStore } from '../runtime/checkpoint.ts';
 import { createTraceSink } from '../runtime/trace.ts';
+import type { TraceEvent } from '../runtime/trace.ts';
 import { finalizeRun } from '../runtime/runOutcome.ts';
 import type { Role } from '../runtime/roleRegistry.ts';
 import type { ToolObservation } from '../runtime/promptAssembly.ts';
@@ -58,6 +59,14 @@ export interface RunAutomationDeps {
   tools: ToolRegistry;
   governor: Governor;
   cancellation?: { readonly cancelled: boolean };
+  /**
+   * Every trace event as it is written, for a window watching the run.
+   *
+   * Distinct from `onStep`, which fires twice per step. This fires on every
+   * tool call, result and decision, which is what "show me what it is doing"
+   * actually needs.
+   */
+  onTraceEvent?: (event: TraceEvent) => void;
   onStep?: (event: {
     nodeId: string;
     phase: 'started' | 'finished';
@@ -221,7 +230,9 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
   }
 
   const checkpoints = createCheckpointStore(db);
-  const trace = createTraceSink(db, runId);
+  const trace = createTraceSink(db, runId, {
+    ...(deps.onTraceEvent ? { onEvent: deps.onTraceEvent } : {}),
+  });
   const meter = createSpendMeter({
     db,
     runId,

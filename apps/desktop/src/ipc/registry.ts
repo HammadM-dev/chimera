@@ -279,6 +279,21 @@ export const runSubscribe = defineInvokeChannel({
       startedAt: z.string(),
       endedAt: z.string(),
       steps: z.array(z.object({ nodeId: z.string(), label: z.string(), status: z.string() })),
+      // What each step did, replayed from the trace. A run that finished before
+      // the window opened emitted its whole live feed to nobody; this is how
+      // the window catches up.
+      activity: z.array(
+        z.object({
+          nodeId: z.string(),
+          at: z.number(),
+          text: z.string(),
+          kind: z.enum(['thinking', 'search', 'web', 'file', 'mail', 'tool', 'done', 'problem']),
+          artifact: z
+            .object({ path: z.string(), name: z.string(), bytes: z.number().nullable() })
+            .optional(),
+          image: z.string().optional(),
+        }),
+      ),
     }),
   }),
 });
@@ -598,6 +613,16 @@ export const telemetrySet = defineInvokeChannel({
   sensitive: false,
   requestSchema: z.object({ telemetry: telemetrySchema }),
   responseSchema: z.object({ telemetry: telemetrySchema }),
+});
+
+// Keeping a file a run produced. Opens the OS save dialog; the path is checked
+// against the run's own sandbox before anything is read.
+export const runSaveArtifact = defineInvokeChannel({
+  channel: 'run:saveArtifact',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string(), path: z.string(), name: z.string() }),
+  responseSchema: z.object({ saved: z.boolean(), path: z.string(), reason: z.string() }),
 });
 
 // The automations somebody can start from. Read-only: a template is data this
@@ -1429,6 +1454,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   profileGet,
   profileSet,
   templateList,
+  runSaveArtifact,
   searchGet,
   searchSet,
   telemetryGet,

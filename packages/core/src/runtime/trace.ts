@@ -66,6 +66,20 @@ export interface TraceSinkOptions {
    * hook added later is a hook added after the first leak.
    */
   secrets?: readonly string[];
+  /**
+   * Called with every event, after redaction, as it is written.
+   *
+   * The trace is the record; this is the live feed. The run monitor needs to
+   * say what a step is doing *while* it is doing it — which website it opened,
+   * what it searched for — and until this existed the only events the renderer
+   * saw were "step started" and "step finished". A person watching a step that
+   * takes four minutes had nothing to look at and no way to tell working from
+   * stuck.
+   *
+   * Given the redacted payload rather than the raw one: whatever the trace is
+   * not allowed to hold, a window is not allowed to show.
+   */
+  onEvent?: (event: TraceEvent) => void;
 }
 
 export function createTraceSink(
@@ -78,15 +92,30 @@ export function createTraceSink(
   return {
     append(event) {
       const payload = JSON.stringify(truncateStrings(event.payload));
+      const redacted = secrets.length === 0 ? payload : scrub(payload, secrets);
+
       tracesRepository.append(db, {
         runId,
         nodeId: event.nodeId,
         eventType: event.eventType,
-        payloadJson: secrets.length === 0 ? payload : scrub(payload, secrets),
+        payloadJson: redacted,
         tokensIn: event.tokensIn ?? null,
         tokensOut: event.tokensOut ?? null,
         costUsd: event.costUsd ?? null,
       });
+
+      // After the write, and never allowed to affect it. A listener that throws
+      // must not lose the audit record it was listening to.
+      if (options.onEvent) {
+        try {
+          options.onEvent({
+            ...event,
+            payload: JSON.parse(redacted) as Record<string, unknown>,
+          });
+        } catch {
+          // A window that cannot be told is not a run that should stop.
+        }
+      }
     },
   };
 }
