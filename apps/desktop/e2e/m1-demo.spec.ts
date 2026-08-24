@@ -139,6 +139,14 @@ async function chatThrough(page: Page, label: string, model: string): Promise<vo
   await expect(page.getByTestId('chat-answer')).toHaveText('ack');
 }
 
+// Three connections, a chat through each, a health check and a cost reading is
+// a lot for one test, and it uses about 45 seconds of the config's 60 on an
+// idle machine. That is a test that passes alone and fails in a full suite, and
+// it did: it was the only failure in an otherwise green run, and passed on its
+// own immediately afterwards. The work is genuine, so the budget moves rather
+// than the test being split into pieces that each prove less.
+test.describe.configure({ timeout: 180_000 });
+
 test.describe('M1-11 provider layer exit criteria', () => {
   test('three connections including OmniRoute, a chat through each, live health and cost', async () => {
     const gateway = await startGateway();
