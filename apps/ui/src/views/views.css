@@ -3,15 +3,37 @@
 
 /* ---- home --------------------------------------------------------------- */
 
+/* Centred when there is room, scrollable when there is not.
+ *
+ * `justify-content: center` alone is the classic version of this trap: once the
+ * content is taller than the box it overflows in *both* directions, so the top
+ * is cut off and no amount of scrolling reaches it — the browser will not
+ * scroll above the start of the flow. It went unnoticed while the home screen
+ * was a greeting and a text box. Adding the template gallery pushed it over,
+ * and the button that starts everything went off the bottom of a 710px window
+ * with no way to reach it.
+ *
+ * The auto margins do what `center` was there for: they absorb the spare room
+ * when there is any and collapse to nothing when there is not, leaving an
+ * ordinary top-aligned scrolling column. */
 .home {
   flex: 1;
   min-height: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
+  overflow-y: auto;
   gap: var(--space-5);
   padding: var(--space-6);
+}
+
+.home > *:first-child {
+  margin-top: auto;
+}
+
+.home > *:last-child {
+  margin-bottom: auto;
 }
 
 .home__greeting {
@@ -541,6 +563,10 @@
  * it, is it for me, and what does it do. "Needs" is last and quiet — it is a
  * warning, not a selling point, and it only appears when there is one. */
 .gallery {
+  /* `.home` centres its children, so a grid with no width shrink-wraps to one
+     column. This is the same width the composer takes. */
+  width: 100%;
+  max-width: 720px;
   margin-top: 32px;
 }
 

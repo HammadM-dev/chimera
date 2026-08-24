@@ -1,0 +1,19 @@
+{
+  // Its own program, not part of the app's. `stats/` is a Cloudflare Worker
+  // deployed by wrangler and built by nothing in this repository, so it is
+  // excluded from the workspace typecheck — but "not typechecked by the app"
+  // should not mean "not typecheckable". Run it with:
+  //   npx tsc --noEmit -p stats
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    // DOM for the fetch types — Workers implement the same Request/Response.
+    "lib": ["ES2022", "DOM"],
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "noEmit": true,
+    "types": []
+  },
+  "include": ["src", "types.d.ts"]
+}

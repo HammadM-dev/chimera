@@ -22,6 +22,18 @@ hours.
 That is the deal the setup screen makes with the user, and it is enforced by
 this schema rather than promised by it.
 
+## Checking it
+
+```sh
+npm run typecheck:stats
+```
+
+The D1 and fetch types it needs are declared in `types.d.ts` rather than pulled
+from `@cloudflare/workers-types`: four methods do not justify a dependency, and
+this keeps the directory buildable with nothing installed. If the declaration
+drifts from the real API, `wrangler deploy` is where you find out — which is the
+right place, since it is the only thing that runs this code.
+
 ## Setting it up
 
 You need a free Cloudflare account. No card.

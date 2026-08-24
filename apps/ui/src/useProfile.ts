@@ -28,10 +28,46 @@ export interface Profile {
 const listeners = new Set<(profile: Profile) => void>();
 let cached: Profile | null = null;
 
+/**
+ * Where the theme is remembered a second time, for one job only.
+ *
+ * `profile.json` is the record. Reading it costs an IPC round trip, and the
+ * round trip finishes several frames after the window paints — so somebody on
+ * the light theme saw the app open dark and then flip, on every single launch.
+ * A mirror in `localStorage` can be read synchronously before React renders,
+ * which is the only way to have the first paint be the right one.
+ *
+ * Never the source of truth. If the two disagree, the profile wins the moment
+ * it arrives; this only decides what is on screen for the first few frames.
+ */
+const THEME_KEY = 'chimera.theme';
+
 /** Applied to the document so every token swap follows one attribute. */
 function applyTheme(theme: Theme): void {
   document.documentElement.dataset['theme'] = theme;
+  try {
+    localStorage.setItem(THEME_KEY, theme);
+  } catch {
+    // A renderer with storage disabled still works; it just flashes.
+  }
 }
+
+/**
+ * Sets the theme before the first paint, from the mirror.
+ *
+ * Called at module load rather than in an effect: an effect runs after the
+ * paint it is meant to precede.
+ */
+function applyRememberedTheme(): void {
+  try {
+    const remembered = localStorage.getItem(THEME_KEY);
+    document.documentElement.dataset['theme'] = remembered === 'light' ? 'light' : 'dark';
+  } catch {
+    document.documentElement.dataset['theme'] = 'dark';
+  }
+}
+
+applyRememberedTheme();
 
 export function useProfile(): {
   profile: Profile | null;

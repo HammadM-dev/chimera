@@ -52,6 +52,23 @@ test('the shipped templates are offered, and one builds into a runnable automati
     await expect(page.getByTestId('template-invoice-to-spreadsheet')).toContainText('invoices');
     await expect(page.getByTestId('template-invoice-to-spreadsheet')).toContainText('Needs:');
 
+    // Everything on the home screen is reachable at the size the app opens at.
+    //
+    // The gallery is what made this worth asserting: `.home` centred its
+    // children with no overflow, so the moment the content grew past the window
+    // it overflowed in both directions and the browser would not scroll above
+    // the start of the flow. "Design it for me" — the button the whole screen
+    // exists to lead to — sat off the bottom of a 710px window, unclickable,
+    // and the only symptom was a click that timed out.
+    for (const id of ['home-input', 'home-design', 'home-blank']) {
+      const control = page.getByTestId(id);
+      await control.scrollIntoViewIfNeeded();
+      await expect(control).toBeInViewport();
+    }
+    // And the gallery itself is reachable by scrolling rather than clipped.
+    await page.getByTestId('template-code-review').scrollIntoViewIfNeeded();
+    await expect(page.getByTestId('template-code-review')).toBeInViewport();
+
     // The contract reviewer, because it is three agents and no fan-out — the
     // shape most likely to run to completion against a stub in reasonable time.
     await page.getByTestId('template-contract-review').click();
