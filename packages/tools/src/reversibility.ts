@@ -51,6 +51,21 @@ const CONTAINED: readonly string[] = [
   // the far end — the same category as loading a page, and the reason a
   // research agent does not need a gate to look something up.
   'search.web',
+  // The workspace server, all of it. There is no tool on it that writes,
+  // deletes, renames or runs anything — `planAutomation` returns a design and
+  // applies nothing — so reading this workspace is as contained as reading a
+  // page. Listed by name rather than as `workspace.*` so that a tool added
+  // there later has to be considered rather than inheriting this.
+  'workspace.automations',
+  'workspace.agents',
+  'workspace.runs',
+  'workspace.run',
+  'workspace.notes',
+  'workspace.plugins',
+  'workspace.providers',
+  'workspace.templates',
+  'workspace.folders',
+  'workspace.planAutomation',
   // Reading a mailbox changes nothing in it. Marking as read is not done here:
   // these fetch without touching flags, so a triage run leaves an inbox exactly
   // as it found it.

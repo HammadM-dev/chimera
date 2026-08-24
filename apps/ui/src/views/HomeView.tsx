@@ -30,6 +30,11 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
   const [modelKey, setModelKey] = useState('');
   const [plan, setPlan] = useState<AutomationTemplate | null>(null);
   const [busy, setBusy] = useState(false);
+  // The conversation. The home screen was a box that designed an automation and
+  // forgot you the moment it had; it is now somebody you can ask about your own
+  // workspace, who can still design one.
+  const [turns, setTurns] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [asking, setAsking] = useState(false);
   const { profile } = useProfile();
   const templates = useTemplates();
   const [error, setError] = useState<string | null>(null);
@@ -60,6 +65,46 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
     }
   }, [choices, description, modelKey]);
 
+  const ask = useCallback(async () => {
+    const question = description.trim();
+    if (question === '') return;
+
+    const chosen = modelKey === '' ? choices[0] : choices.find((choice) => choice.key === modelKey);
+    if (!chosen) {
+      setError('Connect a provider first — Providers, then add one.');
+      return;
+    }
+
+    setAsking(true);
+    setError(null);
+    setDescription('');
+    const asked = [...turns, { role: 'user' as const, content: question }];
+    setTurns(asked);
+
+    try {
+      const answer = await bridge().invoke<{
+        text: string;
+        plan: AutomationTemplate | null;
+      }>('assistant:ask', {
+        connectionId: chosen.connectionId,
+        model: chosen.model,
+        message: question,
+        // Everything before this message. The newest one is the task.
+        history: turns,
+      });
+
+      setTurns([...asked, { role: 'assistant', content: answer.text }]);
+      // A design it made along the way, offered rather than applied.
+      if (answer.plan !== null) setPlan(answer.plan);
+    } catch (err) {
+      setError(describeError(err).message);
+      setTurns(turns);
+      setDescription(question);
+    } finally {
+      setAsking(false);
+    }
+  }, [choices, description, modelKey, turns]);
+
   return (
     <section className="home" data-testid="home-view">
       <div>
@@ -69,15 +114,41 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
         <p className="home__sub">What should CHIMERA automate?</p>
       </div>
 
+      {turns.length > 0 && (
+        <div className="talk" data-testid="home-talk">
+          {turns.map((turn, index) => (
+            <p
+              key={`${turn.role}-${String(index)}`}
+              className={`talk__turn talk__turn--${turn.role}`}
+              data-testid={`talk-${turn.role}`}
+            >
+              {turn.content}
+            </p>
+          ))}
+          {asking && (
+            <p className="talk__turn talk__turn--assistant talk__turn--waiting">Looking…</p>
+          )}
+        </div>
+      )}
+
       <div className="home__composer">
         <textarea
           className="home__input"
           data-testid="home-input"
           rows={3}
           value={description}
-          placeholder="Describe the automation — what should happen, and what should be checked before it counts as done"
+          placeholder="Ask about your automations, agents, runs and notes — or describe something to build"
           onChange={(event) => {
             setDescription(event.target.value);
+          }}
+          onKeyDown={(event) => {
+            // Enter sends, shift-enter breaks the line. The composer is a
+            // conversation now, and a conversation you have to reach for a
+            // button to continue is one people stop having.
+            if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              void ask();
+            }
           }}
         />
         <div className="home__composer-actions">
@@ -114,6 +185,15 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
               }}
             >
               Start blank
+            </button>
+            <button
+              type="button"
+              className="button"
+              data-testid="home-ask"
+              disabled={asking || description.trim() === ''}
+              onClick={() => void ask()}
+            >
+              {asking ? 'Looking' : 'Ask'}
             </button>
             <button
               type="button"

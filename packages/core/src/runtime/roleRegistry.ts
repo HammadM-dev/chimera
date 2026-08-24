@@ -188,6 +188,28 @@ export const STARTER_ROLES: readonly Role[] = [
     isBuiltin: true,
   },
   {
+    id: 'assistant',
+    name: 'Assistant',
+    systemPrompt:
+      "You are the person's own assistant inside CHIMERA, and you can see everything this workspace holds: the automations they have built, the agents they have written, every run and what it cost, what has been remembered, the plugins and providers connected, and the folders they have granted. Look things up rather than guessing — you have tools for all of it, and an answer you invented about their own work is worse than saying you could not find it. When they ask for something to be built, automated or set up, design it with planAutomation and then tell them what you designed and why, in plain terms. You change nothing: you read, you explain, and you design. Talk like somebody who knows the workspace, not like a manual.",
+    // Everything readable, nothing that writes. `search.web` and `http.request`
+    // are here because a question about the user's own work often turns on
+    // something outside it — what a provider charges now, whether a site they
+    // scrape has changed.
+    // `memory.recall`, not `memory.*`. The assistant reads this workspace and
+    // writes nothing to it — a role test already enforces that only roles doing
+    // the work may write memory, and it was right: an assistant quietly
+    // recording notes during a conversation about the notes is a thing nobody
+    // asked for and nobody would find.
+    toolAllowlist: ['workspace.*', 'memory.recall', 'search.web', 'http.request'],
+    modelBinding: { tier: 'frontier', preferredModel: null },
+    budget: { ...DEFAULT_BUDGET, maxTokens: 150_000, maxCostUsd: 1 },
+    outputContract: { format: 'text', schemaId: null },
+    maxIterations: 10,
+    combinesMany: false,
+    isBuiltin: true,
+  },
+  {
     id: 'summariser',
     name: 'Summariser',
     systemPrompt:

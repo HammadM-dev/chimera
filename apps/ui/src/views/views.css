@@ -635,3 +635,44 @@
   font-size: var(--type-floor);
   color: var(--text-muted);
 }
+
+/* The conversation on the home screen.
+ *
+ * Deliberately plain: no avatars, no bubbles with tails, no timestamps. Two
+ * voices distinguished by alignment and weight is enough, and everything else
+ * is furniture in a place people come to get an answer and leave. */
+.talk {
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 46vh;
+  overflow-y: auto;
+}
+
+.talk__turn {
+  margin: 0;
+  padding: 10px 12px;
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  border-radius: var(--radius-card);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.talk__turn--user {
+  align-self: flex-end;
+  max-width: 80%;
+  color: var(--text-primary);
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-hairline);
+}
+
+.talk__turn--assistant {
+  color: var(--text-secondary);
+}
+
+.talk__turn--waiting {
+  color: var(--text-muted);
+}

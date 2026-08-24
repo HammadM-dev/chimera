@@ -30,6 +30,15 @@ export { readAnyDocument, DocumentReadError } from './documentReader.ts';
 export type { DocumentReadOptions } from './documentReader.ts';
 export { kindOf, readableExtensions } from './documents.ts';
 export type { DocumentKind, DocumentText } from './documents.ts';
+export { createWorkspaceServer } from './servers/workspace.ts';
+export type {
+  WorkspaceBackend,
+  WorkspaceAutomation,
+  WorkspaceAgent,
+  WorkspaceRun,
+  WorkspaceRunDetail,
+  WorkspaceNote,
+} from './servers/workspace.ts';
 export { createSearchServer, unwrapBing, DEFAULT_MAX_RESULTS } from './servers/search.ts';
 export type { SearchServerOptions, SearchResult } from './servers/search.ts';
 export { htmlToText } from './html.ts';

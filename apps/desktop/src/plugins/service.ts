@@ -275,6 +275,22 @@ const BUILT_IN_TOOLS = [
     id: 'search.web',
     description: 'Searches the web and returns titles, links and snippets to fetch.',
   },
+  // This workspace, readable. Granted to the Assistant by default and offered
+  // to any agent: there is no reason somebody should not build one that reads
+  // their own run history, and every one of these is a read.
+  { id: 'workspace.automations', description: 'Lists the automations saved here.' },
+  { id: 'workspace.agents', description: 'Lists the agents here and what each may use.' },
+  { id: 'workspace.runs', description: 'Lists recent runs, with what each one cost.' },
+  { id: 'workspace.run', description: 'One run in full, including what failed.' },
+  { id: 'workspace.notes', description: 'Searches what this workspace has remembered.' },
+  { id: 'workspace.plugins', description: 'Lists connected plugins and their tools.' },
+  { id: 'workspace.providers', description: 'Lists model providers and their models. Never keys.' },
+  { id: 'workspace.templates', description: 'Lists the automations CHIMERA ships.' },
+  { id: 'workspace.folders', description: 'Lists folders this workspace may read.' },
+  {
+    id: 'workspace.planAutomation',
+    description: 'Designs an automation from a description. Designs only — applies nothing.',
+  },
 ];
 
 /**

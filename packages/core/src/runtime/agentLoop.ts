@@ -209,6 +209,17 @@ export interface AgentLoopDeps {
    * instructions" is a file the user attached, not an instruction they gave.
    */
   seedObservations?: readonly ToolObservation[];
+  /**
+   * Turns of conversation that happened before this task.
+   *
+   * For the assistant on the home screen, which is a conversation rather than a
+   * step: each message the person sends is its own run of this loop, and
+   * everything said so far is the context. Instruction-position deliberately —
+   * these are the user's own words and this agent's own prior answers, which is
+   * exactly what `history` is for. Anything a *tool* returned is not here; it
+   * goes through `seedObservations` and the untrusted-data envelope.
+   */
+  seedHistory?: readonly Message[];
 }
 
 // Provider tool names are constrained to `[a-zA-Z0-9_-]` by both Anthropic and
@@ -370,7 +381,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   const steps: LoopStep[] = restored.steps;
   const observations: ToolObservation[] =
     restored.observations.length > 0 ? restored.observations : [...(deps.seedObservations ?? [])];
-  const history: Message[] = restored.history;
+  // A resumed run already has its history in the checkpoint; a fresh one starts
+  // with whatever conversation preceded it, which is nothing for an automation
+  // step and everything for the assistant.
+  const history: Message[] =
+    restored.history.length > 0 ? restored.history : [...(deps.seedHistory ?? [])];
   const completedToolCalls: Record<string, CompletedToolCall> = restored.completedToolCalls;
 
   let output = restored.output;
@@ -998,6 +1013,30 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     checkpoint('running');
 
     // ---- decide -----------------------------------------------------------
+
+    // Succeeding with nothing to show for it.
+    //
+    // Every turn so far called tools and said nothing — so there is no answer,
+    // and the verifier has just agreed the work is done. The step would return
+    // success and empty output, and the person would be handed a blank reply
+    // from a run that reported it had finished.
+    //
+    // Rare in an automation, whose steps usually end by writing something.
+    // Fatal in a conversation: the assistant looked up the workspace, its
+    // verifier agreed that it had, and the answer was nothing at all.
+    //
+    // Going round again gives it the turn in which to speak. A step that
+    // produced any prose keeps it and stops here, so this costs nothing in the
+    // ordinary case.
+    if (verification.verified && output.trim() === '' && iteration < task.role.maxIterations) {
+      history.push({
+        role: 'user',
+        content:
+          'You have what you needed. Now answer: say what you found, in your own words. Do not call another tool.',
+      });
+      continue;
+    }
+
     if (verification.verified) {
       const contracted = await applyOutputContract();
       if (contracted !== null && 'denied' in contracted) return denialResult(contracted.denied);

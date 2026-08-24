@@ -30,14 +30,18 @@ function openTemp(): { db: Database.Database; dir: string } {
   return { db: openDatabase({ dbPath: path.join(dir, 'test.sqlite'), migrationsDir }), dir };
 }
 
-test('all eight starter roles load, each with a prompt, an allowlist decision and a budget', () => {
+test('every starter role loads, each with a prompt, an allowlist decision and a budget', () => {
   const { db, dir } = openTemp();
   try {
     const registry = createRoleRegistry(db);
     const roles = registry.list();
 
-    assert.equal(roles.length, 8);
+    assert.equal(roles.length, 9);
     assert.deepEqual(roles.map((role) => role.id).sort(), [
+      // The home screen's own assistant. It reads this workspace and writes
+      // nothing, which is why it is a role like any other rather than a
+      // privileged path around the Governor.
+      'assistant',
       'browser-operator',
       'coder',
       'data-extractor',
@@ -114,7 +118,7 @@ test('an edited allowlist persists and is visible on the next read, no restart',
     assert.deepEqual(reopened.get('researcher')?.toolAllowlist, ['filesystem.readFile']);
 
     // Seeding does not run again and does not overwrite the edit.
-    assert.equal(reopened.list().length, 8);
+    assert.equal(reopened.list().length, 9);
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });

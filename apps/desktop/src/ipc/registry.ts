@@ -615,6 +615,37 @@ export const telemetrySet = defineInvokeChannel({
   responseSchema: z.object({ telemetry: telemetrySchema }),
 });
 
+// The assistant on the home screen: one turn of conversation, with the whole
+// workspace readable behind it. Goes through the Governor like every other
+// agent — see `chat/assistant.ts` for why that is worth saying.
+export const assistantAsk = defineInvokeChannel({
+  channel: 'assistant:ask',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    connectionId: z.string(),
+    model: z.string(),
+    message: z.string(),
+    history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string() })),
+  }),
+  responseSchema: z.object({
+    text: z.string(),
+    // The design, when it designed one. `steps` and `edges` pass through as the
+    // canvas's own shape rather than being re-declared here — this channel is a
+    // courier for them, not an author.
+    plan: z
+      .object({
+        name: z.string(),
+        summary: z.string(),
+        steps: z.unknown(),
+        edges: z.unknown().optional(),
+      })
+      .nullable(),
+    costUsd: z.number(),
+    tokens: z.number(),
+  }),
+});
+
 // Keeping a file a run produced. Opens the OS save dialog; the path is checked
 // against the run's own sandbox before anything is read.
 export const runSaveArtifact = defineInvokeChannel({
@@ -1455,6 +1486,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   profileSet,
   templateList,
   runSaveArtifact,
+  assistantAsk,
   searchGet,
   searchSet,
   telemetryGet,

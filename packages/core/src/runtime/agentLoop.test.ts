@@ -899,3 +899,81 @@ test('a step whose answer does not meet its schema is still put to a model', asy
     await h.cleanup();
   }
 });
+
+test('a step never succeeds with nothing to show for it', async () => {
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          // Every turn calls a tool and says nothing, so there is no answer —
+          // and then the verifier agrees the work is done. Left alone, the step
+          // returns success and an empty string, and the person is handed a
+          // blank reply from a run that reported it had finished. Fatal for the
+          // assistant, which looks things up and then has to speak.
+          {
+            kind: 'toolCall',
+            toolId: 'filesystem__listDirectory',
+            toolName: 'filesystem__listDirectory',
+            params: { path: '.' },
+          },
+          {
+            kind: 'toolCall',
+            toolId: 'filesystem__listDirectory',
+            toolName: 'filesystem__listDirectory',
+            params: { path: '.' },
+          },
+          VERIFIED,
+          // The turn it is given to speak.
+          { kind: 'text', content: 'The folder is empty.' },
+          VERIFIED,
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(taskFor(), {
+      governor: new RecordingGovernor(),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.equal(result.status, 'succeeded');
+    assert.equal(result.output, 'The folder is empty.');
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a step that already said something is not made to say it twice', async () => {
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'Plan: look in the folder.' },
+          { kind: 'text', content: 'The folder is empty.' },
+          VERIFIED,
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(taskFor(), {
+      governor: new RecordingGovernor(),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.equal(result.output, 'The folder is empty.');
+    // Three calls, not four: the extra turn is only for a step that has said
+    // nothing at all, so the ordinary case pays nothing for it.
+    assert.equal(provider.calls, 3);
+  } finally {
+    await h.cleanup();
+  }
+});
