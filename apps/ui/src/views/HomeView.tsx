@@ -2,6 +2,8 @@ import { useCallback, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
+import { useProfile } from '../useProfile.ts';
+import { greetingFor } from './greeting.ts';
 import type { AutomationTemplate } from './CanvasView.tsx';
 import './views.css';
 
@@ -21,18 +23,13 @@ const STARTERS = [
   'Extract invoice totals into a spreadsheet',
 ];
 
-function greeting(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
 export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
   const [description, setDescription] = useState('');
   const { choices } = useConnections();
   const [modelKey, setModelKey] = useState('');
   const [plan, setPlan] = useState<AutomationTemplate | null>(null);
   const [busy, setBusy] = useState(false);
+  const { profile } = useProfile();
   const [error, setError] = useState<string | null>(null);
 
   const design = useCallback(async () => {
@@ -64,7 +61,9 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
   return (
     <section className="home" data-testid="home-view">
       <div>
-        <h1 className="home__greeting">{greeting(new Date().getHours())}</h1>
+        <h1 className="home__greeting" data-testid="home-greeting">
+          {greetingFor(new Date().getHours(), profile?.firstName ?? '')}
+        </h1>
         <p className="home__sub">What should CHIMERA automate?</p>
       </div>
 

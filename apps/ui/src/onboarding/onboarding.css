@@ -343,3 +343,34 @@
 .intro__stack .mark--logo {
   overflow: hidden;
 }
+
+/* The name fields, side by side — they are one question asked in two boxes,
+   and stacking them makes the optional one look like a second demand. */
+.intro__fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin: 16px 0 4px;
+}
+
+/* The disclosure sits closer to the checkbox than to the buttons: it is what
+   the checkbox means, not a paragraph that happens to be nearby. */
+.intro__consent {
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 4px;
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+}
+
+.intro__consent input {
+  margin-top: 3px;
+  flex: none;
+}
+
+@media (max-width: 520px) {
+  .intro__fields {
+    grid-template-columns: 1fr;
+  }
+}

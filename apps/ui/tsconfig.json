@@ -19,5 +19,8 @@
     // and then fail at runtime in the one place that failure is invisible.
     "types": []
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests run under Node and are typechecked by tsconfig.test.json, which is
+  // the one place in this package allowed to see Node's ambient types.
+  "exclude": ["src/**/*.test.ts"]
 }

@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { ProviderMark } from './ProviderMark.tsx';
 import './onboarding.css';
+import { useProfile } from '../useProfile.ts';
 
 // First launch: welcome, choose where models come from, connect one.
 //
@@ -15,7 +16,7 @@ import './onboarding.css';
 // agents, the canvas and the Governor would be a manual, and nobody reads a
 // manual before they have seen the thing work once.
 
-type Step = 'welcome' | 'choose' | 'omniroute' | 'cloud' | 'local' | 'done';
+type Step = 'welcome' | 'you' | 'choose' | 'omniroute' | 'cloud' | 'local' | 'done';
 
 interface Props {
   onDone: () => void;
@@ -37,10 +38,17 @@ const LOCAL_KINDS = [
 ];
 
 /** The step order, for the progress pips. `done` is an outcome, not a stop. */
-const ORDER: Step[] = ['welcome', 'choose', 'omniroute'];
+const ORDER: Step[] = ['welcome', 'you', 'choose', 'omniroute'];
 
 export function Onboarding({ onDone }: Props): JSX.Element {
   const [step, setStep] = useState<Step>('welcome');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  // On by default, said plainly above, one control to turn it off — here and
+  // again in Providers. A count most people never find the switch to enable is
+  // not a count of anything.
+  const [usageStats, setUsageStats] = useState(true);
+  const { save: saveProfile } = useProfile();
   const [armed, setArmed] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -170,10 +178,99 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                 className="button button--primary"
                 data-testid="intro-start"
                 onClick={() => {
+                  setStep('you');
+                }}
+              >
+                Get started
+              </button>
+            </div>
+          </div>
+        )}
+
+        {step === 'you' && (
+          <div className="intro__step" key="you">
+            <p className="intro__eyebrow">Step 1 of 3</p>
+            <h1 className="intro__title">What should we call you?</h1>
+            <p className="intro__body">
+              Only so the app can greet you by name. Your name is saved on this machine and is never
+              sent anywhere — not to us, not to a model, not into a run.
+            </p>
+
+            <div className="intro__fields">
+              <div className="field">
+                <label className="field__label" htmlFor="intro-first-name">
+                  First name
+                </label>
+                <input
+                  id="intro-first-name"
+                  className="control"
+                  data-testid="intro-first-name"
+                  autoFocus
+                  value={firstName}
+                  onChange={(event) => {
+                    setFirstName(event.target.value);
+                  }}
+                />
+              </div>
+              <div className="field">
+                <label className="field__label" htmlFor="intro-last-name">
+                  Last name (optional)
+                </label>
+                <input
+                  id="intro-last-name"
+                  className="control"
+                  data-testid="intro-last-name"
+                  value={lastName}
+                  onChange={(event) => {
+                    setLastName(event.target.value);
+                  }}
+                />
+              </div>
+            </div>
+
+            <label className="canvas__check intro__consent">
+              <input
+                type="checkbox"
+                data-testid="intro-usage-stats"
+                checked={usageStats}
+                onChange={(event) => {
+                  setUsageStats(event.target.checked);
+                }}
+              />
+              <span>
+                Help us count how many people use CHIMERA. Once a day this copy says “still here”
+                and nothing else: a random ID that means nothing outside this app, the version, and
+                your operating system. Never your name, your automations, your prompts, your files
+                or anything they contain — all of that stays on this machine. You can change this
+                any time in Providers.
+              </span>
+            </label>
+
+            <div className="intro__actions">
+              <button
+                type="button"
+                className="button button--ghost"
+                data-testid="intro-skip"
+                onClick={onDone}
+              >
+                Skip for now
+              </button>
+              <button
+                type="button"
+                className="button button--primary"
+                data-testid="intro-you-next"
+                disabled={firstName.trim() === ''}
+                onClick={() => {
+                  void saveProfile({
+                    firstName: firstName.trim(),
+                    lastName: lastName.trim(),
+                    usageStats,
+                    onboarded: true,
+                  });
                   setStep('choose');
                 }}
               >
-                Choose a provider
+                Continue
               </button>
             </div>
           </div>
@@ -181,7 +278,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
 
         {step === 'choose' && (
           <div className="intro__step" key="choose">
-            <p className="intro__eyebrow">Step 1 of 2</p>
+            <p className="intro__eyebrow">Step 2 of 3</p>
             <h1 className="intro__title">Where should models come from?</h1>
             <div className="intro__choices">
               <button
@@ -311,7 +408,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
 
         {step === 'omniroute' && (
           <div className="intro__step" key="omniroute">
-            <p className="intro__eyebrow">Step 2 of 2 · OmniRoute</p>
+            <p className="intro__eyebrow">Step 3 of 3 · OmniRoute</p>
             <h1 className="intro__title">Set OmniRoute up, then CHIMERA will find it.</h1>
             <ol className="intro__steps">
               <li>
@@ -432,7 +529,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
 
         {(step === 'cloud' || step === 'local') && (
           <div className="intro__step" key={step}>
-            <p className="intro__eyebrow">Step 2 of 2</p>
+            <p className="intro__eyebrow">Step 3 of 3</p>
             <h1 className="intro__title">
               {step === 'cloud' ? 'Connect a provider.' : 'Point CHIMERA at your local model.'}
             </h1>

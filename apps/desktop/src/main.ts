@@ -1,5 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import { createWindow } from './windows.ts';
+import { startUsageReporting, setAppVersion } from './telemetry/usageCount.ts';
+import { setProfileDirectory } from './settings/profile.ts';
 import { registerIpcMainHandlers } from './ipc/mainDispatch.ts';
 import { openStore, closeStore } from './store/lifecycle.ts';
 import { setScreenshotRoot } from './runs/screenshots.ts';
@@ -28,6 +30,8 @@ app.setName('CHIMERA');
 const SANDBOX_KEEP_MS = 7 * 24 * 60 * 60 * 1000;
 
 void app.whenReady().then(() => {
+  setProfileDirectory(app.getPath('userData'));
+  setAppVersion(app.getVersion());
   // Before any window exists: the store applies pending migrations on open,
   // and a renderer that came up first could invoke a channel whose handler
   // expects a migrated database.
@@ -49,6 +53,10 @@ void app.whenReady().then(() => {
   void registerPanicKey();
   startControlBroadcast();
   createWindow();
+
+  // After the window, deliberately. See the file: one line a day, and nothing
+  // about it is worth delaying what the person actually clicked for.
+  startUsageReporting();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {

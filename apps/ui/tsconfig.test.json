@@ -1,0 +1,21 @@
+{
+  // The renderer's own tsconfig deliberately has no Node types: giving the
+  // sandboxed renderer `process` and `Buffer` would let a reference typecheck
+  // cleanly and then fail at runtime in the one place that failure is
+  // invisible. That rule is right and stays.
+  //
+  // Unit tests are a different program. They run under `node --test`, they are
+  // never bundled into the renderer, and they need `node:test`. So they get
+  // their own config, the same way apps/desktop's E2E specs do.
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "types": ["node"]
+  },
+  "include": ["src/**/*.test.ts"]
+}

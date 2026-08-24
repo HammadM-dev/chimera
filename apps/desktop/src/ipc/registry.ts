@@ -600,6 +600,43 @@ export const telemetrySet = defineInvokeChannel({
   responseSchema: z.object({ telemetry: telemetrySchema }),
 });
 
+// Who is sitting in front of this copy, and how they like it to look.
+//
+// Device-local and never in SQLite: the name is for the home screen and nothing
+// else. `installId` is deliberately not on this channel — the renderer has no
+// business knowing it, and the ping that uses it is sent from main.
+const profileSchema = z.object({
+  firstName: z.string(),
+  lastName: z.string(),
+  theme: z.enum(['dark', 'light']),
+  usageStats: z.boolean(),
+  onboarded: z.boolean(),
+});
+
+export const profileGet = defineInvokeChannel({
+  channel: 'profile:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: profileSchema,
+});
+
+export const profileSet = defineInvokeChannel({
+  channel: 'profile:set',
+  v: 1,
+  sensitive: false,
+  // Every field optional: the theme toggle sets one thing and setup sets four,
+  // and neither should have to send the others back unchanged.
+  requestSchema: z.object({
+    firstName: z.string().max(80).optional(),
+    lastName: z.string().max(80).optional(),
+    theme: z.enum(['dark', 'light']).optional(),
+    usageStats: z.boolean().optional(),
+    onboarded: z.boolean().optional(),
+  }),
+  responseSchema: profileSchema,
+});
+
 // Which search service the agents use. The key travels one way only: in on
 // `set`, never back out on `get` — the panel is told whether one is stored.
 const searchProviderSchema = z.enum(['none', 'brave', 'tavily', 'serper']);
@@ -1357,6 +1394,10 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   tiersSet,
   cacheGet,
   cacheSet,
+  profileGet,
+  profileSet,
+  searchGet,
+  searchSet,
   telemetryGet,
   telemetrySet,
   telemetryTest,

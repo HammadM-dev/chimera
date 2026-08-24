@@ -3,10 +3,11 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "React renderer — the only process the user sees. Talks to main through window.chimera.* only.",
+  "description": "React renderer \u2014 the only process the user sees. Talks to main through window.chimera.* only.",
   "scripts": {
-    "typecheck": "tsc --noEmit",
-    "build": "vite build"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.test.json",
+    "build": "vite build",
+    "test": "node --test"
   },
   "dependencies": {
     "@xyflow/react": "^12.11.3",
