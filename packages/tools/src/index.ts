@@ -26,6 +26,10 @@ export {
 } from './servers/http.ts';
 export type { EgressMode } from './servers/http.ts';
 export { KNOWN as KNOWN_TOOL_IDS } from './reversibility.ts';
+export { readAnyDocument, DocumentReadError } from './documentReader.ts';
+export type { DocumentReadOptions } from './documentReader.ts';
+export { kindOf, readableExtensions } from './documents.ts';
+export type { DocumentKind, DocumentText } from './documents.ts';
 export { createSearchServer, unwrapBing, DEFAULT_MAX_RESULTS } from './servers/search.ts';
 export type { SearchServerOptions, SearchResult } from './servers/search.ts';
 export { htmlToText } from './html.ts';

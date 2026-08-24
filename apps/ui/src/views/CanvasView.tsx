@@ -599,6 +599,16 @@ function CanvasInner({
   const [nodes, setNodes, onNodesChange] = useNodesState<StepNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(true);
+  const [inspectorOpen, setInspectorOpen] = useState(true);
+
+  // Clicking a step is asking what it does, so the panel that answers comes
+  // back whether or not it was folded. Folding it is a request for room on the
+  // canvas, not a decision never to see the settings again — and a person who
+  // folds it, clicks a step, and gets nothing has found a bug, not a preference.
+  useEffect(() => {
+    if (selectedId !== null) setInspectorOpen(true);
+  }, [selectedId]);
   const [brief, setBrief] = useState(goal);
   const [briefOpen, setBriefOpen] = useState(true);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
@@ -1590,8 +1600,29 @@ function CanvasInner({
   }, [roles]);
 
   return (
-    <div className="canvas" data-testid="canvas-view">
-      <aside className="canvas__palette scroll" aria-label="Agents">
+    <div
+      className="canvas"
+      data-testid="canvas-view"
+      data-palette={paletteOpen ? 'open' : 'closed'}
+      data-inspector={inspectorOpen ? 'open' : 'closed'}
+    >
+      <aside
+        className={`canvas__palette scroll${paletteOpen ? '' : ' canvas__panel--closed'}`}
+        aria-label="Agents"
+      >
+        <button
+          type="button"
+          className="panel-toggle panel-toggle--palette"
+          data-testid="palette-toggle"
+          aria-expanded={paletteOpen}
+          aria-label={paletteOpen ? 'Hide agents' : 'Show agents'}
+          title={paletteOpen ? 'Hide agents' : 'Show agents'}
+          onClick={() => {
+            setPaletteOpen((open) => !open);
+          }}
+        >
+          {paletteOpen ? '‹' : '›'}
+        </button>
         <button
           type="button"
           className="palette__agent palette__agent--new"
@@ -2308,7 +2339,23 @@ function CanvasInner({
         </section>
       </div>
 
-      <aside className="canvas__inspector scroll" aria-label="Step">
+      <aside
+        className={`canvas__inspector scroll${inspectorOpen ? '' : ' canvas__panel--closed'}`}
+        aria-label="Step"
+      >
+        <button
+          type="button"
+          className="panel-toggle panel-toggle--inspector"
+          data-testid="inspector-toggle"
+          aria-expanded={inspectorOpen}
+          aria-label={inspectorOpen ? 'Hide step settings' : 'Show step settings'}
+          title={inspectorOpen ? 'Hide step settings' : 'Show step settings'}
+          onClick={() => {
+            setInspectorOpen((open) => !open);
+          }}
+        >
+          {inspectorOpen ? '›' : '‹'}
+        </button>
         {selected && (
           <div className="canvas__stepBar">
             <span className="canvas__stepKind">{KIND_LABEL[selected.data.kind]}</span>

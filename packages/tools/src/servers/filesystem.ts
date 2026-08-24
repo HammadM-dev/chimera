@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { ToolExecutionError } from '@chimera/errors';
 import type { Sandbox } from '../sandbox.ts';
+import { readAnyDocument } from '../documentReader.ts';
+import { readableExtensions, type DocumentText } from '../documents.ts';
 
 // The filesystem tool server. One instance per run, holding that run's sandbox.
 //
@@ -22,6 +24,16 @@ export const DEFAULT_MAX_READ_BYTES = 1_000_000;
 export interface FilesystemServerOptions {
   /** The automation's own read limit. Absent means `DEFAULT_MAX_READ_BYTES`. */
   maxReadBytes?: number;
+  /** How long one document may take to parse before the child is killed. */
+  documentTimeoutMs?: number;
+  /**
+   * Injected by tests, so they can parse in-process instead of spawning.
+   *
+   * A test that spawns a real child for every fixture is a slow test, and the
+   * thing worth asserting here is that `readFile` reaches the reader at all —
+   * the parsers have their own tests against real documents.
+   */
+  readDocument?: (path: string, maxChars: number, timeoutMs: number) => Promise<DocumentText>;
 }
 
 function failure(message: string): { content: { type: 'text'; text: string }[]; isError: true } {
@@ -78,16 +90,20 @@ export function createFilesystemServer(
   server.registerTool(
     'readFile',
     {
-      description: readDescription(sandbox, 'Reads a UTF-8 text file'),
+      description: readDescription(
+        sandbox,
+        `Reads a file as text. Spreadsheets, Word documents, PDFs, PowerPoints and zip listings are converted for you, so ask for the file itself rather than a text export of it. Readable: ${readableExtensions().join(', ')}`,
+      ),
       inputSchema: {
         path: z
           .string()
           .describe("Relative to the run's workspace, or an absolute path inside a granted folder"),
       },
     },
-    ({ path: requested }) =>
-      guard(() => {
-        const resolved = sandbox.resolveForRead(requested);
+    async ({ path: requested }) => {
+      let resolved: string;
+      try {
+        resolved = sandbox.resolveForRead(requested);
         const stat = fs.statSync(resolved);
         if (stat.isDirectory()) return failure(`"${requested}" is a directory.`);
         if (stat.size > maxReadBytes) {
@@ -95,8 +111,29 @@ export function createFilesystemServer(
             `"${requested}" is ${String(stat.size)} bytes, over this automation’s ${String(maxReadBytes)}-byte read limit. Raise the file size limit on the automation if this file is meant to be read.`,
           );
         }
-        return ok(fs.readFileSync(resolved, 'utf8'));
-      }),
+      } catch (err) {
+        return failure(err instanceof Error ? err.message : String(err));
+      }
+
+      // A character limit derived from the byte one. They measure different
+      // things — a spreadsheet is far smaller than the text it becomes, a PDF
+      // far larger — so the file limit bounds what is opened and this bounds
+      // what reaches the prompt.
+      const maxChars = Math.max(1_000, Math.floor(maxReadBytes / 2));
+
+      try {
+        const document = await readAnyDocument(resolved, {
+          maxChars,
+          ...(options.documentTimeoutMs === undefined
+            ? {}
+            : { timeoutMs: options.documentTimeoutMs }),
+          ...(options.readDocument === undefined ? {} : { spawn: options.readDocument }),
+        });
+        return ok(document.note === '' ? document.text : `${document.text}\n\n[${document.note}]`);
+      } catch (err) {
+        return failure(err instanceof Error ? err.message : String(err));
+      }
+    },
   );
 
   server.registerTool(

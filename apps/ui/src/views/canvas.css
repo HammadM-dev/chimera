@@ -13,17 +13,75 @@
   flex: 1;
   min-height: 0;
   display: grid;
-  grid-template-columns: 204px minmax(0, 1fr) 260px;
+  grid-template-columns: var(--palette-width, 204px) minmax(0, 1fr) var(--inspector-width, 260px);
 }
 
 @media (min-width: 1400px) {
   .canvas {
-    grid-template-columns: 232px minmax(0, 1fr) 300px;
+    grid-template-columns: var(--palette-width, 232px) minmax(0, 1fr) var(--inspector-width, 300px);
   }
+}
+
+/* Folded away. The column collapses to the width of its own handle, so the
+ * graph takes the room rather than the panel merely hiding and leaving a gap. */
+.canvas[data-palette='closed'] {
+  --palette-width: 28px;
+}
+
+.canvas[data-inspector='closed'] {
+  --inspector-width: 28px;
+}
+
+/* The handle that folds a panel. Fixed to the panel's own edge so it stays
+ * where it was after the panel collapses — a control that moves when you use it
+ * is one you have to find again. */
+.panel-toggle {
+  position: absolute;
+  top: var(--space-3);
+  z-index: 2;
+  width: 20px;
+  height: 34px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: inherit;
+  font-size: var(--type-floor);
+  color: var(--text-secondary);
+  background: var(--surface-panel);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.panel-toggle:hover {
+  color: var(--text-primary);
+  background: var(--surface-raised);
+}
+
+.panel-toggle:focus-visible {
+  outline: var(--border-width) solid var(--accent-primary);
+  outline-offset: 1px;
+}
+
+.panel-toggle--palette {
+  right: 4px;
+}
+
+.panel-toggle--inspector {
+  left: 4px;
+}
+
+/* Everything except the handle goes. `visibility` rather than `display` so the
+ * scroll position and any half-typed instruction survive the fold. */
+.canvas__panel--closed > *:not(.panel-toggle) {
+  visibility: hidden;
+  pointer-events: none;
 }
 
 .canvas__palette,
 .canvas__inspector {
+  position: relative;
   min-height: 0;
   padding: var(--space-4);
   display: flex;
