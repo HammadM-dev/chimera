@@ -223,3 +223,37 @@ test('a file over the read limit is refused rather than pulled into a prompt', a
     assert.match(result.text, /read limit/);
   });
 });
+
+test('readFile opens a spreadsheet, not just a text file', async () => {
+  // The wiring, end to end through the tool: a call to `filesystem.readFile`
+  // reaches the document reader and comes back as rows. The parsers have their
+  // own tests against real documents; this is the one that proves an agent can
+  // get at them at all.
+  await withRun('run-docs', async (registry, sandbox) => {
+    const ExcelJS = await import('exceljs');
+    const workbook = new ExcelJS.default.Workbook();
+    const sheet = workbook.addWorksheet('Invoices');
+    sheet.addRow(['Supplier', 'Total']);
+    sheet.addRow(['Acme Ltd', 1240]);
+    await workbook.xlsx.writeFile(path.join(sandbox.root, 'invoices.xlsx'));
+
+    const result = await registry.invoke('fs.readFile', { path: 'invoices.xlsx' }, FULL_ACCESS);
+
+    assert.equal(result.isError, false);
+    assert.match(result.text, /# Sheet: Invoices/);
+    assert.match(result.text, /Acme Ltd\t1240/);
+  });
+});
+
+test('a file type this build cannot read says what it can', async () => {
+  await withRun('run-rtf', async (registry, sandbox) => {
+    fs.writeFileSync(path.join(sandbox.root, 'notes.rtf'), 'hello');
+    const result = await registry.invoke('fs.readFile', { path: 'notes.rtf' }, FULL_ACCESS);
+
+    assert.equal(result.isError, true);
+    // Naming what it *can* open makes the agent's next attempt informed rather
+    // than another guess.
+    assert.match(result.text, /\.xlsx/);
+    assert.match(result.text, /\.pdf/);
+  });
+});
