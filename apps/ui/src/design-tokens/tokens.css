@@ -19,6 +19,15 @@
   --border-hairline: rgba(245, 243, 238, 0.1);
   --border-strong: rgba(245, 243, 238, 0.16);
   --border-stronger: rgba(245, 243, 238, 0.24);
+  /* The edge of a form control, and the one border WCAG actually constrains.
+   * SC 1.4.11 asks 3:1 of "visual information required to identify user
+   * interface components" — the boundary that says "this is a field you can
+   * type in". The three above are structure and decoration: panel edges, node
+   * outlines, row dividers, none of which identify a control, none of which
+   * the criterion covers, and all of which are the 0.5px hairline this design
+   * is built on. Held apart so the hairlines stay hairlines and the thing a
+   * person has to find stays findable. Audited by scripts/check-contrast.mjs. */
+  --border-control: rgba(245, 243, 238, 0.38);
   --border-width: 0.5px;
 
   --accent-primary: #4a8fd4;
@@ -49,6 +58,46 @@
   --line-height-ui: 1.2;
 }
 
+/* The light palette — DESIGN.md section 2.4c.
+ *
+ * Not an inversion. The dark set is warm-neutral, so its counterpart is warm
+ * paper rather than white, and the elevation logic flips with it: in the dark
+ * a raised surface is lighter than the canvas, in the light it is *whiter*,
+ * with the canvas the most tinted step. Text, borders and semantics darken to
+ * hold contrast against a bright ground; the accent darkens most, because a
+ * mid blue that reads well on near-black is illegible on paper.
+ *
+ * Every token in :root is redefined here. A token defined in only one palette
+ * is a component that changes meaning when the theme does, which is the failure
+ * this block exists to make impossible — `npm run check:contrast` fails on any
+ * token the light set forgets. */
+:root[data-theme='light'] {
+  --surface-canvas: #eeece6;
+  --surface-panel: #f6f4ef;
+  --surface-raised: #fbfaf7;
+  --surface-popover: #ffffff;
+
+  --text-primary: #1a1815;
+  --text-secondary: #55524b;
+  --text-muted: #6e6a62;
+
+  --border-hairline: rgba(26, 24, 21, 0.14);
+  --border-strong: rgba(26, 24, 21, 0.22);
+  --border-stronger: rgba(26, 24, 21, 0.32);
+  /* Higher than the dark theme's alpha: the same proportion of ink over paper
+   * carries less contrast than light over near-black, so matching the number
+   * rather than the ratio would have quietly failed on one theme only. */
+  --border-control: rgba(26, 24, 21, 0.48);
+
+  --accent-primary: #1f5c9a;
+
+  --semantic-success: #2f6b42;
+  --semantic-warning: #7a5410;
+  --semantic-danger: #a33520;
+
+  color-scheme: light;
+}
+
 *,
 *::before,
 *::after {
@@ -66,6 +115,12 @@ body,
  * follows the app instead of contradicting it. */
 html {
   color-scheme: dark;
+}
+
+/* The attribute is set on <html> by the renderer before first paint, so the
+ * native controls switch with the palette rather than a frame after it. */
+html[data-theme='light'] {
+  color-scheme: light;
 }
 
 input[type='checkbox'],

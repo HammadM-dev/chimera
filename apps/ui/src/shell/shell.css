@@ -293,7 +293,7 @@
   font-size: var(--type-meta);
   color: var(--text-primary);
   background: var(--surface-canvas);
-  border: var(--border-width) solid var(--border-strong);
+  border: var(--border-width) solid var(--border-control);
   border-radius: var(--radius-control);
   padding: var(--space-2);
   transition: border-color var(--motion-fast) var(--ease-standard);

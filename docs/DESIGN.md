@@ -131,7 +131,33 @@ The canonical definition lives in `apps/ui/src/design-tokens/tokens.css`, one `:
 
 DECISION: the serif face for the byline is unspecified by the master plan beyond "one serif italic." This document names `Source Serif 4` (open-license, ships as a static asset, no network font fetch — consistent with Electron's `webSecurity`/CSP posture in `docs/SECURITY.md`, which would otherwise have to allowlist a font CDN origin for a single seven-word byline) as the default, applied with `font-style: italic`, `font-weight: 400`. Any equivalent open-license serif is an acceptable substitution at implementation time; the binding requirement is *bundled, not fetched* and *used only for the byline*, nowhere else.
 
-This design system does not currently define a light theme; the token block above is the only palette, dark by construction, matching Claude Desktop and Codex's reference direction. If a light theme is added later it is a new set of token values under a `[data-theme="light"]` attribute selector, not a rewrite of component CSS, because components consume tokens, never literals.
+The dark block above is the default and the reference direction, matching Claude Desktop and Codex. A light theme now exists alongside it, added exactly as this paragraph originally said it would be — a new set of token values under a `[data-theme="light"]` attribute selector, not a rewrite of component CSS, because components consume tokens and never literals.
+
+### 2.4c The light palette
+
+| Token | Dark | Light |
+|---|---|---|
+| `--surface-canvas` | `#0d0d0c` | `#eeece6` |
+| `--surface-panel` | `#161614` | `#f6f4ef` |
+| `--surface-raised` | `#1e1c1a` | `#fbfaf7` |
+| `--surface-popover` | `#262421` | `#ffffff` |
+| `--text-primary` | `#f5f3ee` | `#1a1815` |
+| `--text-secondary` | `#a3a09a` | `#55524b` |
+| `--text-muted` | `#6f6c66` | `#6e6a62` |
+| `--border-hairline` | `rgba(245,243,238,.10)` | `rgba(26,24,21,.14)` |
+| `--border-strong` | `rgba(245,243,238,.16)` | `rgba(26,24,21,.22)` |
+| `--border-stronger` | `rgba(245,243,238,.24)` | `rgba(26,24,21,.32)` |
+| `--border-control` | `rgba(245,243,238,.38)` | `rgba(26,24,21,.48)` |
+| `--accent-primary` | `#4a8fd4` | `#1f5c9a` |
+| `--semantic-success` | `#5aa76f` | `#2f6b42` |
+| `--semantic-warning` | `#d9a441` | `#7a5410` |
+| `--semantic-danger` | `#d4614a` | `#a33520` |
+
+DECISION: **the light theme is not an inversion of the dark one.** The dark set is warm-neutral — near-black with a green-brown cast, warm off-white text — so its counterpart is warm paper rather than white, and the elevation logic flips rather than mirrors: in the dark a raised surface is *lighter* than the canvas, in the light it is *whiter*, with the canvas the most tinted step and the popover pure white. Text, borders and semantics darken to hold contrast against a bright ground, and the accent darkens most, because a mid blue that reads well on near-black is illegible on paper. Rationale: an algorithmic inversion produces a grey-blue theme with no relationship to the dark one a user just switched away from, and the two stop looking like one product.
+
+DECISION: **dark remains the default and is set explicitly rather than assumed.** `data-theme` carries `dark` or `light` on the document element from before first paint, so every token block has something to match on and `color-scheme` switches the native scrollbars and form controls with the palette rather than a frame after it. The theme is a device-local preference in `profile.json`, never in the workspace database — a person's eyes are not a property of a workspace, and a shared workspace must not carry one person's choice to somebody else's machine.
+
+DECISION: **`--border-control` is a separate token from the three structural borders.** WCAG SC 1.4.11 requires 3:1 of "visual information required to identify user interface components" — the edge of a text field is exactly that, and at `--border-strong` it measured 1.57:1. The structural hairlines are not that: they divide rows and outline panels, they identify no control, and holding them to 3:1 would replace this system's 0.5px hairline with a rule. So field edges get their own token at 3:1 in both themes and the hairlines are left alone. The light theme's alpha is higher than the dark theme's (.48 against .38) because the same proportion of ink over paper carries less contrast than light over near-black; matching the number rather than the ratio would have failed on one theme only.
 
 ---
 
@@ -332,7 +358,7 @@ Each empty state names the action that fills it and, where relevant, offers the 
 - **`useAccentSlot()` dev-mode guard**: enforces "one accent colour per view" at the component level with a development-time warning, rather than leaving the rule to convention, since it is exactly the kind of constraint that erodes silently as more contributors touch the UI.
 - **Font-weight lint rule**: an ESLint rule forbidding any `font-weight` literal other than 400/500 in `apps/ui`, giving CLAUDE.md's "weights 400 and 500 only" a structural enforcement mechanism instead of relying on review.
 - **Byline typeface**: Source Serif 4 (bundled, not network-fetched), italic, 400 weight — the master plan names "one serif italic" without naming a face; a bundled open-license font avoids adding a font-CDN origin to the CSP allowlist for a single seven-word string.
-- **No light theme defined**: the token set in §2 is the only palette; a future light theme is new token values under a `[data-theme]` selector, not a component rewrite, because components are required to consume tokens rather than literals.
+- **A light theme exists, defined as §2.4 always said it would be**: new token values under a `[data-theme="light"]` selector, not a component rewrite, because components are required to consume tokens rather than literals. Dark stays the default and is set explicitly. Full palette and rationale in §2.4c.
 - **Interaction state model (hover/focus/disabled)**: invented wholesale, since the master plan gives static tokens only — hover as border-strengthening or one-surface-step lightening (never a new colour), focus as an additive 1px accent `outline` (not a border-width change), disabled as 40% opacity plus `pointer-events: none`.
 - **Bordered-rows-vs-cards criteria**: rows for open-ended/scrollable collections, cards for bounded small-N choice sets — the master plan states the rule's existence but not the test for which is which.
 - **Rail active-item treatment**: a raised-surface background with no border and no accent colour, reusing the "elevation as selection cue" pattern from popovers rather than inventing a fourth selection signal.
@@ -341,4 +367,4 @@ Each empty state names the action that fills it and, where relevant, offers the 
 - **Reduced-motion splash hold**: 400ms static display of the full end-state in place of the animated sequence, long enough to register as intentional, short enough not to feel like a forced wait.
 - **`hasSeenSplash` flag is local-only, never synced**: stored in a main-process-only local settings store, explicitly kept out of any future F10 workspace-sync path, since a cosmetic per-device preference should never accidentally become a multi-device or RBAC-relevant setting.
 - **Line-height values**: 1.4 for body/prose contexts, 1.2 for single-line UI contexts — unspecified by the master plan but load-bearing for the "dense information" property this whole document is built around.
-- **Contrast compliance is verified, not asserted**: WCAG AA contrast is a required automated-audit task gating the M4 milestone rather than a claim made by inspection in this document, since asserting a specific ratio for a palette without running a real check would be guessing.
+- **Contrast compliance is verified, not asserted**: WCAG AA contrast is a required automated audit rather than a claim made by inspection in this document, since asserting a specific ratio for a palette without running a real check would be guessing. `scripts/check-contrast.mjs` computes the ratio for every rendered token pairing in both themes and fails CI below the floor — 4.5:1 for body and meta text, 3:1 for large text, the accent, the semantics and the control edge. It was required from M4 and written when the second palette landed, which is the point at which eyeballing became two guesses instead of one.

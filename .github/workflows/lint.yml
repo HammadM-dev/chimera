@@ -23,6 +23,7 @@ jobs:
       - run: npm run check:no-raw-sql
 
       - run: npm run check:design-tokens
+      - run: npm run check:contrast
 
       - run: npm run check:boundaries
 
