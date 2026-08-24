@@ -45,7 +45,8 @@ export type StepKind =
   | 'subworkflow'
   | 'fanout'
   | 'aggregate'
-  | 'team';
+  | 'team'
+  | 'swarm';
 
 /**
  * Everything the shaping node types need, in one flat shape.
@@ -88,6 +89,10 @@ export interface StepSettings {
   stallRounds: number;
   /** Empty means no goal test — the rounds and the stall rule still bound it. */
   goalContains: string;
+  /** Swarm: what the population reacts to, how many of them, and for how long. */
+  swarmQuestion: string;
+  population: number;
+  everyoneUpTo: number;
 }
 
 const DEFAULT_SETTINGS: StepSettings = {
@@ -114,6 +119,9 @@ const DEFAULT_SETTINGS: StepSettings = {
   maxConcurrentAgents: 5,
   stallRounds: 2,
   goalContains: '',
+  swarmQuestion: '',
+  population: 300,
+  everyoneUpTo: 24,
 };
 
 export interface StepNodeData extends Record<string, unknown> {
@@ -156,6 +164,7 @@ const KIND_LABEL: Record<StepKind, string> = {
   fanout: 'Fan out',
   aggregate: 'Combine',
   team: 'Team',
+  swarm: 'Swarm',
 };
 
 const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
@@ -165,6 +174,7 @@ const KIND_BLURB: Record<Exclude<StepKind, 'agent'>, string> = {
   approval: 'Pauses until a person says yes',
   subworkflow: 'Runs another saved automation here',
   fanout: 'Runs the steps below it once per item, several at a time',
+  swarm: 'Puts it to a simulated crowd and reports where they land',
   aggregate: 'Turns many answers into one',
   team: 'A team of agents on one goal, through a shared board',
 };
@@ -194,6 +204,7 @@ const FLOW_KINDS = [
   'fanout',
   'aggregate',
   'team',
+  'swarm',
   'transform',
   'approval',
   'subworkflow',
@@ -219,6 +230,8 @@ function summarise(data: StepNodeData): string {
       return `${String(settings.concurrency)} at a time, up to ${String(settings.maxItems)}`;
     case 'aggregate':
       return STRATEGY_LABEL[settings.strategy];
+    case 'swarm':
+      return `${String(settings.population)} people, up to ${String(settings.maxRounds)} rounds`;
     case 'team':
       return settings.agents.length === 0
         ? 'No specialists yet'
@@ -1097,6 +1110,19 @@ function CanvasInner({
               approval: { prompt: settings.prompt, showSource: settings.showSource },
             },
           };
+        case 'swarm':
+          return {
+            ...base,
+            config: {
+              type: 'swarm',
+              swarm: {
+                question: settings.swarmQuestion,
+                population: settings.population,
+                maxRounds: settings.maxRounds,
+                everyoneUpTo: settings.everyoneUpTo,
+              },
+            },
+          };
         case 'team':
           return {
             ...base,
@@ -1353,6 +1379,11 @@ function CanvasInner({
         return edges.every((edge) => edge.source !== node.id);
       case 'subworkflow':
         return settings.workflowId === '';
+      case 'swarm':
+        // A swarm needs no model binding: it uses the workspace's standard
+        // tier, because a population of three hundred on a frontier model is a
+        // bill nobody meant to run up.
+        return settings.population < 2 || settings.maxRounds < 1;
       case 'team':
         return (
           settings.goal.trim() === '' ||
@@ -2695,6 +2726,86 @@ function ShapingInspector({
         <>
           <p className="canvas__section">Model</p>
           {modelPicker}
+        </>
+      )}
+
+      {data.kind === 'swarm' && (
+        <>
+          <p className="canvas__section">What they react to</p>
+          <textarea
+            className="canvas__instruction"
+            data-testid="swarm-question"
+            value={settings.swarmQuestion}
+            placeholder="Leave empty to use whatever the step before produced"
+            onChange={(event) => {
+              onChange('swarmQuestion', event.target.value);
+            }}
+          />
+
+          <div className="field">
+            <label className="field__label" htmlFor="swarm-node-population">
+              How many people
+            </label>
+            <input
+              id="swarm-node-population"
+              className="control"
+              type="number"
+              min={2}
+              max={50_000}
+              step={50}
+              data-testid="swarm-node-population"
+              value={settings.population}
+              onChange={(event) => {
+                onChange('population', Math.max(2, Number(event.target.value) || 300));
+              }}
+            />
+          </div>
+
+          <div className="field">
+            <label className="field__label" htmlFor="swarm-node-rounds">
+              Rounds at most
+            </label>
+            <input
+              id="swarm-node-rounds"
+              className="control"
+              type="number"
+              min={1}
+              max={20}
+              data-testid="swarm-node-rounds"
+              value={settings.maxRounds}
+              onChange={(event) => {
+                onChange('maxRounds', Math.max(1, Number(event.target.value) || 4));
+              }}
+            />
+          </div>
+
+          <div className="field">
+            <label className="field__label" htmlFor="swarm-node-everyone">
+              Ask everyone up to
+            </label>
+            <input
+              id="swarm-node-everyone"
+              className="control"
+              type="number"
+              min={0}
+              max={200}
+              data-testid="swarm-node-everyone"
+              value={settings.everyoneUpTo}
+              onChange={(event) => {
+                onChange('everyoneUpTo', Math.max(0, Number(event.target.value) || 24));
+              }}
+            />
+            <span className="agent-editor__toolNote">
+              At or below this many, every agent is a real model call. Above it a couple of dozen
+              think and the rest follow them, so a crowd of thousands costs what a crowd of twenty
+              does.
+            </span>
+          </div>
+
+          <p className="agent-editor__toolNote">
+            Running this makes a thread in Swarms, where the whole argument is kept. The step passes
+            on what the crowd arrived at.
+          </p>
         </>
       )}
 

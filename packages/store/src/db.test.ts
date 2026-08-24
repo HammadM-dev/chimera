@@ -224,6 +224,21 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
     'auth_ref',
     'created_at',
   ],
+  // Added by 0018. A swarm is a conversation with a simulated population, not a
+  // run of an automation — no steps, no node states, no graph — so it is stored
+  // as the conversation it is rather than bent into `runs`.
+  swarms: ['id', 'name', 'question', 'seed', 'created_at', 'updated_at', 'source', 'archived_at'],
+  swarm_turns: [
+    'id',
+    'swarm_id',
+    'seq',
+    'asked',
+    'answer',
+    'result_json',
+    'cost_usd',
+    'tokens',
+    'created_at',
+  ],
   roles: [
     'id',
     'name',

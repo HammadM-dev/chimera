@@ -15,7 +15,8 @@ export type NodeType =
   | 'subworkflow'
   | 'fanout'
   | 'aggregate'
-  | 'team';
+  | 'team'
+  | 'swarm';
 
 /**
  * Branches on what a previous step produced.
@@ -110,6 +111,24 @@ export interface TeamConfig {
 }
 
 /**
+ * Puts something to a simulated population, inside an automation.
+ *
+ * The node is deliberately thin. It carries the question and the dials and
+ * nothing else, because the simulation itself is a thread in the Swarm section
+ * — the run creates one there, and the node links to it. An automation that
+ * buried a swarm's transcript inside a step's output would be hiding the most
+ * interesting thing it produced.
+ */
+export interface SwarmNodeConfig {
+  /** Empty means "whatever the step before produced", which is the usual case. */
+  question: string;
+  population: number;
+  maxRounds: number;
+  /** At or below this many, every agent is a real model call. */
+  everyoneUpTo: number;
+}
+
+/**
  * Turns many answers into one.
  *
  * The counterpart to a fan-out. Four of its five strategies need no model at
@@ -159,7 +178,8 @@ export type NodeConfig =
   | { type: 'subworkflow'; subworkflow: SubworkflowConfig }
   | { type: 'fanout'; fanout: FanoutConfig }
   | { type: 'aggregate'; aggregate: AggregateConfig }
-  | { type: 'team'; team: TeamConfig };
+  | { type: 'team'; team: TeamConfig }
+  | { type: 'swarm'; swarm: SwarmNodeConfig };
 
 /** Runs a declared comparison against a value. No evaluation, no code. */
 export function evaluateCondition(config: ConditionConfig, actual: string): boolean {

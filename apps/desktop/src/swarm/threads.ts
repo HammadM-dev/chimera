@@ -1,0 +1,201 @@
+import { swarmsRepository } from '@chimera/store';
+import type { RoundReport, SwarmResult } from '@chimera/core';
+import { getStore } from '../store/lifecycle.ts';
+import { report, runSwarm } from './service.ts';
+
+// A swarm thread: the population, and everything that has been asked of it.
+//
+// One question is one turn. The population is rebuilt from the thread's seed
+// every time, so the same people answer the follow-up — which is the whole
+// point of a thread rather than a series of runs. Asking "and if the price were
+// double?" of a *different* crowd would answer a different question.
+
+export interface SwarmSettings {
+  connectionId: string;
+  model: string;
+  population: number;
+  maxRounds: number;
+  /** Above this, archetypes think and the rest follow. */
+  everyoneUpTo: number;
+}
+
+export interface SwarmTurnView {
+  id: string;
+  seq: number;
+  asked: string;
+  answer: string;
+  /** The whole simulation, for the panel that shows rounds and voices. */
+  result: SwarmResult | null;
+  createdAt: string;
+}
+
+export interface SwarmThreadView {
+  id: string;
+  name: string;
+  question: string;
+  source: string;
+  createdAt: string;
+  updatedAt: string;
+  turns: SwarmTurnView[];
+}
+
+/** A name to show before the model has written a better one. */
+function provisionalName(question: string): string {
+  const words = question.trim().split(/\s+/).slice(0, 6).join(' ');
+  return words === '' ? 'New swarm' : words.length > 48 ? `${words.slice(0, 45)}…` : words;
+}
+
+export function listThreads(): { threads: { id: string; name: string; updatedAt: string; source: string }[] } {
+  return {
+    threads: swarmsRepository.list(getStore()).map((row) => ({
+      id: row.id,
+      name: row.name,
+      updatedAt: row.updatedAt,
+      source: row.source,
+    })),
+  };
+}
+
+export function getThread(id: string): { thread: SwarmThreadView | null } {
+  const db = getStore();
+  const row = swarmsRepository.get(db, id);
+  if (!row) return { thread: null };
+
+  return {
+    thread: {
+      id: row.id,
+      name: row.name,
+      question: row.question,
+      source: row.source,
+      createdAt: row.createdAt,
+      updatedAt: row.updatedAt,
+      turns: swarmsRepository.turnsOf(db, id).map((turn) => ({
+        id: turn.id,
+        seq: turn.seq,
+        asked: turn.asked,
+        answer: turn.answer,
+        result: parseResult(turn.resultJson),
+        createdAt: turn.createdAt,
+      })),
+    },
+  };
+}
+
+function parseResult(json: string): SwarmResult | null {
+  try {
+    return JSON.parse(json) as SwarmResult;
+  } catch {
+    // A turn whose simulation will not read back still has its answer, which is
+    // the part somebody came to read.
+    return null;
+  }
+}
+
+export function renameThread(input: { id: string; name: string }): { renamed: boolean } {
+  swarmsRepository.rename(getStore(), input.id, input.name.trim() || 'Untitled swarm');
+  return { renamed: true };
+}
+
+export function archiveThread(input: { id: string }): { archived: boolean } {
+  swarmsRepository.archive(getStore(), input.id);
+  return { archived: true };
+}
+
+export interface AskDeps {
+  onRound?: (report: RoundReport & { swarmId: string }) => void;
+  cancellation?: { readonly cancelled: boolean };
+}
+
+/**
+ * Asks a population something, in a thread.
+ *
+ * With no `threadId` this starts one; with one, the same population answers
+ * again. Either way the answer, the whole simulation and what it cost are
+ * stored before this returns — a swarm that ran and was not written down is a
+ * swarm somebody paid for twice.
+ */
+export async function askSwarm(
+  input: { threadId?: string; question: string; settings: SwarmSettings; source?: string },
+  deps: AskDeps = {},
+): Promise<{ threadId: string; turn: SwarmTurnView; name: string }> {
+  const db = getStore();
+
+  const thread =
+    input.threadId === undefined || input.threadId === ''
+      ? swarmsRepository.create(db, {
+          name: provisionalName(input.question),
+          question: input.question,
+          ...(input.source === undefined ? {} : { source: input.source }),
+        })
+      : swarmsRepository.get(db, input.threadId);
+
+  if (!thread) throw new Error('That swarm is not in this workspace.');
+
+  // Everything asked so far, so a follow-up is a follow-up. The population is
+  // the same — same seed — and it remembers the conversation, not just the
+  // question in front of it.
+  const before = swarmsRepository.turnsOf(db, thread.id);
+  const background =
+    before.length === 0
+      ? ''
+      : before
+          .map((turn) => `Earlier they were asked: ${turn.asked}\nWhat happened: ${turn.answer}`)
+          .join('\n\n');
+
+  const spec = {
+    connectionId: input.settings.connectionId,
+    model: input.settings.model,
+    question: input.question,
+    background,
+    population: input.settings.population,
+    maxRounds: input.settings.maxRounds,
+    everyoneUpTo: input.settings.everyoneUpTo,
+    // The thread's seed plus the turn number: the same population, a new
+    // conversation. Reusing the seed exactly would rebuild the same jitter and
+    // give the follow-up the same starting positions as the first question.
+    seed: `${thread.seed}:${String(before.length)}`,
+  };
+
+  const result = await runSwarm(spec, {
+    ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
+    ...(deps.onRound
+      ? { onRound: (round: RoundReport) => deps.onRound?.({ ...round, swarmId: thread.id }) }
+      : {}),
+  });
+
+  const written = await report(spec, result);
+
+  const turn = swarmsRepository.addTurn(db, {
+    swarmId: thread.id,
+    asked: input.question,
+    answer: written.answer,
+    resultJson: JSON.stringify(result),
+  });
+
+  // The model's title beats the first six words of the question, and only on
+  // the first turn — renaming a thread under somebody mid-conversation is
+  // worse than a plain name.
+  let name = thread.name;
+  if (before.length === 0 && written.title !== '') {
+    name = written.title;
+    swarmsRepository.rename(db, thread.id, name);
+  }
+
+  return {
+    threadId: thread.id,
+    name,
+    turn: {
+      id: turn.id,
+      seq: turn.seq,
+      asked: turn.asked,
+      answer: turn.answer,
+      result,
+      createdAt: turn.createdAt,
+    },
+  };
+}
+
+/** The thread an automation run created, for the button on a swarm node. */
+export function threadForRun(input: { runId: string }): { threadId: string } {
+  return { threadId: swarmsRepository.bySource(getStore(), input.runId)?.id ?? '' };
+}

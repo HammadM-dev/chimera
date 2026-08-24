@@ -28,6 +28,7 @@ import { getStore } from '../store/lifecycle.ts';
 import { connectionFor } from '../providers/service.ts';
 import { emitRunEvent, subscribe } from './subscriptions.ts';
 import { createActivityReader, type Activity } from './activity.ts';
+import { askSwarm } from '../swarm/threads.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
@@ -494,6 +495,28 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       // The live feed the run window reads. Most trace events are machinery and
       // become nothing; the ones that survive are what a person would say the
       // agent is doing.
+      // A swarm inside an automation makes a thread in the Swarm section rather
+      // than burying its transcript in a step's output. The trace records the
+      // thread id, which is what the button on the node uses to get there.
+      runSwarmNode: async (input) => {
+        const asked = await askSwarm({
+          question: input.question,
+          source: input.runId,
+          settings: {
+            connectionId: tiers.standard.connectionId,
+            model: tiers.standard.model,
+            population: input.population,
+            maxRounds: input.maxRounds,
+            everyoneUpTo: input.everyoneUpTo,
+          },
+        });
+        return {
+          threadId: asked.threadId,
+          answer: asked.turn.answer,
+          population: asked.turn.result?.population ?? 0,
+          mode: asked.turn.result?.mode ?? 'archetypes',
+        };
+      },
       onTraceEvent: (event) => {
         const activity = activityReader.read(event);
         if (activity !== null) emitRunEvent(runId, 'activity', activity);

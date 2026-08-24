@@ -217,5 +217,104 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
   );
 }
 
+const REPORT_SYSTEM = [
+  'You report what happened in a simulation of how a group of people reacted to something.',
+  '',
+  'You are reporting, not deciding. Say where the population ended up and *why* — which',
+  'arguments moved people, who held out, what changed between the first round and the last. Quote',
+  'the lines that did the moving. If it split rather than converging, say so: a split is a finding,',
+  'not a failure to produce one.',
+  '',
+  'Give the numbers as they are, and say plainly which of the two modes produced them, in one',
+  'clause, without apologising for it:',
+  '  everyone   — every one of these agents was asked directly',
+  '  archetypes — this many thought it through; the rest of the population followed them through',
+  '               who listens to whom, so the percentages model a crowd rather than count one',
+  '',
+  'No preamble, no restating the question. Four short paragraphs at most.',
+  '',
+  'Then a title for this conversation on its own last line, prefixed exactly "TITLE: " — three or',
+  'four words naming the subject, not the outcome, so it still reads right after the next question.',
+].join('\n');
+
+export interface SwarmReport {
+  /** What happened, in words. This is the thing a person reads. */
+  answer: string;
+  /** Three or four words naming the thread. Empty when the model gave none. */
+  title: string;
+}
+
+/**
+ * Stage four: turns a simulation into something worth reading.
+ *
+ * One model call for the whole run, however large the population. A swarm that
+ * produced only a percentage would be a poll with extra steps — what makes it
+ * worth running is *why* the population went where it did, and that is in what
+ * they said to each other.
+ */
+export async function report(spec: SwarmRunSpec, result: SwarmResult): Promise<SwarmReport> {
+  const connection = connectionFor(spec.connectionId);
+  const adapter = adapterFor(connection.kind);
+  const options: AdapterCallOptions = {
+    authRef: connection.authRef,
+    ...(connection.baseUrl === null ? {} : { baseUrl: connection.baseUrl }),
+  };
+  const governor = new Governor('permissive');
+
+  const transcript = result.rounds
+    .map((round) =>
+      [
+        `Round ${String(round.round)} — for ${String(round.distribution.for)}, against ${String(
+          round.distribution.against,
+        )}, undecided ${String(round.distribution.undecided)}`,
+        ...round.said.map((one) => `  ${one.name} (${one.position.toFixed(2)}): ${one.said}`),
+      ].join('\n'),
+    )
+    .join('\n\n');
+
+  const asked = [
+    `The question: ${spec.question}`,
+    `Population: ${String(result.population)}. Mode: ${result.mode}. Thinking agents: ${String(
+      result.thinking,
+    )}.`,
+    `It stopped because: ${result.stopped}.`,
+    '',
+    transcript,
+  ].join('\n');
+
+  const authorization = governor.authorizeModelCall({
+    runId: spec.seed,
+    nodeId: 'swarm-report',
+    roleId: 'swarm',
+    iteration: 0,
+    depth: 0,
+    purpose: 'act',
+    connectionId: spec.connectionId,
+    model: spec.model,
+    estimatedInputTokens: Math.ceil((REPORT_SYSTEM.length + asked.length) / 4),
+    estimatedOutputTokens: 700,
+    requiredCapabilities: [],
+  });
+  if (authorization.decision === 'deny') {
+    throw new ProviderError('SWARM_DENIED', authorization.message);
+  }
+
+  const text = textOf(
+    await adapter.chat(
+      {
+        model: authorization.request.model,
+        messages: [
+          { role: 'system', content: REPORT_SYSTEM },
+          { role: 'user', content: asked },
+        ],
+      },
+      options,
+    ),
+  );
+
+  const title = /^TITLE:\s*(.+)$/m.exec(text)?.[1]?.trim() ?? '';
+  return { answer: text.replace(/^TITLE:.*$/m, '').trim(), title };
+}
+
 /** Exported for a test that wants to drive the simulation without a provider. */
 export type { ProviderAdapter };

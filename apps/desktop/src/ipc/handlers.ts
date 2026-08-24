@@ -67,11 +67,21 @@ import {
 import { registerHandler } from './types.ts';
 import type { InvokeChannelDefinition } from './types.ts';
 import * as channels from './registry.ts';
+import { getChannel } from './registry.ts';
+import { EVENT_CHANNEL } from './channelNames.ts';
 import { grantFolder, listGrants, revokeFolder } from '../files/grants.ts';
 import { readProfile, updateProfile, type Profile } from '../settings/profile.ts';
 import { listTemplates } from '../templates/service.ts';
 import { saveArtifact } from '../runs/artifacts.ts';
 import { askAssistant } from '../chat/assistant.ts';
+import {
+  archiveThread,
+  askSwarm,
+  getThread,
+  listThreads,
+  renameThread,
+  threadForRun,
+} from '../swarm/threads.ts';
 import { listAccounts, removeAccount, saveAccount, testAccount } from '../email/service.ts';
 
 // Most channels are still stubs: real business logic arrives with the
@@ -208,6 +218,34 @@ function publicProfile(profile: Profile): {
 registerHandler(channels.templateList, () => listTemplates());
 registerHandler(channels.runSaveArtifact, (payload) => saveArtifact(payload));
 registerHandler(channels.assistantAsk, (payload) => askAssistant(payload));
+
+registerHandler(channels.swarmList, () => listThreads());
+registerHandler(channels.swarmGet, (payload) => getThread(payload.id));
+registerHandler(channels.swarmRename, (payload) => renameThread(payload));
+registerHandler(channels.swarmArchive, (payload) => archiveThread(payload));
+registerHandler(channels.swarmForRun, (payload) => threadForRun(payload));
+registerHandler(channels.swarmAsk, (payload, context) =>
+  askSwarm(payload, {
+    // Rounds are pushed as they land. A population of two thousand takes a
+    // minute of real time and should be something to watch rather than a
+    // spinner that eventually turns into an answer.
+    onRound: (round) => {
+      const channel = getChannel('swarm:round');
+      if (!channel || context.webContents.isDestroyed()) return;
+      context.webContents.send(EVENT_CHANNEL, {
+        v: channel.v,
+        channel: 'swarm:round',
+        payload: {
+          swarmId: round.swarmId,
+          round: round.round,
+          movement: round.movement,
+          distribution: round.distribution,
+          said: round.said,
+        },
+      });
+    },
+  }),
+);
 registerHandler(channels.profileGet, () => publicProfile(readProfile()));
 registerHandler(channels.profileSet, (payload) => publicProfile(updateProfile(payload)));
 registerHandler(channels.searchGet, () => getSearch());

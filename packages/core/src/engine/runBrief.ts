@@ -154,7 +154,7 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
   // A subworkflow does the work too — by running agents of its own. The rule is
   // that something in the graph must act, not that it must act directly.
   const workSteps = brief.steps.filter((step) =>
-    ['agent', 'subworkflow', 'fanout', 'team'].includes(normaliseType(step.type)),
+    ['agent', 'subworkflow', 'fanout', 'team', 'swarm'].includes(normaliseType(step.type)),
   );
 
   if (brief.steps.length === 0) {
@@ -232,6 +232,30 @@ export function validateBrief(brief: RunBrief, knownRoles: readonly string[]): B
           nodeId: step.nodeId,
           message: 'An approval step needs a question for the person approving it.',
         });
+      }
+    }
+
+    if (type === 'swarm') {
+      const swarm = step.config?.type === 'swarm' ? step.config.swarm : undefined;
+      if (!swarm) {
+        problems.push({ nodeId: step.nodeId, message: 'This swarm has nothing set up.' });
+      } else {
+        // The same rule as a loop and a fan-out: this repeats, so it declares
+        // its bound (CLAUDE.md, "no unbounded loops").
+        if (!Number.isFinite(swarm.maxRounds) || swarm.maxRounds < 1) {
+          problems.push({
+            nodeId: step.nodeId,
+            message: 'This swarm needs a maximum number of rounds.',
+            stops: 'save',
+          });
+        }
+        if (!Number.isFinite(swarm.population) || swarm.population < 2) {
+          problems.push({
+            nodeId: step.nodeId,
+            message: 'A swarm needs at least two people in it.',
+            stops: 'save',
+          });
+        }
       }
     }
 

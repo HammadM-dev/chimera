@@ -37,6 +37,8 @@ export * as workflowsRepository from './repositories/workflows.ts';
 export type { WorkflowSummary, WorkflowVersion } from './repositories/workflows.ts';
 export { MODEL_TIERS } from './repositories/settings.ts';
 export type { ModelTier, ModelTiers, TierBinding } from './repositories/settings.ts';
+export * as swarmsRepository from './repositories/swarms.ts';
+export type { SwarmRecord, SwarmTurnRecord } from './repositories/swarms.ts';
 export * as blackboardRepository from './repositories/blackboard.ts';
 export type { BlackboardEntry } from './repositories/blackboard.ts';
 export * as deadLetterRepository from './repositories/deadLetter.ts';

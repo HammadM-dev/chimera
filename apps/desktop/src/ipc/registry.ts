@@ -91,6 +91,15 @@ const nodeConfigSchema = z.discriminatedUnion('type', [
     }),
   }),
   z.object({
+    type: z.literal('swarm'),
+    swarm: z.object({
+      question: z.string(),
+      population: z.number(),
+      maxRounds: z.number(),
+      everyoneUpTo: z.number(),
+    }),
+  }),
+  z.object({
     type: z.literal('aggregate'),
     aggregate: z.object({
       source: z.string(),
@@ -144,6 +153,7 @@ const briefSchema = z.object({
           'fanout',
           'aggregate',
           'team',
+          'swarm',
         ])
         .optional(),
       config: nodeConfigSchema.optional(),
@@ -643,6 +653,158 @@ export const assistantAsk = defineInvokeChannel({
       .nullable(),
     costUsd: z.number(),
     tokens: z.number(),
+  }),
+});
+
+// The swarm section: a population, and every question ever put to it.
+const swarmResultSchema = z.object({
+  mode: z.enum(['everyone', 'archetypes']),
+  population: z.number(),
+  thinking: z.number(),
+  stopped: z.enum(['settled', 'rounds', 'cancelled']),
+  final: z.object({
+    for: z.number(),
+    against: z.number(),
+    undecided: z.number(),
+    weighted: z.number(),
+  }),
+  rounds: z.array(
+    z.object({
+      round: z.number(),
+      movement: z.number(),
+      distribution: z.object({
+        for: z.number(),
+        against: z.number(),
+        undecided: z.number(),
+        weighted: z.number(),
+      }),
+      said: z.array(z.object({ name: z.string(), position: z.number(), said: z.string() })),
+    }),
+  ),
+  personas: z.array(
+    z.object({
+      id: z.string(),
+      name: z.string(),
+      description: z.string(),
+      traits: z.array(z.string()),
+      susceptibility: z.number(),
+      influence: z.number(),
+      kind: z.enum(['archetype', 'follower']),
+      follows: z.string(),
+    }),
+  ),
+});
+
+const swarmTurnSchema = z.object({
+  id: z.string(),
+  seq: z.number(),
+  asked: z.string(),
+  answer: z.string(),
+  result: swarmResultSchema.nullable(),
+  createdAt: z.string(),
+});
+
+export const swarmList = defineInvokeChannel({
+  channel: 'swarm:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    threads: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        updatedAt: z.string(),
+        source: z.string(),
+      }),
+    ),
+  }),
+});
+
+export const swarmGet = defineInvokeChannel({
+  channel: 'swarm:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({
+    thread: z
+      .object({
+        id: z.string(),
+        name: z.string(),
+        question: z.string(),
+        source: z.string(),
+        createdAt: z.string(),
+        updatedAt: z.string(),
+        turns: z.array(swarmTurnSchema),
+      })
+      .nullable(),
+  }),
+});
+
+export const swarmAsk = defineInvokeChannel({
+  channel: 'swarm:ask',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    threadId: z.string().optional(),
+    question: z.string(),
+    settings: z.object({
+      connectionId: z.string(),
+      model: z.string(),
+      population: z.number().int().min(2).max(50_000),
+      maxRounds: z.number().int().min(1).max(20),
+      everyoneUpTo: z.number().int().min(0).max(200),
+    }),
+  }),
+  responseSchema: z.object({
+    threadId: z.string(),
+    name: z.string(),
+    turn: swarmTurnSchema,
+  }),
+});
+
+export const swarmRename = defineInvokeChannel({
+  channel: 'swarm:rename',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string(), name: z.string() }),
+  responseSchema: z.object({ renamed: z.boolean() }),
+});
+
+export const swarmArchive = defineInvokeChannel({
+  channel: 'swarm:archive',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ archived: z.boolean() }),
+});
+
+// The thread an automation run created, for the button on a swarm node.
+export const swarmForRun = defineInvokeChannel({
+  channel: 'swarm:forRun',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ runId: z.string() }),
+  responseSchema: z.object({ threadId: z.string() }),
+});
+
+// Rounds as they happen, so a population of two thousand is something to watch
+// rather than a spinner.
+export const swarmRound = defineEventChannel({
+  channel: 'swarm:round',
+  v: 1,
+  sensitive: false,
+  payloadSchema: z.object({
+    swarmId: z.string(),
+    round: z.number(),
+    movement: z.number(),
+    distribution: z.object({
+      for: z.number(),
+      against: z.number(),
+      undecided: z.number(),
+      weighted: z.number(),
+    }),
+    said: z.array(z.object({ name: z.string(), position: z.number(), said: z.string() })),
   }),
 });
 
@@ -1487,6 +1649,13 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   templateList,
   runSaveArtifact,
   assistantAsk,
+  swarmList,
+  swarmGet,
+  swarmAsk,
+  swarmRename,
+  swarmArchive,
+  swarmForRun,
+  swarmRound,
   searchGet,
   searchSet,
   telemetryGet,

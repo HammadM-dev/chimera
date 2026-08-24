@@ -66,6 +66,22 @@ export interface RunAutomationDeps {
    * tool call, result and decision, which is what "show me what it is doing"
    * actually needs.
    */
+  /**
+   * Runs a swarm node, by making a thread in the Swarm section.
+   *
+   * Injected rather than built here, because a swarm needs a provider and the
+   * engine is not allowed one — `packages/core` reaches models only through the
+   * Governor and the caller's adapter. Absent means this build has no swarm,
+   * and a workflow using one is refused rather than silently skipped.
+   */
+  runSwarmNode?: (input: {
+    runId: string;
+    nodeId: string;
+    question: string;
+    population: number;
+    maxRounds: number;
+    everyoneUpTo: number;
+  }) => Promise<{ threadId: string; answer: string; population: number; mode: string }>;
   onTraceEvent?: (event: TraceEvent) => void;
   onStep?: (event: {
     nodeId: string;
@@ -606,6 +622,47 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         haltCause: teamed.stopped === 'failed' ? 'limit' : 'completed',
         output: teamed.stopped === 'failed' ? teamed.reason : teamed.output,
       };
+    }
+
+    if (type === 'swarm' && step.config?.type === 'swarm') {
+      const config = step.config.swarm;
+      const question = config.question.trim() === '' ? carried : config.question;
+
+      if (!deps.runSwarmNode) {
+        return {
+          ...base,
+          status: 'denied',
+          haltCause: 'limit',
+          output: 'This build cannot run a swarm from an automation.',
+        };
+      }
+
+      const swarm = await deps.runSwarmNode({
+        runId,
+        nodeId: step.nodeId,
+        question,
+        population: config.population,
+        maxRounds: config.maxRounds,
+        everyoneUpTo: config.everyoneUpTo,
+      });
+
+      trace.append({
+        nodeId: step.nodeId,
+        eventType: 'decision',
+        payload: {
+          decision: 'swarm:finished',
+          // The thread id, so the node on the canvas can offer a way into it.
+          // The transcript is not copied here — it belongs in the Swarm section
+          // and a step output is the wrong place to bury it.
+          threadId: swarm.threadId,
+          population: swarm.population,
+          mode: swarm.mode,
+        },
+      });
+
+      outputs.set(step.nodeId, swarm.answer);
+      carried = swarm.answer;
+      return { ...base, status: 'succeeded', haltCause: 'completed', output: swarm.answer };
     }
 
     if (type === 'aggregate' && step.config?.type === 'aggregate') {
