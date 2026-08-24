@@ -74,6 +74,7 @@ import { readProfile, updateProfile, type Profile } from '../settings/profile.ts
 import { listTemplates } from '../templates/service.ts';
 import { saveArtifact } from '../runs/artifacts.ts';
 import { askAssistant } from '../chat/assistant.ts';
+import { connectToolkit, getComposio, listToolkits, setComposio } from '../composio/service.ts';
 import {
   archiveThread,
   askSwarm,
@@ -218,6 +219,11 @@ function publicProfile(profile: Profile): {
 registerHandler(channels.templateList, () => listTemplates());
 registerHandler(channels.runSaveArtifact, (payload) => saveArtifact(payload));
 registerHandler(channels.assistantAsk, (payload) => askAssistant(payload));
+
+registerHandler(channels.composioGet, () => getComposio());
+registerHandler(channels.composioSet, (payload) => setComposio(payload));
+registerHandler(channels.composioToolkits, () => listToolkits());
+registerHandler(channels.composioConnect, (payload) => connectToolkit(payload));
 
 registerHandler(channels.swarmList, () => listThreads());
 registerHandler(channels.swarmGet, (payload) => getThread(payload.id));

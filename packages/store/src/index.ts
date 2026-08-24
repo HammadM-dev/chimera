@@ -21,6 +21,7 @@ export type {
   TelemetrySettings,
   SearchSettings,
   SearchProvider,
+  ComposioSettings,
 } from './repositories/settings.ts';
 export { SEARCH_PROVIDERS } from './repositories/settings.ts';
 export * as rolesRepository from './repositories/roles.ts';

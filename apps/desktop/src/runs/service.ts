@@ -18,6 +18,7 @@ import {
   createBrowserServer,
   createHttpServer,
   createSearchServer,
+  createComposioServer,
   createFilesystemServer,
   createSandbox,
   createMemoryServer,
@@ -29,6 +30,7 @@ import { connectionFor } from '../providers/service.ts';
 import { emitRunEvent, subscribe } from './subscriptions.ts';
 import { createActivityReader, type Activity } from './activity.ts';
 import { askSwarm } from '../swarm/threads.ts';
+import { composioBackend } from '../composio/service.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
@@ -384,6 +386,15 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
         ...(searchSettings.region === '' ? {} : { region: searchSettings.region }),
       }),
     ),
+  );
+
+  // Composio, when the workspace has a key for it. Registered unconditionally —
+  // the backend answers every call with "not connected here" when it has none,
+  // which is a message an agent can read and act on, where a missing server
+  // means it is told it has no tools at all.
+  await tools.registerServer(
+    'composio',
+    await connectInProcess(createComposioServer(composioBackend())),
   );
 
   // Every mailbox the workspace holds, each under its own server id so an

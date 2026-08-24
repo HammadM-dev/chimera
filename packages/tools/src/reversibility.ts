@@ -25,6 +25,14 @@ const ALWAYS: readonly string[] = [
   // thing CLAUDE.md requires a person to approve first.
   'email.send',
   'email.reply',
+  // One tool standing in for ten thousand: Composio's `execute` is how an agent
+  // sends the Gmail, creates the Jira issue, posts to the channel and charges
+  // the card. The slug says which — `GMAIL_SEND_EMAIL` is legible enough — but
+  // this build has no list of which of Composio's thousands are safe, and a
+  // guess that gets one wrong sends something on somebody's behalf. Declared
+  // irreversible outright, so it needs an approval step in front of it like
+  // anything else that cannot be taken back.
+  'composio.execute',
 ];
 
 /** Calls whose effect stays inside the run's own sandbox, and stops there. */
@@ -66,6 +74,16 @@ const CONTAINED: readonly string[] = [
   'workspace.templates',
   'workspace.folders',
   'workspace.planAutomation',
+  // Composio's two reads. Listing the connected apps and searching for a tool
+  // change nothing at the far end.
+  //
+  // `composio.execute` is deliberately absent: it is the one that sends the
+  // email, creates the issue and posts the message, and this build cannot tell
+  // which of ten thousand slugs are the harmless ones. It falls through to the
+  // default — irreversible, needs a gate — which is what a tool named
+  // GMAIL_SEND_EMAIL should get.
+  'composio.toolkits',
+  'composio.search',
   // Reading a mailbox changes nothing in it. Marking as read is not done here:
   // these fetch without touching flags, so a triage run leaves an inbox exactly
   // as it found it.

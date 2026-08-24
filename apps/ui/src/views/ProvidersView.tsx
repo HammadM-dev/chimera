@@ -9,6 +9,7 @@ import { FileGrantsPanel } from './FileGrantsPanel.tsx';
 import { EmailAccountsPanel } from './EmailAccountsPanel.tsx';
 import { SearchPanel } from './SearchPanel.tsx';
 import { UsageStatsPanel } from './UsageStatsPanel.tsx';
+import { ComposioPanel } from './ComposioPanel.tsx';
 import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './views.css';
 
@@ -130,6 +131,10 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
 
         <div>
           <EmailAccountsPanel />
+        </div>
+        <div className="panel">
+          <h3 className="panel__title">Apps, through Composio</h3>
+          <ComposioPanel refreshToken={refreshToken} />
         </div>
         <div className="panel">
           <h3 className="panel__title">Web search</h3>

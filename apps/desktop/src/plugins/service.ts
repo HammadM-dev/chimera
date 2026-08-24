@@ -287,6 +287,15 @@ const BUILT_IN_TOOLS = [
   { id: 'workspace.providers', description: 'Lists model providers and their models. Never keys.' },
   { id: 'workspace.templates', description: 'Lists the automations CHIMERA ships.' },
   { id: 'workspace.folders', description: 'Lists folders this workspace may read.' },
+  { id: 'composio.toolkits', description: 'Lists the apps reachable through Composio.' },
+  {
+    id: 'composio.search',
+    description: 'Finds Composio tools for a job described in plain words.',
+  },
+  {
+    id: 'composio.execute',
+    description: 'Runs one Composio tool for real. Needs an approval step before it.',
+  },
   {
     id: 'workspace.planAutomation',
     description: 'Designs an automation from a description. Designs only — applies nothing.',

@@ -30,6 +30,8 @@ export { readAnyDocument, DocumentReadError } from './documentReader.ts';
 export type { DocumentReadOptions } from './documentReader.ts';
 export { kindOf, readableExtensions } from './documents.ts';
 export type { DocumentKind, DocumentText } from './documents.ts';
+export { createComposioServer } from './servers/composio.ts';
+export type { ComposioBackend, ComposioToolkit, ComposioTool } from './servers/composio.ts';
 export { createWorkspaceServer } from './servers/workspace.ts';
 export type {
   WorkspaceBackend,

@@ -656,6 +656,58 @@ export const assistantAsk = defineInvokeChannel({
   }),
 });
 
+// Composio: one account per workspace, and the apps connected through it.
+const composioStateSchema = z.object({
+  enabled: z.boolean(),
+  hasKey: z.boolean(),
+  userId: z.string(),
+});
+
+export const composioGet = defineInvokeChannel({
+  channel: 'composio:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: composioStateSchema,
+});
+
+export const composioSet = defineInvokeChannel({
+  channel: 'composio:set',
+  v: 1,
+  // Carries an API key on the way in.
+  sensitive: true,
+  requestSchema: z.object({ enabled: z.boolean(), apiKey: z.string().optional() }),
+  responseSchema: composioStateSchema,
+});
+
+export const composioToolkits = defineInvokeChannel({
+  channel: 'composio:toolkits',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({
+    toolkits: z.array(
+      z.object({
+        name: z.string(),
+        slug: z.string(),
+        isNoAuth: z.boolean(),
+        connected: z.boolean(),
+      }),
+    ),
+    reason: z.string(),
+  }),
+});
+
+// Starts connecting an app. Composio runs the sign-in; this hands back the page
+// the user has to visit, and the connection is not made until they finish there.
+export const composioConnect = defineInvokeChannel({
+  channel: 'composio:connect',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ toolkit: z.string() }),
+  responseSchema: z.object({ url: z.string(), reason: z.string() }),
+});
+
 // The swarm section: a population, and every question ever put to it.
 const swarmResultSchema = z.object({
   mode: z.enum(['everyone', 'archetypes']),
@@ -1656,6 +1708,10 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   swarmArchive,
   swarmForRun,
   swarmRound,
+  composioGet,
+  composioSet,
+  composioToolkits,
+  composioConnect,
   searchGet,
   searchSet,
   telemetryGet,

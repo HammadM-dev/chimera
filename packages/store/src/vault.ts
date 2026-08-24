@@ -7,7 +7,7 @@ const SERVICE_NAME = 'chimera';
 // A plugin's credentials are secrets like any other: an MCP server for an
 // email account holds the same kind of thing a provider connection does, and
 // it goes in the same place rather than into the plugin's row.
-export type VaultScope = 'connection' | 'licence' | 'plugin' | 'search';
+export type VaultScope = 'connection' | 'licence' | 'plugin' | 'search' | 'composio';
 
 // Nominal/branded type distinct from `string` — see docs/ARCHITECTURE.md
 // section 5: a repository call site that tries to pass a raw key string
@@ -29,7 +29,7 @@ export type AuthRef = string & { readonly [authRefBrand]: true };
 // that did nothing. A test that checked the *effect* rather than the report is
 // what caught it.
 const AUTH_REF_PATTERN =
-  /^vault:(connection|licence|plugin|search):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+  /^vault:(connection|licence|plugin|search|composio):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 // Exported so the repositories that persist handles (connections, licence)
 // can reject a raw secret at their own write boundary without duplicating the

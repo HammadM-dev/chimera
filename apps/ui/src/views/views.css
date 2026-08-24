@@ -676,3 +676,40 @@
 .talk__turn--waiting {
   color: var(--text-muted);
 }
+
+/* The list of apps Composio can reach. Long, so it scrolls in place rather
+   than pushing the rest of the panel down the page. */
+.toolkits {
+  max-height: 280px;
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toolkit {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: var(--radius-control);
+}
+
+.toolkit:hover {
+  background: var(--surface-raised);
+}
+
+.toolkit__name {
+  flex: 1;
+  min-width: 0;
+  font-size: var(--type-meta);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.toolkit__note {
+  font-size: var(--type-floor);
+  color: var(--text-muted);
+}

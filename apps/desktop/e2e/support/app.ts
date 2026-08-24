@@ -115,7 +115,7 @@ export function launchApp({
  */
 export async function goTo(
   page: Page,
-  view: 'home' | 'build' | 'runs' | 'agents' | 'memory' | 'providers' | 'chat',
+  view: 'home' | 'build' | 'swarm' | 'runs' | 'agents' | 'memory' | 'providers' | 'chat',
 ): Promise<void> {
   await page.waitForSelector('[data-testid="app-shell"]');
   // The splash first, then setup. Both are full-screen overlays, and a nav

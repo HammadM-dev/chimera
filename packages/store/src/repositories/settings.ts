@@ -100,18 +100,31 @@ export interface SearchSettings {
 
 const SEARCH_DEFAULT: SearchSettings = { provider: 'none', authRef: '', region: '' };
 
+/** Composio: one account per workspace, so connected apps are shared by every automation in it. */
+export interface ComposioSettings {
+  enabled: boolean;
+  /** Vault handle for the API key. Never the key. */
+  authRef: string;
+  /** Which Composio user this workspace is. Stable for the life of the workspace. */
+  userId: string;
+}
+
+const COMPOSIO_DEFAULT: ComposioSettings = { enabled: false, authRef: '', userId: '' };
+
 export interface WorkspaceSettings {
   localOnlyMode: boolean;
   modelTiers: ModelTiers;
   cache: CachePolicySettings;
   telemetry: TelemetrySettings;
   search: SearchSettings;
+  composio: ComposioSettings;
 }
 
 export function read(db: Database.Database): WorkspaceSettings {
   const row = db
     .prepare(
-      `SELECT local_only_mode, model_tiers_json, cache_policy_json, telemetry_json, search_json
+      `SELECT local_only_mode, model_tiers_json, cache_policy_json, telemetry_json, search_json,
+              composio_json
        FROM workspace_settings WHERE id = 1`,
     )
     .get() as
@@ -121,6 +134,7 @@ export function read(db: Database.Database): WorkspaceSettings {
         cache_policy_json: string;
         telemetry_json: string;
         search_json: string;
+        composio_json: string;
       }
     | undefined;
 
@@ -167,6 +181,13 @@ export function read(db: Database.Database): WorkspaceSettings {
     search = SEARCH_DEFAULT;
   }
 
+  let composio = COMPOSIO_DEFAULT;
+  try {
+    composio = { ...COMPOSIO_DEFAULT, ...(JSON.parse(row?.composio_json ?? '{}') as object) };
+  } catch {
+    composio = COMPOSIO_DEFAULT;
+  }
+
   // SQLite has no boolean type; 0/1 is the storage convention.
   return {
     localOnlyMode: (row?.local_only_mode ?? 0) === 1,
@@ -174,7 +195,15 @@ export function read(db: Database.Database): WorkspaceSettings {
     cache,
     telemetry,
     search,
+    composio,
   };
+}
+
+export function setComposio(db: Database.Database, composio: ComposioSettings): void {
+  db.prepare('UPDATE workspace_settings SET composio_json = ? WHERE id = 1').run(
+    JSON.stringify(composio),
+  );
+  notifyChanged(db);
 }
 
 export function setSearch(db: Database.Database, search: SearchSettings): void {
