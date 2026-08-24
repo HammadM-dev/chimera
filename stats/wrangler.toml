@@ -1,0 +1,13 @@
+name = "chimera-stats"
+main = "src/worker.ts"
+compatibility_date = "2026-01-01"
+
+# Created with: wrangler d1 create chimera-stats
+# Then paste the id it prints here.
+[[d1_databases]]
+binding = "DB"
+database_name = "chimera-stats"
+database_id = "REPLACE_WITH_YOUR_D1_ID"
+
+[vars]
+GITHUB_REPO = "HammadM-dev/chimera"

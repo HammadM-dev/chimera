@@ -14,6 +14,10 @@ const ALLOWED_DIRS = new Set([
   'sidecar',
   'templates',
   'evals',
+  // Not part of CHIMERA and deliberately not: a Cloudflare Worker that counts
+  // installs, deployed separately, sharing no code with the app and depended on
+  // by none of it. See stats/README.md and docs/ARCHITECTURE.md section 3.
+  'stats',
   'docs',
   'scripts',
   '.github',

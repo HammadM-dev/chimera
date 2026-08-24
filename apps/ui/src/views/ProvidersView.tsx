@@ -8,6 +8,7 @@ import { PluginsPanel } from './PluginsPanel.tsx';
 import { FileGrantsPanel } from './FileGrantsPanel.tsx';
 import { EmailAccountsPanel } from './EmailAccountsPanel.tsx';
 import { SearchPanel } from './SearchPanel.tsx';
+import { UsageStatsPanel } from './UsageStatsPanel.tsx';
 import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './views.css';
 
@@ -140,6 +141,10 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
             An answer already paid for can be given again instead of asked for again.
           </p>
           <AnswerCache refreshToken={refreshToken} />
+        </div>
+        <div className="panel">
+          <h3 className="panel__title">Counting installs</h3>
+          <UsageStatsPanel />
         </div>
         <div className="panel">
           <h3 className="panel__title">Sending runs elsewhere</h3>
