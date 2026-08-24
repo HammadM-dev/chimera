@@ -106,6 +106,20 @@ export type {
 } from './runtime/memory/vectorStore.ts';
 
 export { createTraceSink, NULL_TRACE_SINK } from './runtime/trace.ts';
+
+// The swarm: a simulated population, an event dropped into it, and whatever
+// they arrive at. See `swarm/simulate.ts` for why it has two fidelity modes.
+export { simulate, archetypeCountFor, distributionOf } from './swarm/simulate.ts';
+export type {
+  SwarmSpec,
+  SwarmResult,
+  SwarmMode,
+  SimulateDeps,
+  RoundReport,
+  Distribution,
+} from './swarm/simulate.ts';
+export { grow, wire, propagate, movement, seededRandom } from './swarm/population.ts';
+export type { Persona, Population, Stance, Tie } from './swarm/population.ts';
 export type { TraceEvent, TraceSink, TraceSinkOptions } from './runtime/trace.ts';
 
 export { estimate, describePreview, DEFAULT_MS_PER_ITERATION } from './governor/costPreview.ts';
