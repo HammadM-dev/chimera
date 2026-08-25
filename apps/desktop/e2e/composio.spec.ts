@@ -11,16 +11,25 @@ import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 
 test.describe.configure({ timeout: 120_000 });
 
-test('Composio is off until it is given a key, and says so plainly', async () => {
+test('Apps explains itself before it is given a key', async () => {
   const profile = freshProfile();
   const app = await launchApp({ profile });
 
   try {
     const page = await app.firstWindow();
-    await goTo(page, 'providers');
+    await goTo(page, 'apps');
 
-    const panel = page.getByTestId('composio');
+    const panel = page.getByTestId('composio-view');
     await expect(panel).toBeVisible({ timeout: 20_000 });
+
+    // The whole point of the section existing. Somebody who has never heard of
+    // Composio should be able to get from here to a connected app without
+    // leaving to read something, so the steps are on screen before the key is.
+    const setup = page.getByTestId('composio-setup');
+    await expect(setup).toBeVisible();
+    await expect(setup).toContainText('Make a Composio account');
+    await expect(setup).toContainText('App operator');
+    await expect(page.getByTestId('composio-open-signup')).toBeVisible();
 
     // Off to begin with: no key field, nothing claiming a connection.
     const enabled = page.getByTestId('composio-enabled');
@@ -42,63 +51,18 @@ test('Composio is off until it is given a key, and says so plainly', async () =>
   }
 });
 
-test('a Composio tool call with no key is an answer, not a crash', async () => {
+test('Providers points at Apps rather than holding a second copy of it', async () => {
+  // Connecting somebody's mailbox stopped being a setting three scrolls down
+  // Providers. Anybody who remembers where it was will look there first, so
+  // there has to be something there saying where it went.
   const profile = freshProfile();
   const app = await launchApp({ profile });
 
   try {
     const page = await app.firstWindow();
-
-    // Straight at the tool, through the same bridge the agent runtime uses.
-    // What matters is the shape of the failure: a sentence a person can act on,
-    // and an app still standing afterwards.
-    const answer = await page.evaluate(async () => {
-      const chimera = (
-        window as unknown as {
-          chimera: { invoke: (channel: string, payload: unknown) => Promise<unknown> };
-        }
-      ).chimera;
-      try {
-        return await chimera.invoke('composio:toolkits', {});
-      } catch (err) {
-        return { threw: err instanceof Error ? err.message : String(err) };
-      }
-    });
-
-    assertMentionsSetup(JSON.stringify(answer));
-
-    // Still alive.
     await goTo(page, 'providers');
-    await expect(page.getByTestId('composio')).toBeVisible({ timeout: 20_000 });
-  } finally {
-    await app.close();
-    removeProfile(profile);
-  }
-});
-
-function assertMentionsSetup(text: string): void {
-  expect(text.toLowerCase()).toContain('composio');
-  expect(text).toMatch(/not connected|Providers/i);
-}
-
-test('there is an agent that uses Composio, and it is in the palette', async () => {
-  // The gap this closes was not a bug in any code — the tools were registered,
-  // the server was hosted, the panel connected apps — and it made the whole
-  // feature unusable anyway, because nothing anywhere was an agent that used
-  // them. "Where is that agent?" was the right question and the answer was
-  // "there isn't one".
-  const profile = freshProfile();
-  const app = await launchApp({ profile });
-
-  try {
-    const page = await app.firstWindow();
-    await goTo(page, 'build');
-
-    const operator = page.getByTestId('palette-app-operator');
-    await expect(operator).toBeVisible({ timeout: 20_000 });
-
-    await operator.click();
-    await expect(page.getByTestId('node-app-operator')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByText('now live in Apps')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('composio-key')).toHaveCount(0);
   } finally {
     await app.close();
     removeProfile(profile);

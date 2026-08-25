@@ -9,6 +9,9 @@
 
 .apps {
   max-width: 900px;
+  /* Centred, like Providers. Left-aligned in a 1440px window it read as a
+   * column that had failed to load the rest of the page. */
+  margin: 0 auto;
   padding-bottom: var(--space-6);
 }
 
@@ -126,6 +129,14 @@
   align-items: flex-start;
 }
 
+/* The step's text takes the room the step has. Without this the flex item
+ * sizes to its content and the prose wrapped at about 380px inside an 830px
+ * panel, with the rest of the line empty. */
+.setup__step > div {
+  flex: 1;
+  min-width: 0;
+}
+
 .setup__num {
   flex: none;
   width: 22px;
@@ -172,4 +183,36 @@
   align-items: center;
   gap: var(--space-2);
   flex-wrap: wrap;
+}
+
+/* The account panel's own heading, doubling as the fold. */
+.apps__fold {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.apps__fold .apps__panelTitle {
+  margin: 0;
+}
+
+.apps__foldMark {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+}
+
+.apps__fold:hover .apps__foldMark {
+  color: var(--text-secondary);
+}
+
+.apps__fold[aria-expanded='true'] + * {
+  margin-top: var(--space-3);
 }

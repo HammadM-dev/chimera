@@ -122,9 +122,9 @@ function Setup({ onNote }: { onNote: (note: string) => void }): JSX.Element {
             <p className="setup__why">
               That is the agent that uses all this. On the canvas, drop in an{' '}
               <strong>App operator (Composio)</strong> step and choose which of your connected apps
-              it works with — the same way you choose its model. Two App operators in one
-              automation can hold different apps, so the one that reads your mail is not also the
-              one that can post in Slack.
+              it works with — the same way you choose its model. Two App operators in one automation
+              can hold different apps, so the one that reads your mail is not also the one that can
+              post in Slack.
             </p>
           </div>
         </li>
@@ -140,6 +140,7 @@ export function ComposioView(): JSX.Element {
   const [busy, setBusy] = useState(false);
   const [connectedApps, setConnectedApps] = useState<Toolkit[]>([]);
   const [refreshToken, setRefreshToken] = useState(0);
+  const [accountOpen, setAccountOpen] = useState(true);
   const [question, setQuestion] = useState('');
   const [probing, setProbing] = useState(false);
   const [probe, setProbe] = useState<ToolProbe>({ tools: [], toolkits: [] });
@@ -161,7 +162,10 @@ export function ComposioView(): JSX.Element {
       try {
         const loaded = await bridge().invoke<State>('composio:get', {});
         setState(loaded);
-        if (loaded.enabled && loaded.hasKey) await loadConnected();
+        if (loaded.enabled && loaded.hasKey) {
+          setAccountOpen(false);
+          await loadConnected();
+        }
       } catch (err) {
         setNote(describeError(err).message);
       }
@@ -172,6 +176,13 @@ export function ComposioView(): JSX.Element {
     async (enabled: boolean, key?: string) => {
       setBusy(true);
       setNote('');
+      // Moved before the round trip on purpose. The checkbox is controlled by
+      // this state, so until the main process answered, clicking it did
+      // nothing visible — the box stayed where it was for as long as the
+      // keychain took, which reads as a control that is broken rather than one
+      // that is working. The answer below is still authoritative and replaces
+      // this the moment it lands.
+      setState((current) => (current === null ? current : { ...current, enabled }));
       try {
         const saved = await bridge().invoke<State>('composio:set', {
           enabled,
@@ -180,6 +191,7 @@ export function ComposioView(): JSX.Element {
         setState(saved);
         setApiKey('');
         if (saved.enabled && saved.hasKey) {
+          if (key !== undefined && key !== '') setAccountOpen(false);
           await loadConnected();
           setRefreshToken((current) => current + 1);
         } else {
@@ -238,51 +250,74 @@ export function ComposioView(): JSX.Element {
 
       {!ready && <Setup onNote={setNote} />}
 
+      {/* Folded away once it is done. The key is a thing you set once and then
+          never look at again, and while it was open it pushed the app
+          directory — the part of this section anybody actually comes back
+          for — most of the way off the screen. */}
       <section className="apps__panel">
-        <h3 className="apps__panelTitle">Composio account</h3>
+        <button
+          type="button"
+          className="apps__fold"
+          data-testid="composio-account-toggle"
+          aria-expanded={accountOpen}
+          onClick={() => {
+            setAccountOpen(!accountOpen);
+          }}
+        >
+          <span className="apps__panelTitle">Composio account</span>
+          <span className="apps__foldMark">
+            {ready && !accountOpen ? 'key saved' : accountOpen ? 'Hide' : 'Show'}
+          </span>
+        </button>
 
-        <label className="canvas__check composio__enable">
-          <input
-            type="checkbox"
-            data-testid="composio-enabled"
-            checked={state.enabled}
-            onChange={(event) => {
-              void save(event.target.checked);
-            }}
-          />
-          <span>Use Composio in this workspace.</span>
-        </label>
-
-        {state.enabled && (
+        {accountOpen && (
           <>
-            <div className="field composio__key">
-              <label className="field__label" htmlFor="composio-key">
-                API key
-              </label>
+            <label className="canvas__check composio__enable">
               <input
-                id="composio-key"
-                className="control"
-                type="password"
-                data-testid="composio-key"
-                placeholder={state.hasKey ? 'A key is stored. Type a new one to replace it.' : 'ak_…'}
-                value={apiKey}
+                type="checkbox"
+                data-testid="composio-enabled"
+                checked={state.enabled}
                 onChange={(event) => {
-                  setApiKey(event.target.value);
+                  void save(event.target.checked);
                 }}
               />
-            </div>
+              <span>Use Composio in this workspace.</span>
+            </label>
 
-            <button
-              type="button"
-              className="button"
-              data-testid="composio-save"
-              disabled={busy}
-              onClick={() => {
-                void save(true, apiKey);
-              }}
-            >
-              {busy ? 'Saving' : 'Save key'}
-            </button>
+            {state.enabled && (
+              <>
+                <div className="field composio__key">
+                  <label className="field__label" htmlFor="composio-key">
+                    API key
+                  </label>
+                  <input
+                    id="composio-key"
+                    className="control"
+                    type="password"
+                    data-testid="composio-key"
+                    placeholder={
+                      state.hasKey ? 'A key is stored. Type a new one to replace it.' : 'ak_…'
+                    }
+                    value={apiKey}
+                    onChange={(event) => {
+                      setApiKey(event.target.value);
+                    }}
+                  />
+                </div>
+
+                <button
+                  type="button"
+                  className="button"
+                  data-testid="composio-save"
+                  disabled={busy}
+                  onClick={() => {
+                    void save(true, apiKey);
+                  }}
+                >
+                  {busy ? 'Saving' : 'Save key'}
+                </button>
+              </>
+            )}
           </>
         )}
       </section>
@@ -303,7 +338,11 @@ export function ComposioView(): JSX.Element {
             ) : (
               <div className="apps__grid" data-testid="composio-connected">
                 {connectedApps.map((toolkit) => (
-                  <article key={toolkit.slug} className="mine" data-testid={`composio-mine-${toolkit.slug}`}>
+                  <article
+                    key={toolkit.slug}
+                    className="mine"
+                    data-testid={`composio-mine-${toolkit.slug}`}
+                  >
                     <Logo toolkit={toolkit} />
                     <div className="mine__body">
                       <span className="mine__name">{toolkit.name}</span>

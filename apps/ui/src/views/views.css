@@ -1214,8 +1214,13 @@
   object-fit: contain;
   /* Many of these logos are dark marks drawn for a white page. A light plate
    * behind them keeps them legible in the dark theme without inverting
-   * anybody's brand colours. */
-  background: var(--surface-popover);
+   * anybody's brand colours.
+   *
+   * This said the same thing while using `--surface-popover`, which is a near
+   * black in the dark theme — so it was a dark plate, and GitHub's black mark
+   * on it was an empty square. The comment was right about what was needed and
+   * the value was not. */
+  background: var(--surface-logo-plate);
   padding: 3px;
 }
 

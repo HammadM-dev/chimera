@@ -282,6 +282,35 @@ export async function connectedToolkitSlugs(): Promise<string[]> {
 }
 
 /**
+ * Why a narrowed step may not run this tool, or '' when it may.
+ *
+ * Split out from `execute` so it can be tested without a network and without
+ * exposing a way to run a Composio tool from anywhere but the agent loop. There
+ * is no IPC channel that executes: CLAUDE.md's first hard rule is that every
+ * tool call goes through the Governor, and a channel added to make a test
+ * convenient would be exactly the bypass that rule forbids.
+ *
+ * Fails closed on an empty toolkit. That is the invented-slug case — the one
+ * this exists for — and "Composio has never heard of it" is not a reason to
+ * try it.
+ */
+export function refusalFor(
+  scope: readonly string[],
+  slug: string,
+  toolkit: string,
+): string {
+  if (scope.length === 0) return '';
+  const named = scope.join(', ');
+
+  if (toolkit === '') {
+    return `There is no Composio tool called "${slug}". Use search to find the real slug.`;
+  }
+  if (scope.some((one) => one.toLowerCase() === toolkit.toLowerCase())) return '';
+
+  return `This step is connected to ${named} and nothing else, so it cannot run a ${toolkit} tool. Point it at ${toolkit} in the automation, or use a tool from ${named}.`;
+}
+
+/**
  * Which app a tool slug belongs to, from Composio rather than from its name.
  *
  * The name looks like it would do: `GMAIL_SEND_EMAIL` belongs to `gmail`, and
@@ -294,7 +323,7 @@ export async function connectedToolkitSlugs(): Promise<string[]> {
  * Empty when the slug is unknown, and the caller refuses on empty. Failing
  * closed is the point: an invented slug is exactly the case this exists for.
  */
-async function toolkitOf(slug: string): Promise<string> {
+export async function toolkitOf(slug: string): Promise<string> {
   const key = apiKey();
   if (key === '') return '';
   try {
@@ -334,7 +363,6 @@ export function composioBackend(only: readonly string[] = []): ComposioBackend {
   const scope = only.map((slug) => slug.toLowerCase()).filter((slug) => slug !== '');
   const inScope = (toolkit: string): boolean =>
     scope.length === 0 || scope.includes(toolkit.toLowerCase());
-  const named = scope.join(', ');
 
   return {
     async toolkits(input): Promise<ComposioToolkit[]> {
@@ -433,19 +461,8 @@ export function composioBackend(only: readonly string[] = []): ComposioBackend {
       // The narrowing, at the only point that matters. Everything above this
       // shapes what the agent is shown; this is what it is allowed to do.
       if (scope.length > 0) {
-        const toolkit = await toolkitOf(input.slug);
-        if (toolkit === '') {
-          return {
-            ok: false,
-            output: `There is no Composio tool called "${input.slug}". Use search to find the real slug.`,
-          };
-        }
-        if (!inScope(toolkit)) {
-          return {
-            ok: false,
-            output: `This step is connected to ${named} and nothing else, so it cannot run a ${toolkit} tool. Point it at ${toolkit} in the automation, or use a tool from ${named}.`,
-          };
-        }
+        const refusal = refusalFor(scope, input.slug, await toolkitOf(input.slug));
+        if (refusal !== '') return { ok: false, output: refusal };
       }
 
       // `{ data, error, logId }` — there is no `successful` flag, whatever the

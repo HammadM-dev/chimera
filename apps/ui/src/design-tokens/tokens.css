@@ -12,6 +12,16 @@
   --surface-raised: #1e1c1a;
   --surface-popover: #262421;
 
+  /* The plate behind a third-party logo, light in both themes.
+   *
+   * Not `--surface-popover`, which is dark in the dark theme and was what this
+   * used. Composio serves each app's own mark, and a great many of them are
+   * black-on-transparent SVGs drawn for a white page — GitHub's among them —
+   * so on a dark plate the row showed an empty square. Inverting them would be
+   * altering somebody's brand mark; giving them the page they were drawn for
+   * is not. */
+  --surface-logo-plate: #f5f3ee;
+
   --text-primary: #f5f3ee;
   --text-secondary: #a3a09a;
   --text-muted: #6f6c66;
@@ -76,6 +86,7 @@
   --surface-panel: #f6f4ef;
   --surface-raised: #fbfaf7;
   --surface-popover: #ffffff;
+  --surface-logo-plate: #ffffff;
 
   --text-primary: #1a1815;
   --text-secondary: #55524b;

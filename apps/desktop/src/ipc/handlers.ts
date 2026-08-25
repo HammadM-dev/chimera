@@ -82,6 +82,7 @@ import {
   searchTools,
   toolkitLogo,
   setComposio,
+  toolkitOf,
 } from '../composio/service.ts';
 import { openExternal } from '../security/openExternal.ts';
 import {
@@ -236,6 +237,9 @@ registerHandler(channels.composioToolkits, (input) => listToolkits(input));
 registerHandler(channels.composioSearch, (input) => searchTools(input));
 registerHandler(channels.composioLogo, (input) => toolkitLogo(input));
 registerHandler(channels.composioConnect, (payload) => connectToolkit(payload));
+registerHandler(channels.composioToolkitOf, async (payload) => ({
+  toolkit: await toolkitOf(payload.slug),
+}));
 registerHandler(channels.shellOpenExternal, (payload) => openExternal(payload.url));
 
 registerHandler(channels.swarmList, () => listThreads());

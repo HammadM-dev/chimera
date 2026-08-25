@@ -796,6 +796,28 @@ export const composioConnect = defineInvokeChannel({
 });
 
 /**
+ * Which app one Composio tool slug belongs to.
+ *
+ * A read, and deliberately the only new Composio channel: there is no channel
+ * that *runs* a tool, because CLAUDE.md's first hard rule is that every tool
+ * call goes through the Governor and an IPC channel around it would be exactly
+ * the bypass that forbids.
+ *
+ * Answered by Composio rather than worked out from the name. `GMAIL_SEND_EMAIL`
+ * looks like it belongs to `gmail` and does, but `ZOHO_MAIL_MESSAGES_SEND_EMAIL`
+ * belongs to `zoho_mail` while `ZOHO` is also a real toolkit — twenty-five
+ * colliding pairs in the catalogue, measured — so a prefix rule would put one
+ * app's tools inside another app's limit.
+ */
+export const composioToolkitOf = defineInvokeChannel({
+  channel: 'composio:toolkitOf',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ slug: z.string() }),
+  responseSchema: z.object({ toolkit: z.string() }),
+});
+
+/**
  * Opens a link in the user's own browser.
  *
  * The renderer cannot do this: `applyNavigationGuard` denies `window.open` for
@@ -1906,6 +1928,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   composioToolkits,
   composioSearch,
   composioConnect,
+  composioToolkitOf,
   shellOpenExternal,
   searchGet,
   searchSet,
