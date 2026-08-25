@@ -330,15 +330,15 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
           )}
 
           {open?.turns.map((turn) => (
-            <section key={turn.id} className="turn" data-testid="swarm-turn">
-              <p className="turn__asked" data-testid="swarm-asked">
+            <section key={turn.id} className="swarm-turn" data-testid="swarm-turn">
+              <p className="swarm-turn__asked" data-testid="swarm-asked">
                 {turn.asked}
               </p>
 
               {turn.result && (
                 <>
                   <Split split={turn.result.final} />
-                  <p className="turn__how" data-testid="swarm-how">
+                  <p className="swarm-turn__how" data-testid="swarm-how">
                     {turn.result.mode === 'everyone'
                       ? `All ${String(turn.result.population)} were asked directly.`
                       : `${String(turn.result.thinking)} thought it through; the other ${String(
@@ -353,10 +353,10 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
                 </>
               )}
 
-              <div className="turn__answer">{turn.answer}</div>
+              <div className="swarm-turn__answer">{turn.answer}</div>
 
               {turn.result && turn.result.rounds.length > 0 && (
-                <details className="turn__rounds">
+                <details className="swarm-turn__rounds">
                   <summary>What they said</summary>
                   {turn.result.rounds.map((round) => (
                     <div key={round.round} className="round">
@@ -379,12 +379,12 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
           ))}
 
           {asking && (
-            <section className="turn turn--live" data-testid="swarm-live">
+            <section className="swarm-turn swarm-turn--live" data-testid="swarm-live">
               {live === null ? (
-                <p className="turn__how">Writing the population…</p>
+                <p className="swarm-turn__how">Writing the population…</p>
               ) : (
                 <>
-                  <p className="turn__how">Round {live.round} — the population is still moving</p>
+                  <p className="swarm-turn__how">Round {live.round} — the population is still moving</p>
                   <Split split={live.distribution} />
                   <ul className="round__voices">
                     {live.said.slice(0, 6).map((voice, index) => (

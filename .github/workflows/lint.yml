@@ -23,6 +23,7 @@ jobs:
       - run: npm run check:no-raw-sql
 
       - run: npm run check:design-tokens
+      - run: npm run check:css-collisions
       - run: npm run check:contrast
       # `stats/` is deployed by wrangler and built by nothing here, which is not
       # a reason to let it rot.

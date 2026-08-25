@@ -151,16 +151,19 @@
 }
 
 /* One question and everything that came of it. */
-.turn {
+/* `swarm-turn`, not `turn`: chat.css already defines `.turn` for a message in
+ * a conversation. Both stylesheets load into one document, so the two rules
+ * were overwriting each other and which one won depended on import order. */
+.swarm-turn {
   display: flex;
   flex-direction: column;
   gap: 10px;
   max-width: 760px;
   width: 100%;
-  animation: turn-in 260ms ease-out both;
+  animation: swarm-turn-in 260ms ease-out both;
 }
 
-@keyframes turn-in {
+@keyframes swarm-turn-in {
   from {
     opacity: 0;
     transform: translateY(6px);
@@ -189,7 +192,7 @@
   white-space: pre-wrap;
 }
 
-.turn--live {
+.swarm-turn--live {
   opacity: 0.85;
 }
 
@@ -392,7 +395,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .turn,
+  .swarm-turn,
   .split__part,
   .voice__dot {
     animation: none;
