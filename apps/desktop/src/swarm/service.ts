@@ -35,6 +35,18 @@ export interface SwarmRunSpec {
   maxRounds: number;
   everyoneUpTo: number;
   seed: string;
+  /**
+   * The cast, when this thread already has one.
+   *
+   * A follow-up has to reach the *same* crowd or a thread is just a series of
+   * unrelated runs sharing a title — "and if the price were double?" put to a
+   * freshly-written cast answers a different question from the one before it.
+   * The archetypes are the only part of a population that a model writes; the
+   * rest is arithmetic off the seed, so holding these fixed and holding the
+   * seed fixed reproduces the same people, the same followers and the same
+   * social graph. What changes between turns is what they have heard.
+   */
+  cast?: Persona[];
 }
 
 const PERSONA_SYSTEM = [
@@ -161,6 +173,19 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
       ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
 
       buildPersonas: async ({ question, background, count }) => {
+        // A thread that already has a cast reuses it rather than paying a model
+        // to write a new one.
+        //
+        // `count` can exceed what is stored, because the dials are editable
+        // between turns and a bigger population asks for more archetypes. The
+        // stored cast still wins: keeping the same people and growing more
+        // followers around them is what somebody means by asking the same crowd
+        // a bigger version of the question. Hiring strangers to make up the
+        // difference is not.
+        if (spec.cast !== undefined && spec.cast.length > 0) {
+          return spec.cast.slice(0, count);
+        }
+
         const asked = [
           `Write ${String(count)} people for this:`,
           question,

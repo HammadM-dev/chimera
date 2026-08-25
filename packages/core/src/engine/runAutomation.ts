@@ -637,14 +637,29 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         };
       }
 
-      const swarm = await deps.runSwarmNode({
-        runId,
-        nodeId: step.nodeId,
-        question,
-        population: config.population,
-        maxRounds: config.maxRounds,
-        everyoneUpTo: config.everyoneUpTo,
-      });
+      // Caught here rather than left to propagate. A rejection out of a node
+      // runner unwinds past the point that journals the step, so the step stays
+      // recorded as "running" for good — on screen it is a spinner that never
+      // stops, which is the least useful way for anything to fail.
+      let swarm: { threadId: string; answer: string; population: number; mode: string };
+      try {
+        swarm = await deps.runSwarmNode({
+          runId,
+          nodeId: step.nodeId,
+          question,
+          population: config.population,
+          maxRounds: config.maxRounds,
+          everyoneUpTo: config.everyoneUpTo,
+        });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        trace.append({
+          nodeId: step.nodeId,
+          eventType: 'decision',
+          payload: { decision: 'swarm:failed', reason: message },
+        });
+        return { ...base, status: 'denied', haltCause: 'limit', output: message };
+      }
 
       trace.append({
         nodeId: step.nodeId,

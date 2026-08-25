@@ -145,6 +145,7 @@ export function AppShell(): JSX.Element {
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
   const [canvasKey, setCanvasKey] = useState(0);
   const [buildingAgent, setBuildingAgent] = useState(false);
+  const [openSwarmId, setOpenSwarmId] = useState<string | null>(null);
   const [openId, setOpenId] = useState<string | null>(null);
   const [saved, setSaved] = useState<{ id: string; name: string }[]>([]);
   // Bumped whenever the set of connections changes, so every view reading it
@@ -316,11 +317,29 @@ export function AppShell(): JSX.Element {
                 template={template}
                 openId={openId}
                 onSaved={() => void loadSaved()}
+                onOpenSwarm={(threadId) => {
+                  // The canvas hands over the thread its swarm step made, and
+                  // the section opens on it rather than on the list — landing
+                  // somebody in a list of threads and letting them guess which
+                  // is theirs is the version of this that helps nobody.
+                  setOpenSwarmId(threadId);
+                  setView('swarm');
+                }}
               />
             )}
             {view === 'chat' && <ChatPanel />}
             {view === 'runs' && <RunsView />}
-            {view === 'swarm' && <SwarmView />}
+            {view === 'swarm' && (
+              <SwarmView
+                {...(openSwarmId === null ? {} : { openId: openSwarmId })}
+                onOpened={() => {
+                  // Cleared once used, so navigating back to Swarms later shows
+                  // where the person left off rather than reopening this thread
+                  // for good.
+                  setOpenSwarmId(null);
+                }}
+              />
+            )}
             {view === 'memory' && <MemoryView />}
             {view === 'agents' && (
               <div className="view__body scroll">

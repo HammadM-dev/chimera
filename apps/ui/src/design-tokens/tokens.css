@@ -225,3 +225,26 @@ body {
   --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
   --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
 }
+
+/* Reduced motion, once, for everything.
+ *
+ * This was a list per stylesheet, naming the classes that animate — which is
+ * the same hand-maintained mirror that has already gone wrong five times in
+ * this repo, and here the cost of a miss falls on the person who set the
+ * preference because motion makes them ill. A blanket rule cannot fall behind
+ * the CSS it guards.
+ *
+ * Not `animation: none`: a keyframe that never runs leaves whatever it was
+ * animating stuck at its start, so a card that fades in from `opacity: 0` never
+ * arrives. A duration this short runs the animation to its final frame within a
+ * frame of it starting — the end state, without the journey. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

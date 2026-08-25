@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { applyTransform, evaluateCondition } from './nodeTypes.ts';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { applyTransform, evaluateCondition, NODE_KINDS } from './nodeTypes.ts';
 import { validateBrief, type RunBrief } from './runBrief.ts';
 
 // M4-3 and M4-6: the shaping node types, and the save-time rules that refuse a
@@ -146,4 +148,36 @@ test('every problem is reported at once, not the first', () => {
   assert.ok(problems.some((problem) => problem.message.includes('No agent called')));
   assert.ok(problems.some((problem) => problem.message.includes('Choose a model')));
   assert.ok(problems.some((problem) => problem.message.includes('needs a question')));
+});
+
+test('every node kind the engine knows can be drawn', () => {
+  // Not a test of the engine — a test of the join between it and the canvas.
+  // React Flow silently renders nothing for a node whose `type` it has no
+  // component for, so a kind added to the engine and not to `NODE_TYPES`
+  // produces a canvas where clicking the palette does nothing at all, with no
+  // error anywhere. That is exactly what happened to `swarm`.
+  const drawn = readFileSync(
+    path.join(
+      import.meta.dirname,
+      '..',
+      '..',
+      '..',
+      '..',
+      'apps',
+      'ui',
+      'src',
+      'views',
+      'CanvasView.tsx',
+    ),
+    'utf8',
+  );
+  const registry = /const NODE_TYPES = \{([\s\S]*?)\};/.exec(drawn)?.[1] ?? '';
+  assert.notEqual(registry, '', 'could not find NODE_TYPES in CanvasView.tsx');
+
+  const missing = NODE_KINDS.filter((kind) => !new RegExp(`\\b${kind}:`).test(registry));
+  assert.deepEqual(
+    missing,
+    [],
+    `these kinds exist in the engine and cannot be drawn: ${missing.join(', ')}`,
+  );
 });

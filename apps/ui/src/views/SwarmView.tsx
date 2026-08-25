@@ -118,7 +118,14 @@ function Voice({
   );
 }
 
-export function SwarmView(): JSX.Element {
+export interface SwarmViewProps {
+  /** A thread to open on arrival, when the canvas sent somebody here. */
+  openId?: string;
+  /** Called once that thread has been opened, so it is not reopened for good. */
+  onOpened?: () => void;
+}
+
+export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Element {
   const { choices } = useConnections();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [open, setOpen] = useState<ThreadDetail | null>(null);
@@ -168,6 +175,15 @@ export function SwarmView(): JSX.Element {
       setError(describeError(err).message);
     }
   }, []);
+
+  // Sent here from a swarm step on the canvas, with the thread it made.
+  useEffect(() => {
+    if (openId === undefined || openId === '') return;
+    void (async () => {
+      await openThread(openId);
+      onOpened?.();
+    })();
+  }, [openId, openThread, onOpened]);
 
   const ask = useCallback(async () => {
     const asked = question.trim();

@@ -6,6 +6,28 @@
 // Each also declares its own bound — CLAUDE.md's "no unbounded loops" is not a
 // rule about the loop node alone, it is a rule about anything that can repeat.
 
+/**
+ * Every node kind, as data.
+ *
+ * The union alone is a compile-time fact and the canvas needs a run-time one:
+ * React Flow renders nothing at all for a node whose `type` it has no component
+ * for — no error, no placeholder, just a palette click that does nothing. A
+ * test holds this list against `NODE_TYPES` in the renderer, which is how
+ * `swarm` was caught having been added to the engine and not to the canvas.
+ */
+export const NODE_KINDS = [
+  'agent',
+  'condition',
+  'loop',
+  'transform',
+  'approval',
+  'subworkflow',
+  'fanout',
+  'aggregate',
+  'team',
+  'swarm',
+] as const;
+
 export type NodeType =
   | 'agent'
   | 'condition'

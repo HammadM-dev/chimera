@@ -184,3 +184,63 @@ test('the swarm list folds away, and a swarm can be renamed', async () => {
     await gateway.close();
   }
 });
+
+test('a swarm step in an automation makes a thread, and the node leads to it', async () => {
+  // The join between the two halves. A swarm inside an automation keeps its
+  // argument in the Swarms section rather than in a step's output, which is
+  // only useful if there is a way from the node to the section — otherwise the
+  // most interesting thing the run produced is somewhere the user has to go and
+  // find by name.
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 20_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 20_000,
+    });
+
+    // A swarm borrows the standard tier rather than binding to a model of its
+    // own, so this is what makes the node runnable at all.
+    await page.getByTestId('tier-standard').selectOption({ index: 1 });
+
+    await goTo(page, 'build');
+    await page.getByTestId('palette-swarm').click();
+    await expect(page.getByTestId('node-swarm')).toBeVisible({ timeout: 20_000 });
+
+    await page.getByTestId('swarm-question').fill('Should we raise prices by ten per cent?');
+    await page.getByTestId('swarm-node-population').fill('120');
+    await page.getByTestId('swarm-node-rounds').fill('2');
+
+    await page.getByTestId('brief-input').fill('Ask the crowd about the price rise.');
+    await page.getByTestId('brief-name').fill('Price check');
+
+    await expect(page.getByTestId('brief-blocked')).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.getByTestId('brief-run')).toBeEnabled();
+    await page.getByTestId('brief-run').click();
+
+    await expect(page.getByTestId('node-swarm')).toContainText(/succeeded/, { timeout: 180_000 });
+
+    // The node now offers a way into the thread it made.
+    await page.getByTestId('node-swarm').click();
+    const open = page.getByTestId('swarm-open-thread');
+    await expect(open).toBeVisible({ timeout: 20_000 });
+    await open.click();
+
+    // And it lands on that thread rather than on the list.
+    await expect(page.getByTestId('swarm-view')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('swarm-turn')).toBeVisible({ timeout: 20_000 });
+    await expect(page.getByTestId('swarm-asked')).toContainText('ten per cent');
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});

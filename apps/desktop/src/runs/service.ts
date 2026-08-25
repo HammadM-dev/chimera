@@ -510,6 +510,17 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       // than burying its transcript in a step's output. The trace records the
       // thread id, which is what the button on the node uses to get there.
       runSwarmNode: async (input) => {
+        // A swarm runs on the workspace's standard tier rather than on a model
+        // chosen per node: a population of three hundred on a frontier model is
+        // a bill nobody meant to run up. An unset tier is said plainly here —
+        // the alternative was a throw from `connectionFor('')` that left the
+        // step spinning with nothing on screen to explain it.
+        if (tiers.standard.connectionId === '' || tiers.standard.model === '') {
+          throw new Error(
+            'A swarm runs on the "standard" tier, and this workspace has not said which model that is. Set it in Providers.',
+          );
+        }
+
         const asked = await askSwarm({
           question: input.question,
           source: input.runId,

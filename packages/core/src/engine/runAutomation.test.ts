@@ -800,3 +800,47 @@ test('an automation saved when the node was called "swarm" still loads', () => {
   assert.equal(normaliseType('fanout'), 'fanout');
   assert.equal(normaliseType(undefined), 'agent');
 });
+
+test('a swarm that cannot run is a denied step, not a run that never ends', async () => {
+  // The failure this covers looked like a hang. A rejection out of
+  // `runSwarmNode` unwound past the point that journals the step, so the run
+  // ended with the step still recorded as "running" — on the canvas, a spinner
+  // that stayed on for good with nothing anywhere saying why.
+  const { db, dir } = open('run-swarm-fail');
+  const tools = await toolsFor(dir, 'run-swarm-fail');
+
+  const brief: RunBrief = {
+    name: 'asking the crowd',
+    instruction: 'ask about the price rise',
+    attachments: [],
+    steps: [
+      shaping('crowd', {
+        type: 'swarm',
+        swarm: {
+          question: 'Should we raise prices by ten per cent?',
+          population: 120,
+          maxRounds: 2,
+          everyoneUpTo: 60,
+        },
+      }),
+    ],
+    edges: [],
+  };
+
+  try {
+    const outcome = await runAutomation({
+      ...deps(db, 'run-swarm-fail', brief, tools),
+      runSwarmNode: () =>
+        Promise.reject(new Error('This workspace has not said which model "standard" is.')),
+    });
+
+    const step = outcome.steps[0];
+    assert.equal(step?.status, 'denied');
+    assert.match(step?.output ?? '', /has not said which model/);
+    assert.notEqual(step?.status, 'running');
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});

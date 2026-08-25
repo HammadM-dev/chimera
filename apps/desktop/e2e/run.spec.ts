@@ -75,7 +75,7 @@ test('an automation built on the canvas actually runs', async () => {
     await goTo(page, 'build');
 
     // Run says why it is unavailable rather than being a dead grey button.
-    await expect(page.getByTestId('brief-blocked')).toContainText('Add an agent first');
+    await expect(page.getByTestId('brief-blocked')).toContainText('Add an agent or a swarm');
     await expect(page.getByTestId('brief-run')).toBeDisabled();
 
     await page.getByTestId('palette-researcher').click();

@@ -1,5 +1,5 @@
 import { swarmsRepository } from '@chimera/store';
-import type { RoundReport, SwarmResult } from '@chimera/core';
+import type { Persona, RoundReport, SwarmResult } from '@chimera/core';
 import { getStore } from '../store/lifecycle.ts';
 import { report, runSwarm } from './service.ts';
 
@@ -45,7 +45,9 @@ function provisionalName(question: string): string {
   return words === '' ? 'New swarm' : words.length > 48 ? `${words.slice(0, 45)}…` : words;
 }
 
-export function listThreads(): { threads: { id: string; name: string; updatedAt: string; source: string }[] } {
+export function listThreads(): {
+  threads: { id: string; name: string; updatedAt: string; source: string }[];
+} {
   return {
     threads: swarmsRepository.list(getStore()).map((row) => ({
       id: row.id,
@@ -142,6 +144,23 @@ export async function askSwarm(
           .map((turn) => `Earlier they were asked: ${turn.asked}\nWhat happened: ${turn.answer}`)
           .join('\n\n');
 
+  // The cast the first turn produced, if there was one.
+  //
+  // This is what actually makes a follow-up a follow-up. `buildPersonas` is a
+  // model call, so without a stored cast every turn hired new people: the
+  // second question went to a crowd the first one had never met, and nothing in
+  // the output said so — the answers stayed plausible, which is what made it
+  // hard to see.
+  //
+  // The seed is the thread's, unchanged, for the same reason. It was the
+  // thread's seed plus the turn number, on the belief that reusing it exactly
+  // would give the follow-up the same starting positions; it would not, since
+  // every stance starts at position 0 and confidence 0.3 either way. All the
+  // changing seed varied was how far each follower drifts from the archetype it
+  // came from, and how strongly the ties between them carry — which is to say,
+  // it made the crowd subtly different people for no benefit.
+  const cast = castOf(before);
+
   const spec = {
     connectionId: input.settings.connectionId,
     model: input.settings.model,
@@ -150,10 +169,8 @@ export async function askSwarm(
     population: input.settings.population,
     maxRounds: input.settings.maxRounds,
     everyoneUpTo: input.settings.everyoneUpTo,
-    // The thread's seed plus the turn number: the same population, a new
-    // conversation. Reusing the seed exactly would rebuild the same jitter and
-    // give the follow-up the same starting positions as the first question.
-    seed: `${thread.seed}:${String(before.length)}`,
+    seed: thread.seed,
+    ...(cast.length === 0 ? {} : { cast }),
   };
 
   const result = await runSwarm(spec, {
@@ -198,4 +215,22 @@ export async function askSwarm(
 /** The thread an automation run created, for the button on a swarm node. */
 export function threadForRun(input: { runId: string }): { threadId: string } {
   return { threadId: swarmsRepository.bySource(getStore(), input.runId)?.id ?? '' };
+}
+
+/**
+ * The archetypes an earlier turn wrote, newest first.
+ *
+ * Read from the stored result rather than kept in a column of its own: the
+ * whole simulation is already persisted for the panel that draws rounds and
+ * voices, and a second copy of the cast is a second thing that can disagree
+ * with the first.
+ */
+function castOf(turns: { resultJson: string }[]): Persona[] {
+  for (let index = turns.length - 1; index >= 0; index -= 1) {
+    const stored = turns[index]?.resultJson;
+    const personas = stored === undefined ? [] : (parseResult(stored)?.personas ?? []);
+    const archetypes = personas.filter((persona) => persona.kind === 'archetype');
+    if (archetypes.length > 0) return archetypes;
+  }
+  return [];
 }

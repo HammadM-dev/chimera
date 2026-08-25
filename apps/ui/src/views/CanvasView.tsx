@@ -24,7 +24,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { AGENT_GROUPS, useRoles, type AgentRole } from './useRoles.ts';
-import { useConnections, type ModelChoice } from './useConnections.ts';
+import { useConnections, useStandardTier, type ModelChoice } from './useConnections.ts';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import './canvas.css';
 
@@ -399,6 +399,7 @@ const NODE_TYPES = {
   fanout: ShapingNodeBody,
   aggregate: ShapingNodeBody,
   team: ShapingNodeBody,
+  swarm: ShapingNodeBody,
 };
 
 let nodeSeq = 0;
@@ -607,10 +608,12 @@ function CanvasInner({
   openId = null,
   onSaved,
   onBuildAgent,
+  onOpenSwarm,
   rolesToken = 0,
 }: CanvasProps): JSX.Element {
   const roles = useRoles(rolesToken);
   const { choices, loaded } = useConnections();
+  const standardTier = useStandardTier();
   const [nodes, setNodes, onNodesChange] = useNodesState<StepNode>([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState<Edge>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -639,6 +642,16 @@ function CanvasInner({
   const [webhookPort, setWebhookPort] = useState(0);
   const appliedTemplate = useRef<AutomationTemplate | null>(null);
   const [runId, setRunId] = useState<string | null>(null);
+  // The run that most recently started, kept after it ends.
+  //
+  // `runId` is cleared on 'finished', which is correct for everything that asks
+  // "is a run in flight" — and wrong for the one thing that asks "what did the
+  // last run produce". The button into a swarm's thread was gated on `runId`,
+  // so it appeared while the swarm was still thinking and disappeared the
+  // instant there was a thread worth opening.
+  const [lastRunId, setLastRunId] = useState<string | null>(null);
+  /** The thread a swarm step made, once there is one to go to. */
+  const [swarmThreadId, setSwarmThreadId] = useState<string | null>(null);
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
   const [stepOutput, setStepOutput] = useState<Record<string, string>>({});
   const [resultOpen, setResultOpen] = useState(false);
@@ -1024,6 +1037,7 @@ function CanvasInner({
         const first = result.waiting[0];
         if (!first) return;
         setRunId(first.runId);
+        setLastRunId(first.runId);
         setPending({ nodeId: first.nodeId, prompt: first.prompt, context: first.context });
         await bridge().invoke('run:subscribe', { runId: first.runId });
       } catch {
@@ -1355,6 +1369,7 @@ function CanvasInner({
         brief: currentBrief(),
       });
       setRunId(started.runId);
+      setLastRunId(started.runId);
       await bridge().invoke('run:subscribe', { runId: started.runId });
     } catch (err) {
       setRunNote(describeError(err).message);
@@ -1365,8 +1380,12 @@ function CanvasInner({
   // unexplained disabled control is the same dead end as no control at all.
   const agentNodes = nodes.filter((node) => node.data.kind === 'agent');
   // A subworkflow and a fan-out act too, by running agents of their own.
+  // What counts as an automation doing something. A swarm belongs here: it
+  // simulates a population and produces an answer, so an automation that is
+  // one swarm is a real automation, and "add an agent first" was refusing to
+  // run the only step it had.
   const workNodes = nodes.filter((node) =>
-    ['agent', 'subworkflow', 'fanout', 'team'].includes(node.data.kind),
+    ['agent', 'subworkflow', 'fanout', 'team', 'swarm'].includes(node.data.kind),
   );
   const badShaping = nodes.find((node) => {
     const settings = node.data.settings;
@@ -1410,32 +1429,41 @@ function CanvasInner({
     }
   });
 
+  // A swarm binds to no model of its own, so the thing that can be missing is
+  // the tier it borrows. Caught here rather than at the step: an automation
+  // that runs for a minute and then denies its only interesting step is a worse
+  // way to learn this than a sentence under a disabled button.
+  const swarmNeedsTier =
+    standardTier.loaded && !standardTier.set && nodes.some((node) => node.data.kind === 'swarm');
+
   const blocked =
     workNodes.length === 0
-      ? 'Add an agent first.'
+      ? 'Add an agent or a swarm first.'
       : agentNodes.some((node) => node.data.binding === null && node.data.tier === undefined)
         ? 'Every agent needs a model.'
-        : badShaping
-          ? badShaping.data.kind === 'loop'
-            ? 'A loop needs a maximum number of passes.'
-            : badShaping.data.kind === 'approval'
-              ? 'An approval needs a question to ask.'
-              : badShaping.data.kind === 'transform'
-                ? 'A reshape needs a template.'
-                : badShaping.data.kind === 'team'
-                  ? 'A team needs a goal, at least one specialist, a round limit and a model.'
-                  : badShaping.data.kind === 'aggregate'
-                    ? 'That combine step needs a model and a chunk size, or a template.'
-                    : badShaping.data.kind === 'fanout'
-                      ? 'A fan-out needs a maximum, a concurrency of at least one, and steps to run.'
-                      : badShaping.data.kind === 'subworkflow'
-                        ? 'Choose which automation that step runs.'
-                        : 'A branch needs somewhere to go — join it to a step.'
-          : agentNodes.length > 0 &&
-              brief.trim() === '' &&
-              agentNodes.every((node) => node.data.instruction.trim() === '')
-            ? 'Write a brief, or give a step its own instruction.'
-            : (problems[0]?.message ?? '');
+        : swarmNeedsTier
+          ? 'A swarm runs on the standard tier. Choose which model that is in Providers.'
+          : badShaping
+            ? badShaping.data.kind === 'loop'
+              ? 'A loop needs a maximum number of passes.'
+              : badShaping.data.kind === 'approval'
+                ? 'An approval needs a question to ask.'
+                : badShaping.data.kind === 'transform'
+                  ? 'A reshape needs a template.'
+                  : badShaping.data.kind === 'team'
+                    ? 'A team needs a goal, at least one specialist, a round limit and a model.'
+                    : badShaping.data.kind === 'aggregate'
+                      ? 'That combine step needs a model and a chunk size, or a template.'
+                      : badShaping.data.kind === 'fanout'
+                        ? 'A fan-out needs a maximum, a concurrency of at least one, and steps to run.'
+                        : badShaping.data.kind === 'subworkflow'
+                          ? 'Choose which automation that step runs.'
+                          : 'A branch needs somewhere to go — join it to a step.'
+            : agentNodes.length > 0 &&
+                brief.trim() === '' &&
+                agentNodes.every((node) => node.data.instruction.trim() === '')
+              ? 'Write a brief, or give a step its own instruction.'
+              : (problems[0]?.message ?? '');
 
   const onDrop = useCallback(
     (event: DragEvent<HTMLDivElement>) => {
@@ -1572,6 +1600,36 @@ function CanvasInner({
   const needsSites = webSteps.length > 0;
 
   const selected = nodes.find((node) => node.id === selectedId);
+
+  // Whether this automation has a swarm in it at all — a boolean rather than
+  // `nodes` in the dependency list below, which changes on every drag.
+  const hasSwarmNode = nodes.some((node) => node.data.kind === 'swarm');
+
+  // The thread that run's swarm left behind, resolved once the run is over.
+  //
+  // Looked up here rather than on the button's click so that the button only
+  // exists when it leads somewhere. A control that is present, enabled, and
+  // does nothing when pressed is worse than no control.
+  useEffect(() => {
+    setSwarmThreadId(null);
+    if (lastRunId === null || runId !== null || !hasSwarmNode) return undefined;
+
+    let alive = true;
+    void (async () => {
+      try {
+        const found = await bridge().invoke<{ threadId: string }>('swarm:forRun', {
+          runId: lastRunId,
+        });
+        if (alive && found.threadId !== '') setSwarmThreadId(found.threadId);
+      } catch {
+        // A lookup that fails leaves the button away; the section is reachable
+        // from the rail either way.
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [lastRunId, runId, hasSwarmNode]);
 
   const bind = useCallback(
     (value: string) => {
@@ -2510,6 +2568,13 @@ function CanvasInner({
             </>
           ) : (
             <ShapingInspector
+              {...(selected.data.kind === 'swarm' && swarmThreadId !== null
+                ? {
+                    openSwarm: () => {
+                      onOpenSwarm?.(swarmThreadId);
+                    },
+                  }
+                : {})}
               data={selected.data}
               steps={nodes.map((node) => ({
                 id: node.id,
@@ -2596,7 +2661,17 @@ function ModelPicker({
 interface ShapingInspectorProps {
   data: StepNodeData;
   /** Every step on the canvas, so a source is picked rather than typed. */
-  steps: { id: string; label: string }[];
+  steps: {
+    id: string;
+    label: string;
+  }[];
+  /**
+   * Opens the Swarms section at the thread this step made, when it has made one.
+   *
+   * Absent until the step has run: a control that looks live and does nothing
+   * is worse than one that is not there yet.
+   */
+  openSwarm?: () => void;
   /** Saved automations a subworkflow step can run, minus this one. */
   automations: { id: string; name: string }[];
   /** The roster, for the steps that name agents without being one. */
@@ -2616,6 +2691,7 @@ function ShapingInspector({
   modelPicker,
   selfId,
   onChange,
+  openSwarm,
 }: ShapingInspectorProps): JSX.Element {
   const settings = data.settings;
   const others = steps.filter((step) => step.id !== selfId);
@@ -2808,6 +2884,17 @@ function ShapingInspector({
             Running this makes a thread in Swarms, where the whole argument is kept. The step passes
             on what the crowd arrived at.
           </p>
+
+          {openSwarm !== undefined && (
+            <button
+              type="button"
+              className="button"
+              data-testid="swarm-open-thread"
+              onClick={openSwarm}
+            >
+              Open in Swarms
+            </button>
+          )}
         </>
       )}
 
@@ -3222,6 +3309,15 @@ export interface CanvasProps {
   onSaved?: () => void;
   /** Bumped when the roster changes, so a new agent shows up without a restart. */
   rolesToken?: number;
+  /**
+   * Opens the Swarms section at one thread.
+   *
+   * A swarm step keeps its whole argument in that section rather than in a step
+   * output, so the node has to be able to send somebody there — otherwise the
+   * most interesting thing the run produced is somewhere the user has to go and
+   * find by name.
+   */
+  onOpenSwarm?: (threadId: string) => void;
 }
 
 export function CanvasView({
@@ -3230,6 +3326,7 @@ export function CanvasView({
   openId = null,
   onSaved,
   onBuildAgent,
+  onOpenSwarm,
   rolesToken = 0,
 }: CanvasProps): JSX.Element {
   // The provider owns the viewport, so `screenToFlowPosition` can turn a drop
@@ -3243,6 +3340,7 @@ export function CanvasView({
         onSaved={onSaved}
         rolesToken={rolesToken}
         {...(onBuildAgent ? { onBuildAgent } : {})}
+        {...(onOpenSwarm ? { onOpenSwarm } : {})}
       />
     </ReactFlowProvider>
   );

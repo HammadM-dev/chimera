@@ -52,3 +52,36 @@ export function useConnections(refreshToken = 0): { choices: ModelChoice[]; load
 
   return { choices, loaded };
 }
+
+/**
+ * Whether this workspace has said what it means by "standard".
+ *
+ * Only the one tier, and only whether it is set — the canvas needs to know that
+ * a swarm has somewhere to run, not what it will run on. `loaded` matters:
+ * treating "not read yet" as "not set" would flash a blocking message on every
+ * open of a workspace that is perfectly well configured.
+ */
+export function useStandardTier(): { set: boolean; loaded: boolean } {
+  const [state, setState] = useState({ set: false, loaded: false });
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        const result = await bridge().invoke<{
+          tiers: Record<string, { connectionId: string; model: string }>;
+        }>('tiers:get', {});
+        const standard = result.tiers['standard'];
+        setState({
+          set: standard !== undefined && standard.connectionId !== '' && standard.model !== '',
+          loaded: true,
+        });
+      } catch {
+        // Unreadable settings are not a reason to refuse to run. The step says
+        // the same thing if it turns out the tier really is unset.
+        setState({ set: true, loaded: true });
+      }
+    })();
+  }, []);
+
+  return state;
+}

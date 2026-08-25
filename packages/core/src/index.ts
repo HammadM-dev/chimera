@@ -109,6 +109,7 @@ export { createTraceSink, NULL_TRACE_SINK } from './runtime/trace.ts';
 
 // The swarm: a simulated population, an event dropped into it, and whatever
 // they arrive at. See `swarm/simulate.ts` for why it has two fidelity modes.
+export { NODE_KINDS } from './engine/nodeTypes.ts';
 export { simulate, archetypeCountFor, distributionOf } from './swarm/simulate.ts';
 export type {
   SwarmSpec,
