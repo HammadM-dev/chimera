@@ -26,7 +26,7 @@ import {
   createToolRegistry,
 } from '@chimera/tools';
 import { getStore } from '../store/lifecycle.ts';
-import { connectionFor } from '../providers/service.ts';
+import { capabilitiesLookup, connectionFor } from '../providers/service.ts';
 import { emitRunEvent, subscribe } from './subscriptions.ts';
 import { createActivityReader, type Activity } from './activity.ts';
 import { askSwarm } from '../swarm/threads.ts';
@@ -454,6 +454,11 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
         ]),
       ),
     },
+    // What the providers themselves publish, over the static matrix. Without
+    // this an OpenRouter model prices as `unknown`, and the Governor will not
+    // enforce a spend cap on a price nobody verified — so a run on any of the
+    // four hundred models it routes to had no budget at all.
+    capabilitiesFor: capabilitiesLookup(),
   });
 
   // Which model each tier means, here. Read once at the start of the run: a

@@ -19,6 +19,7 @@ import {
   PROVIDER_KINDS,
   createConnectionRegistry,
   type ConnectionRegistry,
+  type ModelCapabilities,
   type ProviderConnection,
   type ProviderKind,
 } from '@chimera/providers';
@@ -317,7 +318,11 @@ export function estimateCost(
   inputTokens: number,
   outputTokens: number,
 ): number | null {
-  const pricing = capabilityMatrix.get(model).pricing;
+  // Through the same lookup the Governor uses, so the price shown before a run
+  // and the price enforced during it are the same number. Reading the static
+  // matrix directly here meant the preview said "cannot estimate" for a model
+  // whose price the provider publishes.
+  const pricing = capabilitiesLookup()(model).pricing;
   if (pricing.kind === 'local') return 0;
   if (pricing.kind !== 'metered') return null;
   return (
@@ -383,13 +388,97 @@ export async function importCatalogue(connectionId: string): Promise<{ models: n
     connectionId,
     JSON.stringify({
       capabilities: Object.fromEntries(
-        models.map((model) => [model.id, { displayName: model.displayName }]),
+        models.map((model) => [
+          model.id,
+          {
+            displayName: model.displayName,
+            // Whatever the provider said about the model, kept as it came.
+            // Most providers say nothing and this is absent; OpenRouter
+            // publishes price, context length and supported parameters for all
+            // four hundred-odd models it routes to, and without keeping them
+            // every one of those prices as `unknown` — which means no spend cap
+            // can be enforced on any of them.
+            ...(model.capabilities === undefined ? {} : { capabilities: model.capabilities }),
+          },
+        ]),
       ),
       limits: {},
     }),
   );
   providerRegistry().refresh();
   return { models: models.length };
+}
+
+/**
+ * Model capabilities, with what providers publish taking precedence.
+ *
+ * The static matrix in `packages/providers` holds models somebody checked by
+ * hand. It cannot hold OpenRouter's four hundred, it will never hold a model
+ * released this morning, and everything it misses falls back to `unknown` —
+ * including the price, which is the field with a consequence: the Governor
+ * refuses to enforce a spend cap on a price nobody verified, so an unpriced
+ * model is an unbudgeted one.
+ *
+ * A provider that publishes its own catalogue has better information than any
+ * table shipped in a build, so where a connection cached capability data for a
+ * model, it wins. Merged field by field rather than wholesale: a provider that
+ * publishes price but says nothing about vision should not erase what the
+ * matrix knows about vision.
+ *
+ * Built once and closed over rather than read per call — a model lookup happens
+ * on every model call in a run, and this would otherwise be a database read
+ * each time.
+ *
+ * Split in two so the merge can be tested without a database or an Electron
+ * process behind it: this half is given the catalogues, `capabilitiesLookup`
+ * below fetches them.
+ */
+export function buildCapabilitiesLookup(
+  catalogues: readonly (string | null)[],
+): (model: string) => ModelCapabilities {
+  const published = new Map<string, Partial<ModelCapabilities>>();
+
+  for (const catalogue of catalogues) {
+    if (catalogue === null) continue;
+    let parsed: { capabilities?: Record<string, { capabilities?: Partial<ModelCapabilities> }> };
+    try {
+      parsed = JSON.parse(catalogue) as typeof parsed;
+    } catch {
+      // A catalogue that will not read back is not a reason to fail a run. The
+      // static matrix still answers, exactly as it did before any of this.
+      continue;
+    }
+
+    for (const [modelId, entry] of Object.entries(parsed.capabilities ?? {})) {
+      if (entry.capabilities !== undefined && !published.has(modelId)) {
+        published.set(modelId, entry.capabilities);
+      }
+    }
+  }
+
+  return (model: string): ModelCapabilities => {
+    const base = capabilityMatrix.get(model);
+    const extra = published.get(model);
+    if (extra === undefined) return base;
+
+    // `undefined` means "the provider did not say", which must not overwrite
+    // what the matrix knows. `null` on a numeric field is a real answer —
+    // "no stated limit" — and does overwrite.
+    const merged: ModelCapabilities = { ...base, modelId: model };
+    for (const [key, value] of Object.entries(extra)) {
+      if (value !== undefined) {
+        (merged as unknown as Record<string, unknown>)[key] = value;
+      }
+    }
+    return merged;
+  };
+}
+
+/** The same, over this workspace's connections. */
+export function capabilitiesLookup(): (model: string) => ModelCapabilities {
+  return buildCapabilitiesLookup(
+    connectionsRepository.list(getStore()).map((connection) => connection.capabilitiesJson),
+  );
 }
 
 export function setLocalOnlyMode(enabled: boolean): void {

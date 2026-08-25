@@ -1,3 +1,4 @@
+import type { ModelCapabilities } from './capabilityMatrix.ts';
 // The single internal request/response shape every adapter normalises to and
 // from. OpenAI-compatible in structure because that is the shape most providers
 // and most tooling already speak, so the majority of adapters are a thin
@@ -136,6 +137,20 @@ export interface ModelDescriptor {
   id: string;
   /** Human-facing name where the provider gives one; otherwise the id. */
   displayName: string;
+  /**
+   * What the provider says this model can do and what it charges.
+   *
+   * Absent for most providers: `/v1/models` in its ordinary form is a list of
+   * names and nothing else. A few publish the rest — OpenRouter carries price,
+   * context length and supported parameters for every model it routes to — and
+   * where they do, taking their word for it beats a static table that cannot
+   * know about a model released this morning.
+   *
+   * Partial on purpose. A provider that publishes price but says nothing about
+   * vision should leave vision alone rather than assert `'unsupported'`, so
+   * whatever is known statically still stands.
+   */
+  capabilities?: Partial<Omit<ModelCapabilities, 'modelId' | 'displayName'>>;
 }
 
 export interface ConnectionTestResult {
