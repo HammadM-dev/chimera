@@ -440,3 +440,58 @@
     animation: none;
   }
 }
+
+/* The current place, marked by a bar that travels to it.
+ *
+ * The bar is one element per item rather than one that moves between them —
+ * a shared element would need to know where every item is, and this reads the
+ * same. What it adds is that the eye follows the move rather than being told
+ * about it afterwards, which is the difference between a rail that responds and
+ * one that redraws. */
+.sidebar__item {
+  position: relative;
+}
+
+.sidebar__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  margin-top: 0;
+  border-radius: 1px;
+  background: var(--accent-primary);
+  transition:
+    height var(--motion-base) var(--ease-spring),
+    margin-top var(--motion-base) var(--ease-spring);
+}
+
+.sidebar__item[aria-current='page']::before {
+  height: 16px;
+  margin-top: -8px;
+}
+
+/* A control that gives under the finger. One per cent, which is felt rather
+   than seen — anything more is a toy. */
+.button:active:not(:disabled) {
+  transform: scale(0.99);
+}
+
+.button {
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-fast) var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar__item::before,
+  .button {
+    transition: none;
+  }
+
+  .button:active:not(:disabled) {
+    transform: none;
+  }
+}

@@ -248,6 +248,7 @@ function AgentNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
   return (
     <div
       className={`node ${selected === true ? 'node--selected' : ''}`}
+      data-status={status}
       data-testid={`node-${role?.id ?? 'agent'}`}
     >
       {/* Inputs on the left, outputs on the right. A node can take as many of
@@ -293,6 +294,7 @@ function ShapingNodeBody({ data, selected }: NodeProps<StepNode>): JSX.Element {
   return (
     <div
       className={`node node--shaping node--${kind} ${selected === true ? 'node--selected' : ''}`}
+      data-status={status}
       data-testid={`node-${kind}`}
     >
       <Handle type="target" position={Position.Left} className="node__port node__port--in" />

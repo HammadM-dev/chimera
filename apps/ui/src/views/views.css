@@ -713,3 +713,93 @@
   font-size: var(--type-floor);
   color: var(--text-muted);
 }
+
+/* Things arriving.
+ *
+ * A list that appears all at once reads as a redraw; the same list arriving
+ * over a fifth of a second reads as a list being found. The stagger is capped
+ * at eight because past that the last card is waiting on an animation rather
+ * than on data, which is the point at which decoration starts costing time.
+ *
+ * Only ever on entry. Nothing here re-runs when a value changes, because a card
+ * that re-animates every time a number updates is a card nobody can read. */
+.gallery__card,
+.agent-card,
+.toolkit {
+  animation: settle var(--motion-slow) var(--ease-out) both;
+}
+
+.gallery__card:nth-child(1),
+.agent-card:nth-child(1),
+.toolkit:nth-child(1) {
+  animation-delay: 0ms;
+}
+.gallery__card:nth-child(2),
+.agent-card:nth-child(2),
+.toolkit:nth-child(2) {
+  animation-delay: 24ms;
+}
+.gallery__card:nth-child(3),
+.agent-card:nth-child(3),
+.toolkit:nth-child(3) {
+  animation-delay: 48ms;
+}
+.gallery__card:nth-child(4),
+.agent-card:nth-child(4),
+.toolkit:nth-child(4) {
+  animation-delay: 72ms;
+}
+.gallery__card:nth-child(5),
+.agent-card:nth-child(5),
+.toolkit:nth-child(5) {
+  animation-delay: 96ms;
+}
+.gallery__card:nth-child(6),
+.agent-card:nth-child(6),
+.toolkit:nth-child(6) {
+  animation-delay: 120ms;
+}
+.gallery__card:nth-child(7),
+.agent-card:nth-child(7),
+.toolkit:nth-child(7) {
+  animation-delay: 144ms;
+}
+.gallery__card:nth-child(n + 8),
+.agent-card:nth-child(n + 8),
+.toolkit:nth-child(n + 8) {
+  animation-delay: 168ms;
+}
+
+@keyframes settle {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* A card the pointer is over lifts, slightly. The shadow does the work rather
+   than the movement: two pixels of travel is felt, eight is a trampoline. */
+.gallery__card {
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    transform var(--motion-base) var(--ease-out),
+    box-shadow var(--motion-base) var(--ease-out);
+}
+
+.gallery__card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raised);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gallery__card,
+  .agent-card,
+  .toolkit {
+    animation: none;
+  }
+
+  .gallery__card:hover {
+    transform: none;
+  }
+}

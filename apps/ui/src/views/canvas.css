@@ -978,3 +978,58 @@
   border-style: dashed;
   margin-bottom: var(--space-2);
 }
+
+/* A step that is working, seen from across the room.
+ *
+ * The six-pixel dot in the corner is the precise answer and is unreadable at a
+ * glance — on a canvas of nine nodes it does not say *which* one is going. This
+ * is the same fact at the scale the canvas is actually looked at: a thin accent
+ * travelling along the node's top edge, gone the moment the step is done.
+ *
+ * The one piece of motion in this app that runs for minutes at a time, so it is
+ * deliberately slow and low-contrast: something that catches the eye every 1.6
+ * seconds for four minutes is a thing people cover with a sticky note.
+ */
+.node {
+  position: relative;
+  overflow: hidden;
+}
+
+.node[data-status='running']::after {
+  content: '';
+  position: absolute;
+  inset: 0 auto auto 0;
+  width: 40%;
+  height: 2px;
+  border-radius: 1px;
+  background: linear-gradient(90deg, transparent, var(--accent-primary), transparent);
+  animation: node-working 2.4s var(--ease-standard) infinite;
+}
+
+@keyframes node-working {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(250%);
+  }
+}
+
+/* A step waiting its turn is dimmed rather than marked: the canvas should read
+   as "here is the front of the work", and a row of equal-weight cards does not. */
+.node[data-status='waiting'] {
+  opacity: 0.72;
+}
+
+.node[data-status='succeeded'],
+.node[data-status='failed'] {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .node[data-status='running']::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}

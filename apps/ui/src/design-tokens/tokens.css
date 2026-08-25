@@ -211,3 +211,17 @@ body {
   scrollbar-width: thin;
   scrollbar-color: var(--border-strong) transparent;
 }
+
+/* Motion, beyond the two durations above.
+ *
+ * `--motion-slow` is for something arriving — a card, a row, a result — where
+ * the eye needs long enough to see where it came from. `--ease-out` is the
+ * curve for anything entering: fast at the start, settling at the end, which is
+ * how a thing that was already moving comes to rest. `--ease-spring` overshoots
+ * a hair and is used once, on the nav marker, because a marker that slides
+ * without any weight to it reads as a bug in the renderer. */
+:root {
+  --motion-slow: 260ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+}
