@@ -36,11 +36,14 @@ test('every starter role loads, each with a prompt, an allowlist decision and a 
     const registry = createRoleRegistry(db);
     const roles = registry.list();
 
-    assert.equal(roles.length, 9);
+    // Counted from the list below rather than written out again: two
+    // statements of the same number is one that goes stale, and the assertion
+    // that matters is which roles exist, not how many.
     assert.deepEqual(roles.map((role) => role.id).sort(), [
       // The home screen's own assistant. It reads this workspace and writes
       // nothing, which is why it is a role like any other rather than a
       // privileged path around the Governor.
+      'app-operator',
       'assistant',
       'browser-operator',
       'coder',
@@ -107,6 +110,7 @@ test('an edited allowlist persists and is visible on the next read, no restart',
   const { db, dir } = openTemp();
   try {
     const registry = createRoleRegistry(db);
+    const seeded = registry.list().length;
     registry.setToolAllowlist('researcher', ['filesystem.readFile']);
 
     // Read back through the same registry — no restart, no cache to invalidate.
@@ -117,8 +121,11 @@ test('an edited allowlist persists and is visible on the next read, no restart',
     const reopened = createRoleRegistry(db);
     assert.deepEqual(reopened.get('researcher')?.toolAllowlist, ['filesystem.readFile']);
 
-    // Seeding does not run again and does not overwrite the edit.
-    assert.equal(reopened.list().length, 9);
+    // Seeding does not run again and does not overwrite the edit. Compared
+    // against what the first registry seeded rather than a written-out number,
+    // which was a second copy of the role count that went stale the first time
+    // a role was added.
+    assert.equal(reopened.list().length, seeded);
   } finally {
     db.close();
     fs.rmSync(dir, { recursive: true, force: true });

@@ -188,6 +188,32 @@ export const STARTER_ROLES: readonly Role[] = [
     isBuiltin: true,
   },
   {
+    id: 'app-operator',
+    name: 'App operator',
+    systemPrompt: [
+      'You do things in the apps somebody already uses — Gmail, Slack, Notion, Jira, Sheets, HubSpot, Stripe and several hundred others — through Composio.',
+      '',
+      'Work in this order, every time. Search for the tools that fit the job in plain words; there are thousands of them and their names cannot be guessed. Read what the search tells you: it says which apps are actually connected, what arguments each tool takes, and the mistakes people make with it. An app nobody has signed into cannot be used, and saying so plainly is the right answer — far better than forming a perfect call to an account that does not exist.',
+      '',
+      'Then act, using the exact slug and argument names the search returned rather than ones that seem likely.',
+      '',
+      'Anything that sends, posts, creates, buys or deletes is stopped in front of a person before it happens. That is not a formality to work around: state clearly what you are about to do and to whom, so the person approving knows what they are approving.',
+    ].join('\n'),
+    // Composio and nothing else. An operator that could also read the
+    // filesystem or run a shell would be a much larger thing to trust with
+    // somebody's mailbox, and none of it is needed to do this job.
+    toolAllowlist: ['composio.*'],
+    // `balanced`, which is what a role calls the middle tier. The workspace
+    // settings call the same idea `standard`; the two vocabularies meet in
+    // `resolveTier` and not before.
+    modelBinding: { tier: 'balanced', preferredModel: null },
+    budget: { ...DEFAULT_BUDGET, maxWallClockMs: 10 * 60_000 },
+    outputContract: { format: 'text', schemaId: null },
+    maxIterations: 15,
+    combinesMany: false,
+    isBuiltin: true,
+  },
+  {
     id: 'assistant',
     name: 'Assistant',
     systemPrompt:

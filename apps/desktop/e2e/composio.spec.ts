@@ -80,3 +80,27 @@ function assertMentionsSetup(text: string): void {
   expect(text.toLowerCase()).toContain('composio');
   expect(text).toMatch(/not connected|Providers/i);
 }
+
+test('there is an agent that uses Composio, and it is in the palette', async () => {
+  // The gap this closes was not a bug in any code — the tools were registered,
+  // the server was hosted, the panel connected apps — and it made the whole
+  // feature unusable anyway, because nothing anywhere was an agent that used
+  // them. "Where is that agent?" was the right question and the answer was
+  // "there isn't one".
+  const profile = freshProfile();
+  const app = await launchApp({ profile });
+
+  try {
+    const page = await app.firstWindow();
+    await goTo(page, 'build');
+
+    const operator = page.getByTestId('palette-app-operator');
+    await expect(operator).toBeVisible({ timeout: 20_000 });
+
+    await operator.click();
+    await expect(page.getByTestId('node-app-operator')).toBeVisible({ timeout: 20_000 });
+  } finally {
+    await app.close();
+    removeProfile(profile);
+  }
+});
