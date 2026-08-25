@@ -91,6 +91,63 @@ test.describe('a swarm on a real provider', () => {
       removeProfile(profile);
     }
   });
+
+  test('a swarm can read up before it reacts', async () => {
+    // The briefing stage, against a real provider and the real web.
+    //
+    // Small on purpose: eight people and one round, because what is being
+    // proved here is that the Researcher runs first and that what it found
+    // reaches the population — not anything about how a crowd converges, which
+    // the test above already covers at size.
+    const profile = freshProfile();
+    const app = await launchApp({ profile });
+
+    try {
+      const page = await app.firstWindow();
+      await goTo(page, 'providers');
+
+      await page.getByTestId('connection-label').fill('OpenRouter');
+      await page.getByTestId('connection-kind').selectOption('openrouter');
+      await page.getByTestId('connection-key').fill(KEY);
+      await page.getByTestId('connection-create').click();
+      await expect(page.getByTestId('connection-row')).toBeVisible({ timeout: 60_000 });
+      await expect(page.getByTestId('connection-models')).not.toContainText('No catalogue', {
+        timeout: 120_000,
+      });
+
+      await goTo(page, 'swarm');
+      await page.getByTestId('swarm-model').selectOption(`${await connectionId(page)}::${MODEL}`);
+
+      // A question that cannot be answered from the sentence alone. If the
+      // briefing does not run, the crowd is reacting to the words "the current
+      // price" and nothing else.
+      await page
+        .getByTestId('swarm-input')
+        .fill(
+          'Would people switch away from a music streaming service that raised its price to £15 a month, given what the main services charge now?',
+        );
+      await page.getByTestId('swarm-population').fill('8');
+      await page.getByTestId('swarm-rounds').fill('1');
+      await page.getByTestId('swarm-research').check();
+
+      // The cost line says what the extra call is for, before it is paid.
+      await expect(page.getByTestId('swarm-view')).toContainText('read around it first');
+
+      await page.getByTestId('swarm-ask').click();
+
+      // It says it is reading, which is the whole of the progress story for a
+      // stage that can take a minute on its own.
+      await expect(page.getByTestId('swarm-progress')).toContainText(/[Rr]eading up on it/, {
+        timeout: 240_000,
+      });
+
+      await expect(page.getByTestId('swarm-turn')).toBeVisible({ timeout: 600_000 });
+      await expect(page.getByTestId('swarm-error')).toHaveCount(0);
+    } finally {
+      await app.close();
+      removeProfile(profile);
+    }
+  });
 });
 
 /** The id of the one connection, for building a tier option value. */
