@@ -21,6 +21,15 @@ import type { Persona, Population, Stance, Tie } from './population.ts';
 // prediction that will not say how it was produced is a prediction nobody
 // should act on.
 
+/**
+ * Simultaneous model calls, unless the caller says otherwise.
+ *
+ * Six is comfortably under every consumer-tier rate limit seen so far and
+ * still finishes a twenty-four persona round in four waves rather than
+ * twenty-four.
+ */
+export const DEFAULT_CONCURRENCY = 6;
+
 export type SwarmMode = 'everyone' | 'archetypes';
 
 export interface SwarmSpec {
@@ -96,6 +105,13 @@ export interface SimulateDeps {
   onRound?: (report: RoundReport) => void;
   /** Seeds the deterministic jitter. The run id, so a run repeats exactly. */
   seed: string;
+  /**
+   * How many personas may be asked at once.
+   *
+   * They are independent within a round, so this is purely about what the
+   * provider will tolerate rather than about correctness.
+   */
+  concurrency?: number;
 }
 
 /** How many archetypes to write for a population. Enough voices to disagree, few enough to afford. */
@@ -153,6 +169,41 @@ function heardBy(
     .filter((entry) => entry.said !== '');
 }
 
+/**
+ * Runs `work` over every item, at most `limit` at a time.
+ *
+ * The round used to be a plain `Promise.all` over every thinking persona,
+ * which for a population in archetypes mode is two dozen simultaneous requests
+ * and in everyone mode as many as the headcount. Providers answer that with
+ * HTTP 429, so the swarm reported "rate limit reached" on a workspace whose
+ * models were demonstrably fine — one call from the providers panel worked,
+ * because one call is not two dozen.
+ *
+ * Order is preserved: the caller matches answers back to personas by index.
+ */
+async function mapWithLimit<In, Out>(
+  items: readonly In[],
+  limit: number,
+  work: (item: In) => Promise<Out>,
+): Promise<Out[]> {
+  const results = new Array<Out>(items.length);
+  let next = 0;
+
+  const runner = async (): Promise<void> => {
+    for (;;) {
+      const index = next;
+      next += 1;
+      if (index >= items.length) return;
+      results[index] = await work(items[index] as In);
+    }
+  };
+
+  await Promise.all(
+    Array.from({ length: Math.max(1, Math.min(limit, items.length)) }, () => runner()),
+  );
+  return results;
+}
+
 export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<SwarmResult> {
   const random = seededRandom(deps.seed);
 
@@ -201,8 +252,10 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
     // The thinking agents, all at once. They are independent within a round —
     // each reacts to what it heard *last* round, which is what makes a round a
     // round rather than a queue.
-    const thought = await Promise.all(
-      thinkers.map(async (persona) => {
+    const thought = await mapWithLimit(
+      thinkers,
+      deps.concurrency ?? DEFAULT_CONCURRENCY,
+      async (persona) => {
         const answer = await deps.ask({
           persona,
           question: spec.question,
@@ -216,7 +269,7 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
           confidence: Math.max(0, Math.min(1, answer.confidence)),
           said: answer.said,
         };
-      }),
+      },
     );
 
     const merged = stances.map(

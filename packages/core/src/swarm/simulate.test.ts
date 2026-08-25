@@ -195,3 +195,99 @@ test('the archetype count grows slowly, so a bigger question is not a bigger bil
   // Ten thousand agents must not cost ten times what a thousand does.
   assert.equal(archetypeCountFor(10_000), archetypeCountFor(100_000));
 });
+
+test('a round asks a few at a time, not the whole population at once', async () => {
+  // The bug this covers reported itself as "rate limit reached" on a workspace
+  // whose models worked perfectly well from the providers panel. One call is
+  // not two dozen: a round was a plain `Promise.all` over every thinking
+  // persona, so a population in archetypes mode opened twenty-odd simultaneous
+  // connections and the provider answered the way providers answer that.
+  let inFlight = 0;
+  let peak = 0;
+
+  await simulate(
+    {
+      question: 'Should we raise prices?',
+      background: '',
+      population: 400,
+      maxRounds: 1,
+      everyoneUpTo: 50,
+      settleAt: 0.03,
+    },
+    {
+      seed: 'concurrency',
+      concurrency: 4,
+      buildPersonas: ({ count }) =>
+        Promise.resolve(
+          Array.from({ length: count }, (_, index) => ({
+            id: `a${String(index)}`,
+            name: `person ${String(index)}`,
+            description: '',
+            traits: [],
+            susceptibility: 0.5,
+            influence: 0.5,
+            kind: 'archetype' as const,
+            follows: '',
+          })),
+        ),
+      ask: async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await new Promise((resolve) => setTimeout(resolve, 1));
+        inFlight -= 1;
+        return { position: 0.2, confidence: 0.6, said: 'fine' };
+      },
+    },
+  );
+
+  assert.ok(peak > 1, `expected some parallelism, saw ${String(peak)}`);
+  assert.ok(peak <= 4, `expected at most 4 at once, saw ${String(peak)}`);
+});
+
+test('every persona is still asked, and answers land on the right one', async () => {
+  // A worker pool that loses or misorders results would be a much quieter bug
+  // than the one it replaced: the numbers would still look plausible.
+  const asked: string[] = [];
+
+  const result = await simulate(
+    {
+      question: 'Should we raise prices?',
+      background: '',
+      population: 12,
+      maxRounds: 1,
+      everyoneUpTo: 50,
+      settleAt: 0.03,
+    },
+    {
+      seed: 'pool-order',
+      concurrency: 3,
+      buildPersonas: ({ count }) =>
+        Promise.resolve(
+          Array.from({ length: count }, (_, index) => ({
+            id: `a${String(index)}`,
+            name: `person ${String(index)}`,
+            description: '',
+            traits: [],
+            susceptibility: 0.5,
+            influence: 0.5,
+            kind: 'archetype' as const,
+            follows: '',
+          })),
+        ),
+      // Each persona says its own name back, and staggered so a pool that
+      // matched by completion order rather than by index would scramble them.
+      ask: async ({ persona }) => {
+        asked.push(persona.id);
+        await new Promise((resolve) => setTimeout(resolve, persona.id === 'a0' ? 8 : 1));
+        return { position: 0.3, confidence: 0.6, said: persona.name };
+      },
+    },
+  );
+
+  assert.equal(asked.length, 12);
+  assert.equal(new Set(asked).size, 12);
+
+  for (const spoke of result.rounds[0]?.said ?? []) {
+    assert.equal(spoke.said, spoke.name, 'an answer landed on the wrong persona');
+  }
+});

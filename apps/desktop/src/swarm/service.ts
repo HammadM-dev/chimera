@@ -11,7 +11,7 @@ import {
   type ProviderAdapter,
   type AdapterCallOptions,
 } from '@chimera/providers';
-import { ProviderError } from '@chimera/errors';
+import { ProviderError, ProviderRateLimitError } from '@chimera/errors';
 import { connectionFor } from '../providers/service.ts';
 
 // The swarm, driven by real models.
@@ -144,18 +144,46 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
     if (authorization.decision === 'deny') {
       throw new ProviderError('SWARM_DENIED', authorization.message);
     }
-    return textOf(
-      await adapter.chat(
-        {
-          model: authorization.request.model,
-          messages: [
-            { role: 'system', content: system },
-            { role: 'user', content: user },
-          ],
-        },
-        options,
-      ),
-    );
+
+    // Retried on a rate limit, the way the agent loop retries one.
+    //
+    // A swarm is the most request-dense thing this app does — a round is one
+    // call per thinking persona — so it meets provider rate limits that
+    // nothing else here ever does. Without this, one 429 anywhere in a round
+    // failed the entire swarm, and the message that reached the user was
+    // "rate limit reached" on a workspace whose models were fine, which reads
+    // as a false accusation rather than as "slow down".
+    for (let attempt = 0; ; attempt += 1) {
+      try {
+        return textOf(
+          await adapter.chat(
+            {
+              model: authorization.request.model,
+              messages: [
+                { role: 'system', content: system },
+                { role: 'user', content: user },
+              ],
+            },
+            options,
+          ),
+        );
+      } catch (err) {
+        const retryable =
+          err instanceof ProviderRateLimitError ||
+          (err instanceof ProviderError && err.code === 'PROVIDER_UNREACHABLE');
+        if (!retryable || attempt >= governor.maxRetries) throw err;
+
+        if (err instanceof ProviderRateLimitError) {
+          const retryAfterMs = Number(err.details.retryAfterMs);
+          governor.recordRateLimit(
+            spec.connectionId,
+            Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
+          );
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, governor.backoffFor(attempt)));
+      }
+    }
   };
 
   return simulate(
