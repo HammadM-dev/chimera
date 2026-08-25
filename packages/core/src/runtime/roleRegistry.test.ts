@@ -6,7 +6,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type Database from 'better-sqlite3';
 import { ValidationError, ToolAllowlistError } from '@chimera/errors';
-import { openDatabase } from '@chimera/store';
+import { openDatabase, rolesRepository } from '@chimera/store';
 import {
   connectInProcess,
   createToolRegistry,
@@ -203,12 +203,33 @@ test('an agent added after a workspace was made still reaches it', () => {
   // the palette, in the docs, and in nobody's actual workspace, and the honest
   // answer to "where is that agent?" was that it was nowhere.
   //
-  // Simulated by deleting one from an already-seeded workspace, which is
-  // exactly the state an older workspace was in.
+  // Simulated by seeding the roster as it stood before `app-operator` was
+  // written, which is exactly the state an older workspace is in. Written
+  // through the repository rather than with a DELETE, because a builtin is not
+  // deletable — CLAUDE.md keeps all SQLite behind packages/store, and the one
+  // statement that would have expressed this is refused for good reason.
   const { db, dir } = openTemp();
   try {
-    createRoleRegistry(db);
-    db.prepare('DELETE FROM roles WHERE id = ?').run('app-operator');
+    for (const role of STARTER_ROLES.filter((one) => one.id !== 'app-operator')) {
+      rolesRepository.upsert(db, {
+        id: role.id,
+        name: role.name,
+        systemPrompt: role.systemPrompt,
+        toolAllowlistJson: JSON.stringify(role.toolAllowlist),
+        modelBindingJson: JSON.stringify(role.modelBinding),
+        budgetJson: JSON.stringify(role.budget),
+        outputContractJson: JSON.stringify(role.outputContract),
+        maxIterations: role.maxIterations,
+        combinesMany: role.combinesMany,
+        isBuiltin: role.isBuiltin,
+      });
+    }
+    assert.equal(
+      rolesRepository.list(db).filter((one) => one.id === 'app-operator').length,
+      0,
+      'the older roster should not have it — otherwise this test proves nothing',
+    );
+
     assert.equal(
       createRoleRegistry(db)
         .list()
