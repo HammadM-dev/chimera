@@ -52,38 +52,20 @@ interface ScheduledAnimation {
  * completion, where frame jitter does not matter.
  */
 async function captureSchedule(page: Page): Promise<void> {
-  // Captured from inside the page, by a poller that runs in the renderer, the
-  // moment the splash arms. Reading it with a round-tripped page.evaluate()
-  // instead loses a race against the 2.3s sequence whenever the machine is
-  // busy — the splash unmounts, its animations go with it, and the read comes
-  // back empty. Nothing here can be late: the capture happens in the same
-  // frame as the condition it waits on.
+  // The splash records its own schedule when it arms — see
+  // `apps/ui/src/splash/timeline.ts`. This waits for that value rather than
+  // reading the animations from out here.
+  //
+  // It used to poll `document.getAnimations()` itself, which meant racing a
+  // 2.3-second window that goes away with the splash: on a loaded machine the
+  // whole sequence can pass between two delivered frames, and then the
+  // condition can never come true and the wait spends thirty seconds proving
+  // it. That is how this failed once, as test 86 of a ninety-minute run, and
+  // passed on its own immediately afterwards. A value written from inside the
+  // page outlives the animations it describes, so there is nothing left to
+  // race.
   await page.waitForFunction(
-    () => {
-      const store = window as unknown as { __splashSchedule?: unknown[] };
-      if (store.__splashSchedule) return true;
-      const root = document.querySelector('.splash');
-      if (!root || root.getAttribute('data-armed') !== 'true') return false;
-      store.__splashSchedule = document
-        .getAnimations()
-        .filter((animation) => {
-          const target = (animation.effect as KeyframeEffect | null)?.target;
-          return target instanceof Element && root.contains(target);
-        })
-        .map((animation) => {
-          const effect = animation.effect as KeyframeEffect;
-          const timing = effect.getComputedTiming();
-          const target = effect.target as HTMLElement;
-          return {
-            name: (animation as CSSAnimation).animationName,
-            startTime: Number(animation.startTime),
-            delay: Number(timing.delay),
-            duration: Number(timing.duration),
-            letterIndex: target.dataset['letterIndex'] ?? null,
-          };
-        });
-      return true;
-    },
+    () => (window as unknown as { __chimeraSplashSchedule?: unknown[] }).__chimeraSplashSchedule,
     undefined,
     { polling: 'raf', timeout: 30_000 },
   );
@@ -91,7 +73,9 @@ async function captureSchedule(page: Page): Promise<void> {
 
 function readSchedule(page: Page): Promise<ScheduledAnimation[]> {
   return page.evaluate(
-    () => (window as unknown as { __splashSchedule?: ScheduledAnimation[] }).__splashSchedule ?? [],
+    () =>
+      (window as unknown as { __chimeraSplashSchedule?: ScheduledAnimation[] })
+        .__chimeraSplashSchedule ?? [],
   );
 }
 

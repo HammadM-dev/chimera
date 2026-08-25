@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AnimationEvent, CSSProperties, JSX } from 'react';
-import { recordStage } from './timeline.ts';
+import { recordSchedule, recordStage } from './timeline.ts';
 import './splash.css';
 
 const WORDMARK = 'CHIMERA';
@@ -120,6 +120,20 @@ export function Splash({ onDone }: SplashProps): JSX.Element {
 
   // Nothing to arm under reduced motion — there are no animations to hold.
   const armed = useArmed(!reducedMotion);
+
+  // The schedule, taken on the frame after arming puts the animations on the
+  // DOM. One rAF rather than a bare effect: the effect runs after React commits
+  // `data-armed`, but style resolution — and so the animations themselves —
+  // has not necessarily happened yet.
+  useEffect(() => {
+    if (!armed || reducedMotion) return undefined;
+    const frame = requestAnimationFrame(() => {
+      if (rootRef.current) recordSchedule(rootRef.current);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+    };
+  }, [armed, reducedMotion]);
 
   const finish = useCallback(
     (reason: 'unmount' | 'skip') => {
