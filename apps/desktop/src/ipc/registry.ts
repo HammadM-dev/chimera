@@ -712,6 +712,29 @@ export const composioSearch = defineInvokeChannel({
   }),
 });
 
+/** One connection's models, with price and capability for each. */
+export const connectionCatalogue = defineInvokeChannel({
+  channel: 'connection:catalogue',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ connectionId: z.string() }),
+  responseSchema: z.object({
+    models: z.array(
+      z.object({
+        id: z.string(),
+        displayName: z.string(),
+        vendor: z.string(),
+        contextWindowTokens: z.number().nullable(),
+        maxOutputTokens: z.number().nullable(),
+        inputPerMillion: z.number().nullable(),
+        outputPerMillion: z.number().nullable(),
+        toolCalling: z.string(),
+        vision: z.string(),
+      }),
+    ),
+  }),
+});
+
 export const composioToolkits = defineInvokeChannel({
   channel: 'composio:toolkits',
   v: 1,
@@ -1747,6 +1770,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   swarmRound,
   composioGet,
   composioSet,
+  connectionCatalogue,
   composioToolkits,
   composioSearch,
   composioConnect,

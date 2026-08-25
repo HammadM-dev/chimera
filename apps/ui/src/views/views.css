@@ -803,3 +803,316 @@
     transform: none;
   }
 }
+
+/* ---- A connection's model catalogue -------------------------------------
+ *
+ * A router's catalogue is four hundred rows, so the layout has one job: let
+ * somebody find a model and read its price without scrolling past three
+ * hundred they will never use. Grouping by vendor does most of that — an
+ * OpenRouter catalogue is thirty vendors, not four hundred models — and a
+ * sticky vendor heading keeps the reader's place inside a long group.
+ *
+ * The numeric columns are tabular and right-aligned. Prices that do not line
+ * up cannot be compared at a glance, which is the whole reason to show them. */
+
+.connection__label,
+.connection-row__label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+  color: var(--text-primary);
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--text-muted);
+}
+
+.dot--ok {
+  background: var(--semantic-success);
+}
+
+.dot--bad {
+  background: var(--semantic-danger);
+}
+
+.catalogue {
+  border-top: var(--border-width) solid var(--border-hairline);
+  padding-top: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.catalogue__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.catalogue__head .control {
+  flex: 1;
+  min-width: 0;
+}
+
+.catalogue__count {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.catalogue__scroll {
+  max-height: 340px;
+  /* Vertical only. A row that cannot fit shortens its name rather than making
+     the whole list slide sideways. */
+  overflow-x: hidden;
+}
+
+.catalogue__vendor {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-2);
+  /* Opaque: a transparent sticky heading lets model rows scroll through it. */
+  background: var(--surface-panel);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  text-transform: capitalize;
+  letter-spacing: 0.04em;
+}
+
+.catalogue__vendor-count {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.model {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.model:hover {
+  background: var(--surface-raised);
+}
+
+.model__name {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  /* `flex: 1` with `min-width: 0` so the name is what shrinks. Without the
+     grow, the fixed-width fact columns pushed the row wider than the panel and
+     the capability chips were cut off at the right edge. */
+  flex: 1;
+  min-width: 0;
+}
+
+.model__title {
+  color: var(--text-primary);
+  font-size: var(--type-meta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The id is what a step is actually bound to, so it is present but quiet —
+ * needed when two vendors ship a similarly-named model, ignorable otherwise. */
+.model__id {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.model__facts {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: none;
+}
+
+.model__price {
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  min-width: 92px;
+  text-align: right;
+}
+
+.model__slash {
+  color: var(--text-muted);
+}
+
+.model__context {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  min-width: 32px;
+  text-align: right;
+}
+
+.model__marks {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 116px;
+  justify-content: flex-end;
+}
+
+/* `model__mark`, not `mark`.
+ *
+ * `mark` was taken: onboarding.css uses it for a 30x30 icon tile, so these
+ * chips inherited `width: 30px` and clipped their own text — "Vision" lost its
+ * last letters and it read as the row overflowing the panel, which it never
+ * was. A generic class name in a shared stylesheet is a collision waiting for
+ * whoever writes the second one. */
+.model__mark {
+  flex: none;
+  padding: 1px var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  white-space: nowrap;
+}
+
+/* Unpriced is the one that changes what somebody can do: no verified price
+ * means no spend cap can be enforced on that model. */
+.model__mark--warn {
+  border-color: var(--semantic-danger);
+  color: var(--semantic-danger);
+}
+
+/* ---- Composio ------------------------------------------------------------
+ *
+ * Three questions in the order somebody asks them: what have I got, what else
+ * is there, and what can it actually do. The panel used to open on a search box
+ * over a thousand apps, which answers the second question to somebody who has
+ * not had the first one answered yet — and the third had no answer anywhere,
+ * which is why "how am I supposed to use this" was a fair thing to ask. */
+
+/* The panel is a stack of unlike things — prose, a checkbox, a field, a list —
+ * and they were running together into a wall of text with no seams. Spacing is
+ * the only thing separating them, so it has to be deliberate. */
+.composio__intro {
+  margin-bottom: var(--space-3);
+}
+
+.composio__enable {
+  margin-bottom: var(--space-3);
+}
+
+.composio__key {
+  margin-bottom: var(--space-2);
+}
+
+.composio__section {
+  padding-top: var(--space-3);
+  margin-top: var(--space-3);
+  border-top: var(--border-width) solid var(--border-hairline);
+}
+
+.composio__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.composio__title {
+  margin: 0;
+  font-size: var(--type-meta);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.composio__count {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+/* A connected app is a settled state, so it reads as one: no button, no
+ * pointer affordance, and a rule down the side to separate it from the
+ * searchable list below, where every row is something still to be done. */
+.toolkit--on {
+  border-left: 2px solid var(--semantic-success);
+  padding-left: var(--space-2);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.composio__ask {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.composio__ask .control {
+  flex: 1;
+  min-width: 0;
+}
+
+.tools {
+  max-height: 240px;
+  margin-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.tool {
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-control);
+}
+
+.tool__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+/* The slug is what the agent will actually call, so it is the thing to read —
+ * monospaced because these are identifiers and read wrongly as prose. */
+.tool__slug {
+  font-family: var(--font-mono);
+  font-size: var(--type-floor);
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool__kit {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  flex: none;
+}
+
+.tool__what {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  line-height: 1.45;
+  /* Composio's descriptions run long. Three lines is enough to tell two
+     similar tools apart, which is all this list is for. */
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}

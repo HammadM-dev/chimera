@@ -9,6 +9,7 @@ import {
   estimateCost,
   removeConnection,
   listConnections,
+  catalogueOf,
   startChat,
   sweepHealth,
   testConnection,
@@ -228,6 +229,7 @@ registerHandler(channels.assistantAsk, (payload) => askAssistant(payload));
 
 registerHandler(channels.composioGet, () => getComposio());
 registerHandler(channels.composioSet, (payload) => setComposio(payload));
+registerHandler(channels.connectionCatalogue, (input) => catalogueOf(input.connectionId));
 registerHandler(channels.composioToolkits, (input) => listToolkits(input));
 registerHandler(channels.composioSearch, (input) => searchTools(input));
 registerHandler(channels.composioConnect, (payload) => connectToolkit(payload));

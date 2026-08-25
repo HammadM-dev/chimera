@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
 import { ConnectionForm } from '../connections/ConnectionForm.tsx';
+import { ModelCatalogue } from './ModelCatalogue.tsx';
 import { AnswerCache, ModelTiers, TelemetryPanel } from './ModelTiers.tsx';
 import { Confirm } from '../shell/Confirm.tsx';
 import { PluginsPanel } from './PluginsPanel.tsx';
@@ -26,6 +27,8 @@ interface Props {
 export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [kinds, setKinds] = useState<string[]>([]);
+  /** Which connection's catalogue is open. One at a time. */
+  const [opened, setOpened] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<ConnectionSummary | null>(null);
 
   const load = useCallback(async () => {
@@ -83,25 +86,51 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
           </p>
         ) : (
           connections.map((connection) => (
-            <div key={connection.id} className="connection-row" data-testid="connection-row">
-              <span>{connection.label}</span>
-              <span className="connection-row__meta">
-                {connection.kind} ·{' '}
-                {connection.models.length === 0
-                  ? 'no catalogue'
-                  : `${String(connection.models.length)} models`}{' '}
-                · {connection.healthState}
-              </span>
-              <button
-                type="button"
-                className="button button--quiet"
-                data-testid="connection-remove"
-                onClick={() => {
-                  setConfirming(connection);
-                }}
-              >
-                Remove
-              </button>
+            <div key={connection.id} className="connection">
+              <div className="connection-row" data-testid="connection-row">
+                <span className="connection-row__label">
+                  <span
+                    className={`dot dot--${connection.healthState === 'healthy' ? 'ok' : connection.healthState === 'unknown' ? 'idle' : 'bad'}`}
+                    title={connection.healthState}
+                  />
+                  {connection.label}
+                </span>
+                <span className="connection-row__meta">{connection.kind}</span>
+
+                {/* The catalogue is a thing to open, not a number to read. It
+                    was imported, stored, and then shown as "419 models" with
+                    nowhere to go — which is indistinguishable from not having
+                    imported it. */}
+                <button
+                  type="button"
+                  className="button button--quiet"
+                  data-testid="connection-models"
+                  aria-expanded={opened === connection.id}
+                  disabled={connection.models.length === 0}
+                  onClick={() => {
+                    setOpened((current) => (current === connection.id ? null : connection.id));
+                  }}
+                >
+                  {connection.models.length === 0
+                    ? 'No catalogue'
+                    : `${String(connection.models.length)} models`}
+                </button>
+
+                <button
+                  type="button"
+                  className="button button--quiet"
+                  data-testid="connection-remove"
+                  onClick={() => {
+                    setConfirming(connection);
+                  }}
+                >
+                  Remove
+                </button>
+              </div>
+
+              {opened === connection.id && (
+                <ModelCatalogue connectionId={connection.id} label={connection.label} />
+              )}
             </div>
           ))
         )}

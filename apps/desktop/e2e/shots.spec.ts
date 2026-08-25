@@ -93,6 +93,19 @@ test('every view, photographed', async () => {
     });
     await shot('providers');
 
+    // The model catalogue, open. It is four hundred rows on a router and the
+    // layout is the whole point, so it is worth having a picture of.
+    await page.getByTestId('connection-models').first().click();
+    await expect(page.getByTestId('model-catalogue')).toBeVisible({ timeout: 15_000 });
+    await shot('providers-catalogue');
+    await page.getByTestId('connection-models').first().click();
+
+    // Composio with no key: the state every workspace starts in, and the one
+    // that has to explain itself.
+    await page.getByTestId('composio-enabled').check();
+    await shot('providers-composio');
+    await page.getByTestId('composio-enabled').uncheck();
+
     await goTo(page, 'home');
     await shot('home');
 

@@ -481,6 +481,58 @@ export function capabilitiesLookup(): (model: string) => ModelCapabilities {
   );
 }
 
+export interface CatalogueEntry {
+  id: string;
+  displayName: string;
+  /** The vendor half of `vendor/model`, or the connection's kind. */
+  vendor: string;
+  contextWindowTokens: number | null;
+  maxOutputTokens: number | null;
+  /** Null when this model has no verified price and so cannot be budgeted. */
+  inputPerMillion: number | null;
+  outputPerMillion: number | null;
+  toolCalling: string;
+  vision: string;
+}
+
+/**
+ * One connection's models, with everything known about each.
+ *
+ * The connection row said "419 models" and offered no way to look at them, so
+ * the catalogue this app works hard to import was a number on a label. What a
+ * person actually wants to know before binding a step is what a model costs and
+ * whether it can call tools, and both are now answerable.
+ */
+export function catalogueOf(connectionId: string): { models: CatalogueEntry[] } {
+  const connection = resolve(connectionId);
+  const lookup = capabilitiesLookup();
+
+  const models = Object.entries(connection.capabilities).map(([id, value]): CatalogueEntry => {
+    const stored = (value ?? {}) as { displayName?: string };
+    const known = lookup(id);
+    const priced = known.pricing.kind === 'metered' ? known.pricing : null;
+    const slash = id.indexOf('/');
+
+    return {
+      id,
+      displayName: stored.displayName ?? id,
+      // `anthropic/claude-opus-5` groups under Anthropic. A bare id has no
+      // vendor half and groups under the provider it came from, which for a
+      // single-vendor connection is the only sensible heading anyway.
+      vendor: slash > 0 ? id.slice(0, slash) : connection.kind,
+      contextWindowTokens: known.contextWindowTokens,
+      maxOutputTokens: known.maxOutputTokens,
+      inputPerMillion: priced?.inputPerMillion ?? null,
+      outputPerMillion: priced?.outputPerMillion ?? null,
+      toolCalling: known.toolCalling,
+      vision: known.vision,
+    };
+  });
+
+  models.sort((a, b) => a.vendor.localeCompare(b.vendor) || a.id.localeCompare(b.id));
+  return { models };
+}
+
 export function setLocalOnlyMode(enabled: boolean): void {
   settingsRepository.setLocalOnlyMode(getStore(), enabled);
 }
