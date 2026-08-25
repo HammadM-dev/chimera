@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import type { JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import type { JSX, MutableRefObject } from 'react';
 import { layoutOf, type Layout } from './swarmForce.ts';
 
 // The population, as a picture.
@@ -33,6 +33,24 @@ export interface Stance {
   confidence: number;
 }
 
+/** What one agent is doing right now, and since when. */
+export interface ActivityState {
+  state: 'asking' | 'answered' | 'failed';
+  /** `performance.now()` at the moment it changed. Drives the flare's decay. */
+  since: number;
+}
+
+/**
+ * The live feed, as a box rather than a value.
+ *
+ * Activity arrives several times a second and is read by an animation loop, so
+ * it must not be React state: a re-render per event would rebuild the
+ * component tree faster than the frames it is trying to draw. The owner
+ * mutates the map inside this ref and the loop reads it, which is the same
+ * arrangement `stances` uses and for the same reason.
+ */
+export type ActivityFeed = MutableRefObject<Map<string, ActivityState>>;
+
 /** What one persona is, for the panel that opens when you click. */
 export interface Picked {
   id: string;
@@ -42,6 +60,9 @@ export interface Picked {
   confidence: number;
   said: string;
 }
+
+/** How long an answer stays lit after it lands, in milliseconds. */
+const FLARE_MS = 1_400;
 
 /**
  * Reads a CSS custom property as an rgb triple.
@@ -82,20 +103,42 @@ export function SwarmGraph({
   stances,
   said,
   live,
+  activity,
+  caption = '',
+  round = 0,
 }: {
   graph: GraphData;
   /** Where everyone stands right now. Empty before the first round lands. */
   stances: Stance[];
   /** What the thinking ones said, by name, for the detail panel. */
   said: Map<string, string>;
-  /** True while rounds are still arriving — drives the pulse on thinkers. */
+  /** True while rounds are still arriving — drives the motion and the pulse. */
   live: boolean;
+  /** Per-agent activity, when there is a run to watch. */
+  activity?: ActivityFeed;
+  /** A line of progress under the picture. Empty on a finished thread. */
+  caption?: string;
+  /**
+   * Bumped when a round lands, to push the crowd apart again.
+   *
+   * A number rather than a callback because the graph is the thing that knows
+   * how to move; the owner only knows when something happened. Deliberately
+   * not the stance list: individual answers land several times a second, and
+   * reheating on each would be a permanent stir rather than a round breaking.
+   */
+  round?: number;
 }): JSX.Element {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const layoutRef = useRef<Layout | null>(null);
   const stanceRef = useRef<Map<string, Stance>>(new Map());
+  const hoverRef = useRef<{ x: number; y: number } | null>(null);
   const [picked, setPicked] = useState<Picked | null>(null);
+  const [full, setFull] = useState(false);
+  const [names, setNames] = useState(true);
   const [size, setSize] = useState({ width: 640, height: 380 });
+
+  const empty = useRef<Map<string, ActivityState>>(new Map());
+  const feed = activity ?? empty;
 
   // Stances arrive per round and are read by the draw loop, which must not
   // re-subscribe every time they change — hence a ref rather than state.
@@ -103,8 +146,9 @@ export function SwarmGraph({
     stanceRef.current = new Map(stances.map((stance) => [stance.id, stance]));
   }, [stances]);
 
-  // The layout is rebuilt only when the population itself changes. A new round
-  // must not move anybody: the point is watching the same crowd change colour.
+  // The layout is rebuilt only when the population itself changes, or when the
+  // stage does. A new round must not move anybody: the point is watching the
+  // same crowd change colour.
   useEffect(() => {
     layoutRef.current = graph.nodes.length === 0 ? null : layoutOf(graph.nodes, graph.ties, size);
   }, [graph.nodes, graph.ties, size]);
@@ -116,6 +160,7 @@ export function SwarmGraph({
 
     const observer = new ResizeObserver(() => {
       const box = parent.getBoundingClientRect();
+      if (box.width < 1 || box.height < 1) return;
       setSize({ width: Math.max(240, box.width), height: Math.max(220, box.height) });
     });
     observer.observe(parent);
@@ -123,6 +168,38 @@ export function SwarmGraph({
       observer.disconnect();
     };
   }, []);
+
+  // Escape leaves fullscreen. The button is the obvious way out and this is
+  // the one everybody tries first.
+  useEffect(() => {
+    if (!full) return undefined;
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === 'Escape') setFull(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [full]);
+
+  // Everything the loop needs that is not a ref, in one box it can read
+  // without being torn down and rebuilt. Restarting the animation on every
+  // prop change was what made a thread with several finished graphs expensive:
+  // each restart is a fresh closure, and none of them ever stopped.
+  const view = useRef({ live, names, picked, nodes: graph.nodes });
+  view.current = { live, names, picked, nodes: graph.nodes };
+
+  /**
+   * Wakes the animation, which otherwise stops.
+   *
+   * This is the fix for the real performance fault. Every graph in a thread —
+   * one per question ever asked of this crowd — used to run its own 60fps
+   * loop, clearing the canvas and redrawing several hundred arcs and a
+   * thousand hairlines, for good, whether or not anything had changed. Five
+   * finished turns on screen was five of those. A finished graph now draws
+   * once and stops; a running one animates until the run ends.
+   */
+  const wake = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -138,24 +215,29 @@ export function SwarmGraph({
     const forIt = readColour('--semantic-success', [90, 167, 111]);
     const undecided = readColour('--text-muted', [111, 108, 102]);
     const hairline = readColour('--text-primary', [245, 243, 238]);
+    const ink = `rgb(${String(hairline[0])}, ${String(hairline[1])}, ${String(hairline[2])})`;
 
     let frame = 0;
+    let running = false;
     let pulse = 0;
 
     const draw = (): void => {
       const layout = layoutRef.current;
+      const { live: isLive, names: showNames, picked: chosen, nodes: meta } = view.current;
+      const now = performance.now();
       context.clearRect(0, 0, size.width, size.height);
 
       if (layout === null) {
-        frame = requestAnimationFrame(draw);
+        running = false;
         return;
       }
 
-      // Keep integrating until it comes to rest; after that only redraw, so an
-      // idle graph costs a clear and a few hundred arcs rather than a physics
-      // step. Rounds keep arriving and changing colour either way.
-      if (!layout.settled) layout.step();
-      pulse = (pulse + 0.04) % (Math.PI * 2);
+      // While a run is in flight the crowd never comes to rest: the wander
+      // keeps it drifting, which is the difference between watching a
+      // population and looking at a diagram of one. When the run is over it
+      // integrates to rest and then stops entirely.
+      if (isLive || !layout.settled) layout.step(isLive);
+      pulse = (pulse + 0.045) % (Math.PI * 2);
 
       // Ties first, under the nodes. Faint: they are context for the clusters,
       // not the subject, and at three hundred nodes a confident line weight
@@ -172,10 +254,22 @@ export function SwarmGraph({
         context.stroke();
       }
 
+      const hover = hoverRef.current;
+      let nearest: { at: number; distance: number } | null = null;
+      let flaring = false;
+      const labels: { x: number; y: number; text: string; strong: boolean }[] = [];
+
       for (let at = 0; at < layout.nodes.length; at += 1) {
         const node = layout.nodes[at];
-        const meta = graph.nodes[at];
-        if (!node || !meta) continue;
+        const who = meta[at];
+        if (!node || !who) continue;
+
+        if (hover !== null) {
+          const distance = Math.hypot(node.x - hover.x, node.y - hover.y);
+          if (distance <= node.radius + 8 && (nearest === null || distance < nearest.distance)) {
+            nearest = { at, distance };
+          }
+        }
 
         const stance = stanceRef.current.get(node.id);
         const position = stance?.position ?? 0;
@@ -187,61 +281,155 @@ export function SwarmGraph({
           Math.min(1, Math.abs(position)) * (0.35 + (stance?.confidence ?? 0) * 0.65);
         const [r, g, b] = mix(undecided, towards, strength);
 
-        // A thinking agent breathes while the round is in flight. This is the
-        // only motion once the layout rests, and it is what makes the picture
-        // read as a thing happening rather than a chart.
+        // What this agent is doing, right now. `asking` means a request is
+        // genuinely in flight to a provider; `answered` flares and fades. This
+        // is the live progress — not a decoration standing in for the work,
+        // the work itself, one model call at a time.
+        const doing = feed.current.get(node.id);
+        const age = doing === undefined ? Number.POSITIVE_INFINITY : now - doing.since;
+        const waiting = doing?.state === 'asking';
+        const flare =
+          doing?.state === 'answered' && age < FLARE_MS ? 1 - age / FLARE_MS : 0;
+        if (waiting || flare > 0) flaring = true;
+
+        // A thinking agent breathes while the round is in flight, and one with
+        // a request actually open breathes harder.
         const breathing =
-          live && meta.kind === 'archetype' ? 1 + Math.sin(pulse + at * 0.4) * 0.12 : 1;
+          isLive && (who.kind === 'archetype' || waiting)
+            ? 1 + Math.sin(pulse * (waiting ? 2.2 : 1) + at * 0.4) * (waiting ? 0.28 : 0.12)
+            : 1;
+        const radius = node.radius * breathing + flare * 2;
+
+        if (waiting) {
+          // An opening ring, so an agent that has been waiting thirty seconds
+          // looks different from one asked a moment ago.
+          const reach = radius + 4 + ((age / 900) % 1) * 10;
+          context.beginPath();
+          context.arc(node.x, node.y, reach, 0, Math.PI * 2);
+          context.strokeStyle = `rgba(${String(hairline[0])}, ${String(hairline[1])}, ${String(hairline[2])}, ${String(0.35 * (1 - ((age / 900) % 1)))})`;
+          context.lineWidth = 1;
+          context.stroke();
+        }
+
+        if (flare > 0) {
+          context.beginPath();
+          context.arc(node.x, node.y, radius + 6 * flare, 0, Math.PI * 2);
+          context.fillStyle = `rgba(${String(r)}, ${String(g)}, ${String(b)}, ${String(0.28 * flare)})`;
+          context.fill();
+        }
 
         context.beginPath();
-        context.arc(node.x, node.y, node.radius * breathing, 0, Math.PI * 2);
+        context.arc(node.x, node.y, radius, 0, Math.PI * 2);
         context.fillStyle = `rgb(${String(r)}, ${String(g)}, ${String(b)})`;
         context.fill();
 
         // Archetypes are ringed. They are the ones a model actually answers
         // for; everyone else moved by arithmetic, and the difference is worth
         // being able to see.
-        if (meta.kind === 'archetype') {
+        if (who.kind === 'archetype') {
           context.lineWidth = 1;
-          context.strokeStyle = `rgba(${String(hairline[0])}, ${String(hairline[1])}, ${String(hairline[2])}, 0.55)`;
+          context.strokeStyle = `rgba(${String(hairline[0])}, ${String(hairline[1])}, ${String(hairline[2])}, ${String(waiting ? 0.9 : 0.55)})`;
           context.stroke();
         }
 
-        if (picked?.id === node.id) {
+        if (chosen?.id === node.id) {
           context.lineWidth = 1.5;
-          context.strokeStyle = `rgb(${String(hairline[0])}, ${String(hairline[1])}, ${String(hairline[2])})`;
+          context.strokeStyle = ink;
           context.beginPath();
-          context.arc(node.x, node.y, node.radius * breathing + 4, 0, Math.PI * 2);
+          context.arc(node.x, node.y, radius + 4, 0, Math.PI * 2);
           context.stroke();
+        }
+
+        // Name tags. Archetypes carry theirs always — there are at most two
+        // dozen of them and they are the ones with something to say. A
+        // follower is one of three hundred and gets a tag only when it is
+        // under the cursor or opened, which is the only moment its name is a
+        // question anybody is asking.
+        if (showNames && who.kind === 'archetype') {
+          labels.push({ x: node.x + radius + 4, y: node.y + 3, text: who.name, strong: false });
         }
       }
 
-      frame = requestAnimationFrame(draw);
+      if (nearest !== null) {
+        const node = layout.nodes[nearest.at];
+        const who = meta[nearest.at];
+        if (node && who && (!showNames || who.kind !== 'archetype')) {
+          labels.push({
+            x: node.x + node.radius + 4,
+            y: node.y + 3,
+            text: who.name,
+            strong: true,
+          });
+        }
+      }
+
+      // Labels last so nothing is drawn over them.
+      context.font = '400 10px ui-sans-serif, system-ui, sans-serif';
+      context.textBaseline = 'alphabetic';
+      for (const label of labels) {
+        const width = context.measureText(label.text).width;
+        // Flipped to the left near the right edge, rather than clipped off it.
+        const x = label.x + width > size.width - 4 ? label.x - width - 12 : label.x;
+        context.fillStyle = `rgba(${String(hairline[0])}, ${String(hairline[1])}, ${String(hairline[2])}, ${String(label.strong ? 0.92 : 0.6)})`;
+        context.fillText(label.text, x, label.y);
+      }
+
+      // Another frame only while something is still moving. A finished,
+      // settled graph costs nothing until it is touched again.
+      if (isLive || !layout.settled || flaring || hover !== null) {
+        frame = requestAnimationFrame(draw);
+      } else {
+        running = false;
+      }
     };
 
-    frame = requestAnimationFrame(draw);
-    return () => {
-      cancelAnimationFrame(frame);
+    const start = (): void => {
+      if (running) return;
+      running = true;
+      frame = requestAnimationFrame(draw);
     };
-  }, [size, graph.nodes, live, picked]);
+    wake.current = start;
+    start();
+
+    return () => {
+      running = false;
+      cancelAnimationFrame(frame);
+      wake.current = () => undefined;
+    };
+  }, [size, feed]);
+
+  // Anything that changes the picture wakes it. A settled graph is asleep, so
+  // without this a new round would change colour and nothing would repaint.
+  useEffect(() => {
+    wake.current();
+  }, [live, names, picked, stances, graph.nodes]);
+
+  // A round landing is worth seeing move, not only seeing recolour.
+  useEffect(() => {
+    if (round > 0) layoutRef.current?.reheat();
+    wake.current();
+  }, [round]);
+
+  const at = useCallback((event: React.MouseEvent<HTMLCanvasElement>) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const box = canvas.getBoundingClientRect();
+    return { x: event.clientX - box.left, y: event.clientY - box.top };
+  }, []);
 
   const pick = useCallback(
     (event: React.MouseEvent<HTMLCanvasElement>) => {
       const layout = layoutRef.current;
-      const canvas = canvasRef.current;
-      if (layout === null || !canvas) return;
-
-      const box = canvas.getBoundingClientRect();
-      const x = event.clientX - box.left;
-      const y = event.clientY - box.top;
+      const point = at(event);
+      if (layout === null || point === null) return;
 
       let best: { at: number; distance: number } | null = null;
-      for (let at = 0; at < layout.nodes.length; at += 1) {
-        const node = layout.nodes[at];
+      for (let index = 0; index < layout.nodes.length; index += 1) {
+        const node = layout.nodes[index];
         if (!node) continue;
-        const distance = Math.hypot(node.x - x, node.y - y);
+        const distance = Math.hypot(node.x - point.x, node.y - point.y);
         if (distance <= node.radius + 6 && (best === null || distance < best.distance)) {
-          best = { at, distance };
+          best = { at: index, distance };
         }
       }
 
@@ -250,19 +438,24 @@ export function SwarmGraph({
         return;
       }
 
-      const meta = graph.nodes[best.at];
-      if (!meta) return;
-      const stance = stanceRef.current.get(meta.id);
+      const who = graph.nodes[best.at];
+      if (!who) return;
+      const stance = stanceRef.current.get(who.id);
       setPicked({
-        id: meta.id,
-        name: meta.name,
-        kind: meta.kind,
+        id: who.id,
+        name: who.name,
+        kind: who.kind,
         position: stance?.position ?? 0,
         confidence: stance?.confidence ?? 0,
-        said: said.get(meta.name) ?? '',
+        said: said.get(who.name) ?? '',
       });
     },
-    [graph.nodes, said],
+    [at, graph.nodes, said],
+  );
+
+  const archetypes = useMemo(
+    () => graph.nodes.filter((node) => node.kind === 'archetype').length,
+    [graph.nodes],
   );
 
   if (graph.nodes.length === 0) {
@@ -283,7 +476,11 @@ export function SwarmGraph({
           : 'undecided';
 
   return (
-    <div className="swarm-graph" data-testid="swarm-graph">
+    <div
+      className={`swarm-graph${full ? ' swarm-graph--full' : ''}`}
+      data-testid="swarm-graph"
+      data-full={full ? 'yes' : 'no'}
+    >
       <div className="swarm-graph__stage">
         <canvas
           ref={canvasRef}
@@ -291,7 +488,42 @@ export function SwarmGraph({
           data-testid="swarm-graph-canvas"
           style={{ width: `${String(size.width)}px`, height: `${String(size.height)}px` }}
           onClick={pick}
+          onMouseMove={(event) => {
+            hoverRef.current = at(event);
+            wake.current();
+          }}
+          onMouseLeave={() => {
+            hoverRef.current = null;
+            wake.current();
+          }}
         />
+
+        <div className="swarm-graph__tools">
+          {archetypes > 0 && (
+            <button
+              type="button"
+              className={`swarm-graph__tool${names ? ' swarm-graph__tool--on' : ''}`}
+              data-testid="swarm-graph-names"
+              aria-pressed={names}
+              onClick={() => {
+                setNames(!names);
+              }}
+            >
+              Names
+            </button>
+          )}
+          <button
+            type="button"
+            className="swarm-graph__tool"
+            data-testid="swarm-graph-full"
+            aria-pressed={full}
+            onClick={() => {
+              setFull(!full);
+            }}
+          >
+            {full ? 'Close' : 'Full screen'}
+          </button>
+        </div>
       </div>
 
       <div className="swarm-graph__legend">
@@ -307,10 +539,12 @@ export function SwarmGraph({
           <i className="swarm-graph__swatch swarm-graph__swatch--for" />
           For
         </span>
-        <span className="swarm-graph__count">
-          {graph.drawn === graph.total
-            ? `${String(graph.total)} people`
-            : `${String(graph.drawn)} of ${String(graph.total)} shown`}
+        <span className="swarm-graph__count" data-testid="swarm-graph-caption">
+          {caption !== ''
+            ? caption
+            : graph.drawn === graph.total
+              ? `${String(graph.total)} people`
+              : `${String(graph.drawn)} of ${String(graph.total)} shown`}
         </span>
       </div>
 

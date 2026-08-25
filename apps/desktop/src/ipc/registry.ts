@@ -777,10 +777,28 @@ export const composioToolkits = defineInvokeChannel({
 // the user has to visit, and the connection is not made until they finish there.
 export const composioConnect = defineInvokeChannel({
   channel: 'composio:connect',
-  v: 1,
+  // Bumped: `opened` is a new field, and the renderer needs to know whether the
+  // browser actually came up rather than assuming it did — which is what the
+  // last version did, and it was wrong every single time.
+  v: 2,
   sensitive: false,
   requestSchema: z.object({ toolkit: z.string() }),
-  responseSchema: z.object({ url: z.string(), reason: z.string() }),
+  responseSchema: z.object({ url: z.string(), opened: z.boolean(), reason: z.string() }),
+});
+
+/**
+ * Opens a link in the user's own browser.
+ *
+ * The renderer cannot do this: `applyNavigationGuard` denies `window.open` for
+ * every origin but the app's own, deliberately. See `openExternal` for the
+ * destinations this will accept and why it is a list rather than "any https".
+ */
+export const shellOpenExternal = defineInvokeChannel({
+  channel: 'shell:openExternal',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ url: z.string() }),
+  responseSchema: z.object({ opened: z.boolean(), reason: z.string() }),
 });
 
 // The swarm section: a population, and every question ever put to it.
@@ -989,6 +1007,36 @@ export const swarmRound = defineEventChannel({
     }),
     said: z.array(z.object({ name: z.string(), position: z.number(), said: z.string() })),
     stances: z.array(z.object({ id: z.string(), position: z.number(), confidence: z.number() })),
+  }),
+});
+
+/**
+ * One thing happening inside a running swarm, as it happens.
+ *
+ * Finer than `swarm:round` on purpose. A round of two dozen agents against a
+ * rate-limited model is minutes long, and until this existed the window had
+ * nothing to say for the whole of it — the graph sat perfectly still and the
+ * only honest reading was that something had hung. This carries each agent
+ * being asked and each answer landing, so what is on screen is the work.
+ *
+ * Every field is required. `z.object` drops keys it does not name, silently
+ * and with no error at either end, and optional halves of a union are exactly
+ * the shape that gets lost that way — it has already cost this section a whole
+ * feature once. Absent values are sent as empty rather than omitted.
+ */
+export const swarmActivity = defineEventChannel({
+  channel: 'swarm:activity',
+  v: 1,
+  sensitive: false,
+  payloadSchema: z.object({
+    swarmId: z.string(),
+    stage: z.enum(['casting', 'thinking', 'writing', 'done']),
+    personaId: z.string(),
+    round: z.number(),
+    state: z.enum(['asking', 'answered', 'failed', 'none']),
+    position: z.number(),
+    confidence: z.number(),
+    said: z.string(),
   }),
 });
 
@@ -1841,6 +1889,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   swarmForRun,
   swarmPopulation,
   swarmRound,
+  swarmActivity,
   composioGet,
   composioSet,
   connectionCatalogue,
@@ -1848,6 +1897,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   composioToolkits,
   composioSearch,
   composioConnect,
+  shellOpenExternal,
   searchGet,
   searchSet,
   telemetryGet,

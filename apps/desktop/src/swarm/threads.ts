@@ -105,9 +105,33 @@ export function archiveThread(input: { id: string }): { archived: boolean } {
   return { archived: true };
 }
 
+/**
+ * One thing happening inside a running swarm, small enough to send often.
+ *
+ * Flat and fully populated rather than a union with optional halves. The IPC
+ * boundary validates with `z.object`, which drops any key its schema does not
+ * name — silently, with no error at either end — and that has already cost
+ * this section a whole feature once. A shape with no optional fields cannot
+ * lose one.
+ */
+export interface SwarmActivity {
+  swarmId: string;
+  /** Which part of the run this is: writing the cast, thinking, writing up. */
+  stage: 'casting' | 'thinking' | 'writing' | 'done';
+  /** The agent this concerns. Empty when the event is only about the stage. */
+  personaId: string;
+  round: number;
+  state: 'asking' | 'answered' | 'failed' | 'none';
+  position: number;
+  confidence: number;
+  said: string;
+}
+
 export interface AskDeps {
   onPopulation?: (graph: SwarmGraph & { swarmId: string }) => void;
   onRound?: (report: RoundReport & { swarmId: string }) => void;
+  /** Per-agent and per-stage progress, as it happens. */
+  onActivity?: (activity: SwarmActivity) => void;
   cancellation?: { readonly cancelled: boolean };
 }
 
@@ -181,6 +205,13 @@ export async function askSwarm(
   // came to do all its thinking successfully and then fail writing it up.
   const throttle = new SwarmThrottle({ permits: DEFAULT_CONCURRENCY });
 
+  const say = (activity: Omit<SwarmActivity, 'swarmId'>): void => {
+    deps.onActivity?.({ ...activity, swarmId: thread.id });
+  };
+  const quiet = { personaId: '', round: 0, state: 'none' as const, position: 0, confidence: 0, said: '' };
+
+  say({ stage: 'casting', ...quiet });
+
   const result = await runSwarm(spec, {
     throttle,
     ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
@@ -193,9 +224,32 @@ export async function askSwarm(
     ...(deps.onRound
       ? { onRound: (round: RoundReport) => deps.onRound?.({ ...round, swarmId: thread.id }) }
       : {}),
+    ...(deps.onActivity
+      ? {
+          onThinking: (event) => {
+            say({
+              stage: 'thinking',
+              personaId: event.personaId,
+              round: event.round,
+              state: event.state,
+              position: event.position ?? 0,
+              confidence: event.confidence ?? 0,
+              said: event.said ?? '',
+            });
+          },
+        }
+      : {}),
   });
 
+  // The write-up is one model call over the whole transcript, and on a
+  // rate-limited provider it is minutes on its own. Without this the window
+  // went silent right after the last round — the point at which a person who
+  // had been watching the crowd move would reasonably conclude it had hung.
+  say({ stage: 'writing', ...quiet });
+
   const written = await report(spec, result, throttle);
+
+  say({ stage: 'done', ...quiet });
 
   const turn = swarmsRepository.addTurn(db, {
     swarmId: thread.id,

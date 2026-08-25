@@ -3,7 +3,12 @@ import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
 import './swarm.css';
-import { SwarmGraph, type GraphData, type Stance } from './SwarmGraph.tsx';
+import {
+  SwarmGraph,
+  type ActivityState,
+  type GraphData,
+  type Stance,
+} from './SwarmGraph.tsx';
 
 // The swarm section: a population, and every question ever put to it.
 //
@@ -140,6 +145,16 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   const [graph, setGraph] = useState<GraphData | null>(null);
   const [stances, setStances] = useState<Stance[]>([]);
   const [live, setLive] = useState<Round | null>(null);
+  // Per-agent activity, held in a ref because it changes several times a
+  // second and is read by an animation loop. Only the counts below are state,
+  // and those are a line of text rather than a repaint.
+  const activity = useRef<Map<string, ActivityState>>(new Map());
+  const [progress, setProgress] = useState<{
+    stage: 'casting' | 'thinking' | 'writing' | 'done';
+    round: number;
+    asking: number;
+    answered: number;
+  }>({ stage: 'casting', round: 0, asking: 0, answered: 0 });
   const [error, setError] = useState<string | null>(null);
   const [modelKey, setModelKey] = useState('');
   const [population, setPopulation] = useState(300);
@@ -174,6 +189,59 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
     return bridge().on<Round & { swarmId: string; stances?: Stance[] }>('swarm:round', (round) => {
       setLive(round);
       if (round.stances) setStances(round.stances);
+    });
+  }, []);
+
+  // Each agent as it is asked and as its answer lands. This is what makes the
+  // picture a progress indicator rather than a decoration: a round against a
+  // rate-limited model is minutes long, and the only thing that can honestly
+  // fill those minutes is the individual calls going out and coming back.
+  useEffect(() => {
+    return bridge().on<{
+      swarmId: string;
+      stage: 'casting' | 'thinking' | 'writing' | 'done';
+      personaId: string;
+      round: number;
+      state: 'asking' | 'answered' | 'failed' | 'none';
+      position: number;
+      confidence: number;
+      said: string;
+    }>('swarm:activity', (event) => {
+      if (event.personaId !== '') {
+        if (event.state === 'none') return;
+        activity.current.set(event.personaId, {
+          state: event.state,
+          since: performance.now(),
+        });
+        // The node recolours the moment its own answer lands, rather than at
+        // the end of the round. Within a round the followers have not moved —
+        // that is arithmetic needing every answer in — so this shows exactly
+        // what is true: the thinkers turning one by one.
+        if (event.state === 'answered') {
+          setStances((current) => {
+            const next = current.filter((stance) => stance.id !== event.personaId);
+            next.push({
+              id: event.personaId,
+              position: event.position,
+              confidence: event.confidence,
+            });
+            return next;
+          });
+        }
+      }
+
+      setProgress((current) => {
+        const round = event.round === 0 ? current.round : event.round;
+        // Counts are recomputed from the feed rather than incremented, so a
+        // dropped event cannot leave the readout permanently wrong.
+        let asking = 0;
+        let answered = 0;
+        for (const one of activity.current.values()) {
+          if (one.state === 'asking') asking += 1;
+          else answered += 1;
+        }
+        return { stage: event.stage, round, asking, answered };
+      });
     });
   }, []);
 
@@ -214,6 +282,8 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
     setError(null);
     setQuestion('');
     setLive(null);
+    activity.current.clear();
+    setProgress({ stage: 'casting', round: 0, asking: 0, answered: 0 });
 
     try {
       const answer = await bridge().invoke<{ threadId: string; name: string; turn: Turn }>(
@@ -415,10 +485,12 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
                 <p className="swarm-turn__how">Writing the population…</p>
               ) : (
                 <>
-                  <p className="swarm-turn__how">
-                    {live === null
-                      ? 'The crowd is assembled — they are starting to think'
-                      : `Round ${String(live.round)} — the population is still moving`}
+                  <p className="swarm-turn__how" data-testid="swarm-progress">
+                    {progress.stage === 'writing'
+                      ? 'Writing up what happened'
+                      : live === null
+                        ? 'The crowd is assembled — they are starting to think'
+                        : `Round ${String(live.round)} — the population is still moving`}
                   </p>
 
                   {/* The crowd itself, while it argues. A number at the end is
@@ -430,6 +502,17 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
                       stances={stances}
                       said={new Map((live?.said ?? []).map((one) => [one.name, one.said]))}
                       live
+                      activity={activity}
+                      round={live?.round ?? 0}
+                      caption={
+                        progress.stage === 'writing'
+                          ? 'Every round is in — writing up what happened'
+                          : progress.stage === 'casting'
+                            ? 'Writing the cast'
+                            : `Round ${String(Math.max(1, progress.round))} · ${String(
+                                progress.answered,
+                              )} answered, ${String(progress.asking)} thinking`
+                      }
                     />
                   )}
 

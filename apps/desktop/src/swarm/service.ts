@@ -129,6 +129,15 @@ export interface SwarmRunDeps {
   throttle?: SwarmThrottle;
   onPopulation?: (graph: SwarmGraph) => void;
   onRound?: (report: RoundReport) => void;
+  /** Per-agent progress, so the window can show the work rather than a spinner. */
+  onThinking?: (event: {
+    personaId: string;
+    round: number;
+    state: 'asking' | 'answered' | 'failed';
+    position?: number;
+    confidence?: number;
+    said?: string;
+  }) => void;
   cancellation?: { readonly cancelled: boolean };
 }
 
@@ -246,6 +255,7 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
       },
       ...(deps.onPopulation ? { onPopulation: deps.onPopulation } : {}),
       ...(deps.onRound ? { onRound: deps.onRound } : {}),
+      ...(deps.onThinking ? { onThinking: deps.onThinking } : {}),
       ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
 
       buildPersonas: async ({ question, background, count }) => {

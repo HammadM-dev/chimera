@@ -83,6 +83,7 @@ import {
   toolkitLogo,
   setComposio,
 } from '../composio/service.ts';
+import { openExternal } from '../security/openExternal.ts';
 import {
   archiveThread,
   askSwarm,
@@ -235,6 +236,7 @@ registerHandler(channels.composioToolkits, (input) => listToolkits(input));
 registerHandler(channels.composioSearch, (input) => searchTools(input));
 registerHandler(channels.composioLogo, (input) => toolkitLogo(input));
 registerHandler(channels.composioConnect, (payload) => connectToolkit(payload));
+registerHandler(channels.shellOpenExternal, (payload) => openExternal(payload.url));
 
 registerHandler(channels.swarmList, () => listThreads());
 registerHandler(channels.swarmGet, (payload) => getThread(payload.id));
@@ -274,6 +276,26 @@ registerHandler(channels.swarmAsk, (payload, context) =>
           distribution: round.distribution,
           said: round.said,
           stances: round.stances,
+        },
+      });
+    },
+    // Per-agent, many times a round. Cheap enough to send at this rate: eight
+    // small fields, and at most two events per thinking agent per round.
+    onActivity: (activity) => {
+      const channel = getChannel('swarm:activity');
+      if (!channel || context.webContents.isDestroyed()) return;
+      context.webContents.send(EVENT_CHANNEL, {
+        v: channel.v,
+        channel: 'swarm:activity',
+        payload: {
+          swarmId: activity.swarmId,
+          stage: activity.stage,
+          personaId: activity.personaId,
+          round: activity.round,
+          state: activity.state,
+          position: activity.position,
+          confidence: activity.confidence,
+          said: activity.said,
         },
       });
     },

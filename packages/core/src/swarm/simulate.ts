@@ -159,6 +159,27 @@ export interface SimulateDeps {
    * provider will tolerate rather than about correctness.
    */
   concurrency?: number;
+  /**
+   * Told as each thinking agent is asked and as its answer lands.
+   *
+   * A round is the unit of the simulation and it is far too coarse to be the
+   * unit of progress: on a rate-limited free model one round of two dozen
+   * agents takes minutes, during which the only honest thing the window could
+   * say was "still going". This is what turns that into something a person can
+   * watch — the crowd lights up one agent at a time, in the order the provider
+   * actually answered, so what is on screen is the work rather than a
+   * decoration standing in for it.
+   */
+  onThinking?: (event: {
+    personaId: string;
+    round: number;
+    state: 'asking' | 'answered' | 'failed';
+    /** Where it landed. Only on `answered`; -1 to 1. */
+    position?: number;
+    confidence?: number;
+    /** What it said. Only on `answered`. */
+    said?: string;
+  }) => void;
 }
 
 /** How many archetypes to write for a population. Enough voices to disagree, few enough to afford. */
@@ -334,6 +355,7 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
       deps.concurrency ?? DEFAULT_CONCURRENCY,
       async (persona) => {
         const previous = stances.find((stance) => stance.personaId === persona.id);
+        deps.onThinking?.({ personaId: persona.id, round, state: 'asking' });
         try {
           const answer = await deps.ask({
             persona,
@@ -342,18 +364,27 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
             heard: heardBy(persona, ties, stances, people),
             round,
           });
-          return {
+          const landed = {
             personaId: persona.id,
             position: Math.max(-1, Math.min(1, answer.position)),
             confidence: Math.max(0, Math.min(1, answer.confidence)),
             said: answer.said,
           };
+          // Carried on the event as well as returned, so the node changes
+          // colour the moment its answer lands rather than at the end of the
+          // round. Within a round the followers have not moved yet — that is
+          // arithmetic which needs every answer in — so what a person sees mid
+          // round is exactly what is true: the thinkers turning, the crowd
+          // still holding last round's view.
+          deps.onThinking?.({ ...landed, round, state: 'answered' });
+          return landed;
         } catch {
           // One person who could not be reached is one person who said nothing
           // this round, and they keep the view they already held. Failing the
           // whole simulation instead throws away every other answer in the
           // round and every round before it — which is what used to happen,
           // and on a rate-limited free model it happened most times.
+          deps.onThinking?.({ personaId: persona.id, round, state: 'failed' });
           return {
             personaId: persona.id,
             position: previous?.position ?? 0,

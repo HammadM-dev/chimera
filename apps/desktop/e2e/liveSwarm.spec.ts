@@ -58,6 +58,23 @@ test.describe('a swarm on a real provider', () => {
       await page.getByTestId('swarm-rounds').fill('2');
       await page.getByTestId('swarm-ask').click();
 
+      // The crowd appears, and then it says what it is doing. This is the
+      // difference between a picture and a progress indicator: the caption
+      // counts real model calls going out and coming back, so a run that has
+      // been going ten minutes can be told apart from one that has hung.
+      await expect(page.getByTestId('swarm-graph')).toBeVisible({ timeout: 300_000 });
+      await expect(page.getByTestId('swarm-graph-caption')).toContainText(/answered|thinking/, {
+        timeout: 300_000,
+      });
+
+      // The controls the picture is worth having: names on the agents, and a
+      // way to fill the window with them.
+      await expect(page.getByTestId('swarm-graph-full')).toBeVisible();
+      await page.getByTestId('swarm-graph-full').click();
+      await expect(page.getByTestId('swarm-graph')).toHaveAttribute('data-full', 'yes');
+      await page.getByTestId('swarm-graph-full').click();
+      await expect(page.getByTestId('swarm-graph')).toHaveAttribute('data-full', 'no');
+
       // The whole point: it finishes. Generously timed, because slowing down
       // under a rate limit is the correct behaviour and it takes longer.
       await expect(page.getByTestId('swarm-turn')).toBeVisible({ timeout: 780_000 });

@@ -338,3 +338,83 @@ test('one persona failing does not throw away the whole round', async () => {
   assert.equal(result.rounds[0]?.said.filter((one) => one.said !== '').length, 11);
   assert.ok(result.final.for > 0, 'the round still produced a distribution');
 });
+
+test('every agent asked is reported starting and finishing', async () => {
+  // The live progress feed. A round against a rate-limited model is minutes
+  // long, and a round is far too coarse a unit to show a person: until this
+  // existed the window could only say "still going" for the whole of it.
+  //
+  // Asserted as a pairing rather than a count, because the useful property is
+  // that nobody is left showing as thinking for ever — a missing `answered`
+  // is a node that pulses until the run ends.
+  const seen: { personaId: string; round: number; state: string }[] = [];
+  const deps = stubbed(() => ({ position: 0.5, confidence: 0.6, said: 'yes' }));
+
+  const result = await simulate(spec({ population: 6, maxRounds: 2, settleAt: 0 }), {
+    ...deps,
+    onThinking: (event) => {
+      seen.push({ personaId: event.personaId, round: event.round, state: event.state });
+    },
+  });
+
+  const asked = seen.filter((one) => one.state === 'asking');
+  const answered = seen.filter((one) => one.state === 'answered');
+  assert.equal(asked.length, deps.calls(), 'every model call should have been announced');
+  assert.equal(answered.length, deps.calls(), 'every answer should have been announced');
+
+  for (const one of asked) {
+    assert.ok(
+      answered.some(
+        (other) => other.personaId === one.personaId && other.round === one.round,
+      ),
+      `${one.personaId} was shown thinking in round ${String(one.round)} and never finished`,
+    );
+  }
+  assert.ok(result.rounds.length > 0);
+});
+
+test('an answer carries where it landed, so a node recolours before the round ends', async () => {
+  // Without this the picture can only change once a round is complete, which
+  // on a slow provider is minutes of a crowd sitting at exactly the colour it
+  // was. The position on the event is the same one that goes into the round.
+  const landed: number[] = [];
+  await simulate(spec({ population: 4, maxRounds: 1 }), {
+    ...stubbed(() => ({ position: -0.8, confidence: 0.9, said: 'no chance' })),
+    onThinking: (event) => {
+      if (event.state === 'answered') landed.push(event.position ?? 0);
+    },
+  });
+
+  assert.ok(landed.length > 0, 'nothing landed');
+  for (const position of landed) assert.equal(position, -0.8);
+});
+
+test('an agent that could not be reached is reported failed, not left thinking', async () => {
+  // The failure that matters. A persona whose call throws keeps the view it
+  // held — that is deliberate, and tested elsewhere — but the picture must
+  // stop showing it as mid-thought, or the crowd fills up with agents that
+  // pulse for ever.
+  const states = new Map<string, string>();
+  let asks = 0;
+
+  await simulate(spec({ population: 4, maxRounds: 1 }), {
+    seed: 'run-fail',
+    buildPersonas: ({ count }) =>
+      Promise.resolve(Array.from({ length: count }, (_, index) => persona(`p${String(index)}`))),
+    ask: () => {
+      asks += 1;
+      return asks % 2 === 0
+        ? Promise.reject(new Error('provider said no'))
+        : Promise.resolve({ position: 0.4, confidence: 0.5, said: 'fine' });
+    },
+    onThinking: (event) => {
+      states.set(`${event.personaId}:${String(event.round)}`, event.state);
+    },
+  });
+
+  assert.ok([...states.values()].includes('failed'), 'a refusal should be announced');
+  assert.ok(
+    ![...states.values()].includes('asking'),
+    'nobody should be left showing as still thinking',
+  );
+});

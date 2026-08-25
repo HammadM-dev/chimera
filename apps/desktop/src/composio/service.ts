@@ -12,6 +12,7 @@ import type {
   ComposioToolkit,
 } from '@chimera/tools';
 import { getStore } from '../store/lifecycle.ts';
+import { openExternal } from '../security/openExternal.ts';
 
 // The half of Composio that holds the key and talks to their SDK.
 //
@@ -361,19 +362,32 @@ export function composioBackend(): ComposioBackend {
  */
 export async function connectToolkit(input: {
   toolkit: string;
-}): Promise<{ url: string; reason: string }> {
+}): Promise<{ url: string; opened: boolean; reason: string }> {
   const live = await session();
   if (live === null) {
-    return { url: '', reason: 'Composio is not connected in this workspace.' };
+    return {
+      url: '',
+      opened: false,
+      reason: 'Composio is not connected in this workspace — add its key first.',
+    };
   }
   try {
     const request = await live.authorize(input.toolkit);
     const url = request.redirectUrl ?? '';
-    return url === ''
-      ? { url: '', reason: 'That app needs no sign-in — it is ready to use.' }
-      : { url, reason: '' };
+    if (url === '') {
+      return { url: '', opened: false, reason: 'That app needs no sign-in — it is ready to use.' };
+    }
+
+    // Opened here rather than handed back for the renderer to open.
+    //
+    // This is the whole of the bug where Connect said "Opening" and nothing
+    // happened. The renderer called `window.open`, which the navigation guard
+    // denies for every origin but the app's own — correctly, and by design.
+    // The browser has to be opened by the process that is allowed to open it.
+    const opened = await openExternal(url);
+    return { url, opened: opened.opened, reason: opened.reason };
   } catch (err) {
-    return { url: '', reason: err instanceof Error ? err.message : String(err) };
+    return { url: '', opened: false, reason: err instanceof Error ? err.message : String(err) };
   }
 }
 
