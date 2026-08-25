@@ -1,5 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { freshProfile, goTo, launchApp, pasteInto, removeProfile } from './support/app.ts';
 import { startStub } from './support/stub.ts';
 
 // What happens when things go wrong, and when a person types something nobody
@@ -75,7 +75,10 @@ test('an emoji, a right-to-left name and 20k characters all survive a round trip
     await place(page, 'summariser', 'Summarise it.');
 
     await page.getByTestId('brief-name').fill(awkward);
-    await page.getByTestId('brief-input').fill(huge);
+    // Pasted rather than filled: `locator.fill` is quadratic against Electron
+    // over CDP and would spend 45 seconds proving that Playwright is slow. The
+    // renderer handles this in about 200ms either way — see `pasteInto`.
+    await pasteInto(page, 'brief-input', huge);
     await page.getByTestId('brief-save').click();
 
     // Saved, then reopened from the list: it comes back exactly as it went in.

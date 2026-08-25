@@ -113,6 +113,42 @@ export function launchApp({
  * person does rather than asserting against something that happens to be
  * mounted.
  */
+/**
+ * Puts a lot of text into a field, the way a paste does.
+ *
+ * `locator.fill` is quadratic in the length of the string against Electron over
+ * CDP, and it is measuring itself rather than the app: at 5,000 characters it
+ * takes 5.1 seconds and the renderer takes 213ms; at 20,000 it takes 45 seconds
+ * and the renderer takes 195ms. A test that spends 45 seconds proving a React
+ * textarea can hold 20,000 characters is timing Playwright.
+ *
+ * This is how a paste actually reaches a controlled React input — the native
+ * value setter, then one `input` event — so the app sees exactly what it would
+ * see from a person pressing Ctrl+V, and the test measures the app.
+ */
+export async function pasteInto(page: Page, testId: string, text: string): Promise<void> {
+  const set = await page.evaluate(
+    ({ id, value }) => {
+      const field = document.querySelector<HTMLTextAreaElement | HTMLInputElement>(
+        `[data-testid="${id}"]`,
+      );
+      if (!field) return false;
+      const prototype =
+        field instanceof HTMLTextAreaElement
+          ? HTMLTextAreaElement.prototype
+          : HTMLInputElement.prototype;
+      Object.getOwnPropertyDescriptor(prototype, 'value')?.set?.call(field, value);
+      field.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
+    },
+    { id: testId, value: text },
+  );
+
+  if (!set) throw new Error(`No element with data-testid="${testId}" to paste into`);
+  // React has to have processed the event before the caller reads it back.
+  await expect(page.getByTestId(testId)).not.toHaveValue('', { timeout: 10_000 });
+}
+
 export async function goTo(
   page: Page,
   view: 'home' | 'build' | 'swarm' | 'runs' | 'agents' | 'memory' | 'providers' | 'chat',
