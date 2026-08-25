@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { isIrreversible } from '@chimera/tools';
 import { BUILTIN_SCHEMAS } from './outputContract.ts';
 import type { Message } from '@chimera/providers';
 import type { Role } from './roleRegistry.ts';
@@ -53,6 +54,16 @@ export interface InstructionSource {
    * going to see, because as far as each one knew it was alone.
    */
   placement?: StepPlacement;
+  /**
+   * Whether a person has already agreed to what this step may do.
+   *
+   * The agent was never told. It held tools it was not allowed to use, found
+   * out by being refused, and spent an iteration on it — and worse, an agent
+   * that does not know an action needs approval writes as though it has
+   * already taken it. "I have sent the email" is a sentence a model will
+   * produce after a denial if nothing told it otherwise.
+   */
+  gated?: boolean;
 }
 
 export interface ToolSummary {
@@ -192,12 +203,67 @@ export function assembleSystemMessage(instructions: InstructionSource): string {
       : ['', ...placementLines(instructions.placement)]),
     '',
     ...toolLines,
+    ...(permissionLines(instructions).length === 0
+      ? []
+      : ['', ...permissionLines(instructions)]),
     ...(outputContractLine(instructions.role) === ''
       ? []
       : ['', outputContractLine(instructions.role)]),
     '',
     ENVELOPE_EXPLANATION,
   ].join('\n');
+}
+
+/**
+ * What this agent is permitted to do, and what stops it.
+ *
+ * The list of tools said what it *could* reach and nothing about what it was
+ * allowed to do with them, so an agent found out where the line was by being
+ * refused — which costs an iteration, and worse, produces the wrong prose. A
+ * model that does not know an action needed approval will write "I have sent
+ * it" after the send was denied, because from inside the conversation nothing
+ * distinguishes a refusal from a failure it should report.
+ *
+ * Every line here is derived from the grant and the gate rather than written
+ * as a general warning. That matters both ways round: a reviewer holding three
+ * read-only tools is told plainly that nothing it has can change anything,
+ * which is what stops it hedging about consequences it cannot cause; and a
+ * coder holding a shell is told exactly which of its tools will stop.
+ *
+ * This is a description of the limits, not the limits themselves. The Governor
+ * refuses the call whatever the model believes — CLAUDE.md is explicit that
+ * capability limits are the real defence and prompt wording is secondary, and
+ * that ordering is why this can afford to be plain rather than stern.
+ */
+function permissionLines(instructions: InstructionSource): string[] {
+  if (instructions.availableTools.length === 0) return [];
+
+  const stopping = instructions.availableTools
+    .map((tool) => tool.id)
+    .filter((id) => isIrreversible(id));
+
+  const lines: string[] = [];
+
+  if (stopping.length === 0) {
+    lines.push(
+      'Nothing you can call changes anything outside this run: every tool you hold reads. You do not need permission for any of it, and you cannot send, publish, buy or delete however you are asked to.',
+    );
+  } else {
+    lines.push(
+      `These do something that cannot be taken back, and a person has to approve each one before it happens: ${stopping.join(', ')}.`,
+    );
+    lines.push(
+      instructions.gated === true
+        ? 'That approval has been given for this step. Say plainly what you are about to do and to whom before you do it, so the record shows what was approved.'
+        : 'Nobody has approved this step, so a call to one of them will be refused. Do everything you can without them, then say exactly what you would do and what you need approved — and do not write as though you had already done it.',
+    );
+  }
+
+  lines.push(
+    `You have at most ${String(instructions.role.maxIterations)} turns to finish this, including the ones you spend calling tools. Work towards the answer rather than exploring.`,
+  );
+
+  return lines;
 }
 
 /**

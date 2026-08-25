@@ -3,6 +3,7 @@ import { DEFAULT_CONCURRENCY } from '@chimera/core';
 import type { Persona, RoundReport, SwarmGraph, SwarmResult } from '@chimera/core';
 import { getStore } from '../store/lifecycle.ts';
 import { report, runSwarm } from './service.ts';
+import { briefFor } from './briefing.ts';
 import { SwarmThrottle } from './throttle.ts';
 
 // A swarm thread: the population, and everything that has been asked of it.
@@ -19,6 +20,15 @@ export interface SwarmSettings {
   maxRounds: number;
   /** Above this, archetypes think and the rest follow. */
   everyoneUpTo: number;
+  /**
+   * Read around the question before writing the cast.
+   *
+   * One extra model call, and the difference between a crowd reacting to the
+   * thing and a crowd reacting to a sentence about the thing. Off by default:
+   * plenty of questions are entirely about the person's own situation and have
+   * nothing to look up, and paying for a search to establish that is a waste.
+   */
+  research?: boolean;
 }
 
 export interface SwarmTurnView {
@@ -116,8 +126,8 @@ export function archiveThread(input: { id: string }): { archived: boolean } {
  */
 export interface SwarmActivity {
   swarmId: string;
-  /** Which part of the run this is: writing the cast, thinking, writing up. */
-  stage: 'casting' | 'thinking' | 'writing' | 'done';
+  /** Which part of the run this is: reading up, casting, thinking, writing up. */
+  stage: 'reading' | 'casting' | 'thinking' | 'writing' | 'done';
   /** The agent this concerns. Empty when the event is only about the stage. */
   personaId: string;
   round: number;
@@ -188,7 +198,17 @@ export async function askSwarm(
   // it made the crowd subtly different people for no benefit.
   const cast = castOf(before);
 
-  const spec = {
+  const spec: {
+    connectionId: string;
+    model: string;
+    question: string;
+    background: string;
+    population: number;
+    maxRounds: number;
+    everyoneUpTo: number;
+    seed: string;
+    cast?: typeof cast;
+  } = {
     connectionId: input.settings.connectionId,
     model: input.settings.model,
     question: input.question,
@@ -208,7 +228,34 @@ export async function askSwarm(
   const say = (activity: Omit<SwarmActivity, 'swarmId'>): void => {
     deps.onActivity?.({ ...activity, swarmId: thread.id });
   };
-  const quiet = { personaId: '', round: 0, state: 'none' as const, position: 0, confidence: 0, said: '' };
+  const quiet = {
+    personaId: '',
+    round: 0,
+    state: 'none' as const,
+    position: 0,
+    confidence: 0,
+    said: '',
+  };
+
+  // What the crowd is told, before it is written.
+  //
+  // Appended to the thread's own history rather than replacing it: a follow-up
+  // has to reach a crowd that remembers the earlier questions *and* knows what
+  // was looked up for this one.
+  if (input.settings.research === true) {
+    say({ stage: 'reading', ...quiet });
+    const briefing = await briefFor({
+      connectionId: input.settings.connectionId,
+      model: input.settings.model,
+      question: input.question,
+    });
+    if (briefing.background !== '') {
+      spec.background =
+        spec.background === ''
+          ? `What is actually true about this:\n${briefing.background}`
+          : `${spec.background}\n\nWhat is actually true about this:\n${briefing.background}`;
+    }
+  }
 
   say({ stage: 'casting', ...quiet });
 

@@ -3,12 +3,7 @@ import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
 import './swarm.css';
-import {
-  SwarmGraph,
-  type ActivityState,
-  type GraphData,
-  type Stance,
-} from './SwarmGraph.tsx';
+import { SwarmGraph, type ActivityState, type GraphData, type Stance } from './SwarmGraph.tsx';
 
 // The swarm section: a population, and every question ever put to it.
 //
@@ -150,7 +145,7 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   // and those are a line of text rather than a repaint.
   const activity = useRef<Map<string, ActivityState>>(new Map());
   const [progress, setProgress] = useState<{
-    stage: 'casting' | 'thinking' | 'writing' | 'done';
+    stage: 'reading' | 'casting' | 'thinking' | 'writing' | 'done';
     round: number;
     asking: number;
     answered: number;
@@ -160,6 +155,7 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   const [population, setPopulation] = useState(300);
   const [maxRounds, setMaxRounds] = useState(4);
   const [everyoneUpTo, setEveryoneUpTo] = useState(24);
+  const [research, setResearch] = useState(false);
   const [renaming, setRenaming] = useState('');
   const tail = useRef<HTMLDivElement>(null);
 
@@ -199,7 +195,7 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   useEffect(() => {
     return bridge().on<{
       swarmId: string;
-      stage: 'casting' | 'thinking' | 'writing' | 'done';
+      stage: 'reading' | 'casting' | 'thinking' | 'writing' | 'done';
       personaId: string;
       round: number;
       state: 'asking' | 'answered' | 'failed' | 'none';
@@ -283,7 +279,7 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
     setQuestion('');
     setLive(null);
     activity.current.clear();
-    setProgress({ stage: 'casting', round: 0, asking: 0, answered: 0 });
+    setProgress({ stage: research ? 'reading' : 'casting', round: 0, asking: 0, answered: 0 });
 
     try {
       const answer = await bridge().invoke<{ threadId: string; name: string; turn: Turn }>(
@@ -297,6 +293,7 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
             population,
             maxRounds,
             everyoneUpTo,
+            research,
           },
         },
       );
@@ -310,7 +307,18 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
       setAsking(false);
       setLive(null);
     }
-  }, [choices, everyoneUpTo, maxRounds, modelKey, open, openThread, population, question, refresh]);
+  }, [
+    choices,
+    everyoneUpTo,
+    maxRounds,
+    modelKey,
+    open,
+    openThread,
+    population,
+    question,
+    refresh,
+    research,
+  ]);
 
   return (
     <div className="swarm" data-testid="swarm-view" data-list={listOpen ? 'open' : 'closed'}>
@@ -482,15 +490,21 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
           {asking && (
             <section className="swarm-turn swarm-turn--live" data-testid="swarm-live">
               {live === null && graph === null ? (
-                <p className="swarm-turn__how">Writing the population…</p>
+                <p className="swarm-turn__how" data-testid="swarm-progress">
+                  {progress.stage === 'reading'
+                    ? 'Reading up on it first — files you have granted, and the web'
+                    : 'Writing the population…'}
+                </p>
               ) : (
                 <>
                   <p className="swarm-turn__how" data-testid="swarm-progress">
-                    {progress.stage === 'writing'
-                      ? 'Writing up what happened'
-                      : live === null
-                        ? 'The crowd is assembled — they are starting to think'
-                        : `Round ${String(live.round)} — the population is still moving`}
+                    {progress.stage === 'reading'
+                      ? 'Reading up on it first, so they react to the thing rather than to the question'
+                      : progress.stage === 'writing'
+                        ? 'Writing up what happened'
+                        : live === null
+                          ? 'The crowd is assembled — they are starting to think'
+                          : `Round ${String(live.round)} — the population is still moving`}
                   </p>
 
                   {/* The crowd itself, while it argues. A number at the end is
@@ -505,13 +519,15 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
                       activity={activity}
                       round={live?.round ?? 0}
                       caption={
-                        progress.stage === 'writing'
-                          ? 'Every round is in — writing up what happened'
-                          : progress.stage === 'casting'
-                            ? 'Writing the cast'
-                            : `Round ${String(Math.max(1, progress.round))} · ${String(
-                                progress.answered,
-                              )} answered, ${String(progress.asking)} thinking`
+                        progress.stage === 'reading'
+                          ? 'Reading up on it'
+                          : progress.stage === 'writing'
+                            ? 'Every round is in — writing up what happened'
+                            : progress.stage === 'casting'
+                              ? 'Writing the cast'
+                              : `Round ${String(Math.max(1, progress.round))} · ${String(
+                                  progress.answered,
+                                )} answered, ${String(progress.asking)} thinking`
                       }
                     />
                   )}
@@ -625,6 +641,21 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
               </select>
             )}
 
+            <label
+              className="swarm__dial swarm__dial--check"
+              title="One extra model call: a researcher reads the folders you have granted and searches the web, and what it finds is what the crowd is told"
+            >
+              <input
+                type="checkbox"
+                data-testid="swarm-research"
+                checked={research}
+                onChange={(event) => {
+                  setResearch(event.target.checked);
+                }}
+              />
+              Read up first
+            </label>
+
             <button
               type="button"
               className="button button--primary swarm__ask"
@@ -637,6 +668,7 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
           </div>
 
           <p className="swarm__cost">
+            {research ? 'One call to read around it first, then ' : ''}
             {population <= everyoneUpTo
               ? `${String(population)} agents, each asked directly — ${String(population * maxRounds)} model calls.`
               : `${String(population)} agents; about ${String(Math.min(24, Math.max(6, Math.round(Math.sqrt(population) * 1.4))) * maxRounds)} model calls, because most of them follow rather than think.`}

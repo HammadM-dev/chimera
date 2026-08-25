@@ -593,6 +593,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
           id: tool.id,
           description: tool.description,
         })),
+        // The same flag the Governor decides on, so what the agent is told
+        // about its permissions and what it is actually permitted cannot
+        // disagree. They were two separate facts and only one of them reached
+        // the model.
+        gated: task.gated === true,
         ...(task.placement ? { placement: task.placement } : {}),
       },
       history: [...history, ...extraMessages],

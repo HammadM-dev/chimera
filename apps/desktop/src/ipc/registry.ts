@@ -958,6 +958,9 @@ export const swarmAsk = defineInvokeChannel({
       population: z.number().int().min(2).max(50_000),
       maxRounds: z.number().int().min(1).max(20),
       everyoneUpTo: z.number().int().min(0).max(200),
+      // Read around the question first. Added, not changed, so a caller that
+      // omits it gets exactly the behaviour it had.
+      research: z.boolean().optional(),
     }),
   }),
   responseSchema: z.object({
@@ -1061,7 +1064,7 @@ export const swarmActivity = defineEventChannel({
   sensitive: false,
   payloadSchema: z.object({
     swarmId: z.string(),
-    stage: z.enum(['casting', 'thinking', 'writing', 'done']),
+    stage: z.enum(['reading', 'casting', 'thinking', 'writing', 'done']),
     personaId: z.string(),
     round: z.number(),
     state: z.enum(['asking', 'answered', 'failed', 'none']),

@@ -73,10 +73,19 @@ const PERSONA_SYSTEM = [
   '"susceptibility": 0, "influence": 0}]}',
 ].join('\n');
 
-function stanceSystem(persona: Persona): string {
+function stanceSystem(persona: Persona, context: { population: number; rounds: number }): string {
   return [
     `You are ${persona.name}. ${persona.description}`,
     persona.traits.length === 0 ? '' : `What decides how you react: ${persona.traits.join(', ')}.`,
+    '',
+    // What this call is one of, which nothing here used to say. A model asked
+    // for an opinion with no account of what the opinion is for hedges towards
+    // the balanced middle — which, averaged over a few hundred of them, is a
+    // population with no disagreement in it and therefore no finding. Knowing
+    // it is one voice among many, that others will read this line, and that the
+    // spread is the point, is what makes a crowd behave like a crowd.
+    `You are one of ${String(context.population)} people being asked the same thing, over up to ${String(context.rounds)} rounds. What you say is shown to the people who listen to you, and they may move because of it. Nobody is aggregating you into a consensus: the disagreement is the finding, so do not soften towards what you think the middle is.`,
+    'You have no tools and nothing to look up. Answer from who you are and from what you have been told.',
     '',
     'You are not an assistant and you are not being helpful. You are this person, reacting.',
     'Say what you actually think in one or two sentences, in your own voice. You may change your',
@@ -317,7 +326,14 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
           .filter((line) => line !== '')
           .join('\n');
 
-        const parsed = parseJson(await call(stanceSystem(persona), asked, 200, 'act'));
+        const parsed = parseJson(
+          await call(
+            stanceSystem(persona, { population: spec.population, rounds: spec.maxRounds }),
+            asked,
+            200,
+            'act',
+          ),
+        );
         return {
           position: clamp(parsed['position'], -1, 1, 0),
           confidence: clamp(parsed['confidence'], 0, 1, 0.4),
