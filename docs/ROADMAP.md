@@ -102,6 +102,107 @@ environment and its tools did nothing — and the failure was swallowed by a
 `catch` that dropped the variable silently. Both fixed: the pattern covers every
 scope, and a key that cannot be read is reported on the plugin's own row.
 
+### M11-5: The crowd is something to watch
+
+STATUS: **done.** The swarm graph animates while a run is in flight, carries the
+thinkers' names, and fills the window on request. Every model call announces
+itself going out and coming back, so agents light up one at a time in the order
+the provider answered, and each node recolours the moment its own answer lands
+rather than at the end of a round.
+
+DECISION: **a round is too coarse a unit of progress.** A round of two dozen
+agents against a rate-limited free model is minutes long, and for all of it the
+window could only say "still going". The per-agent feed is a separate, finer
+event channel: eight flat fields, at most two events per thinking agent per
+round.
+
+DECISION: **the event schema has no optional fields.** `z.object` drops keys it
+does not name, silently and at both ends, which is how the graph itself came to
+be stored correctly and thrown away at the IPC boundary. Absent values are sent
+as empty rather than omitted.
+
+BUG: the graph did not stutter because the physics were slow. Every graph in a
+thread — one per question ever asked of that crowd — ran its own 60fps loop
+for good, redrawing several hundred arcs and a thousand hairlines whether or not
+anything had changed. A finished graph now draws once and stops. The
+neighbourhood grid added alongside it is a real improvement (19,004 pairs a step
+at the drawn cap rather than 51,040) and was not the fault; the profile that
+suggested it came from an environment about a thousand times slower than the
+machine this runs on, which is worth remembering before optimising from a
+measurement again.
+
+### M11-6: A swarm reads before it reacts
+
+STATUS: **done.** With "Read up first" on, one Researcher gathers the facts
+before the cast is written — the folders the user has granted, web search, and
+page fetches — through the same agent loop, Governor and trace as any other
+agent. What it writes becomes the background every persona is given.
+
+DECISION: **off by default.** Plenty of questions are entirely about the
+person's own situation and have nothing to look up; paying for a search to
+establish that is waste.
+
+DECISION: **a failed briefing leaves the swarm less informed rather than
+refusing to run.** The alternative is declining to answer because a search
+engine was busy.
+
+### M11-7: Apps, and an operator pointed at one of them
+
+STATUS: **done.** Composio has its own section rather than a panel three scrolls
+down Providers: the whole path from never having heard of it to a working
+connected app, each app's own guide, and a sign-in that completes on its own.
+An App operator step chooses which connected apps it uses, per step, the same
+way it chooses a model.
+
+DECISION: **each connected app is its own tool server** — `composio-gmail`,
+`composio-slack` — the same arrangement the mailboxes already use, and a
+narrowed step is granted one of them. The other apps' tools are not
+deprioritised in its list; they are absent from it.
+
+DECISION: **a tool's app is resolved by asking Composio, never from its slug.**
+`ZOHO` and `ZOHO_MAIL` are both real toolkits and twenty-five pairs in the
+catalogue collide the same way, so a prefix rule would put one app's tools
+inside another app's limit.
+
+DECISION: **Composio's own `toolkits` filter is not a capability limit.**
+Measured live: `search({toolkits:['GMAIL']})` came back with Outlook and Resend
+in it, and `['gmail']` came back with AgentMail and no Gmail at all. It is sent
+as a ranking hint; the limit is enforced on this side.
+
+BUG: Connect said "Opening" and did nothing, for its whole life. The renderer
+called `window.open`; the navigation guard denies that for every origin but the
+app's own, correctly and by design. The browser is opened by the main process
+now, against a host allowlist.
+
+BUG: **an agent shipped after a workspace was created never reached it.** The
+starter roster was seeded once, guarded by "is the table empty", so
+`app-operator` was in the palette, in the docs, and in nobody's existing
+workspace — the honest answer to "where is that agent?" was that it was
+nowhere. Missing agents are added on launch, by id, without overwriting one the
+user has edited.
+
+### M11-8: An agent knows what it is allowed to do
+
+STATUS: **done.** Every agent's system message now names which of its own tools
+stop for a person, whether that approval has been given for this step, and how
+many turns it has. An agent holding only reads is told plainly that nothing it
+has can change anything.
+
+DECISION: **derived from the grant and the gate, never written as a general
+warning.** A reviewer that does not know it is harmless hedges about
+consequences it cannot cause, and that is as much of a defect as an agent that
+oversteps.
+
+The failure this closes is not that a forbidden call went through — the
+Governor refuses it either way. It is that a model which does not know an action
+needed approval writes "I have sent it" after the send was denied, because from
+inside the conversation a refusal and a reportable failure look identical.
+
+Swarm personas got the same treatment: each knows it is one voice of many over a
+known number of rounds, that what it says is read by the people who listen to
+it, and that the disagreement is the finding rather than something to average
+away.
+
 ## How this plan is followed
 
 Each ticket keeps its original acceptance criteria unless it says otherwise. `DECISION:` blocks record choices made while building, including the ones that turned out wrong; they are not edited after the fact. A ticket is done when a stranger can verify it from the outside — for anything with a screen, that means an end-to-end test that drives the app the way a person would, because that is the standard three shipped defects failed to meet.
