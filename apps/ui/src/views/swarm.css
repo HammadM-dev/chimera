@@ -402,3 +402,118 @@
     transition: none;
   }
 }
+
+/* ---- The population, drawn -----------------------------------------------
+ *
+ * The canvas is the subject and everything else defers to it: a legend small
+ * enough to read once and forget, and a detail panel that only exists after
+ * somebody has clicked a node. */
+
+.swarm-graph {
+  position: relative;
+  margin: var(--space-3) 0;
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-canvas);
+  overflow: hidden;
+}
+
+.swarm-graph--empty {
+  padding: var(--space-4);
+  text-align: center;
+}
+
+.swarm-graph__stage {
+  height: 320px;
+  width: 100%;
+}
+
+.swarm-graph__canvas {
+  display: block;
+}
+
+.swarm-graph__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-top: var(--border-width) solid var(--border-hairline);
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+}
+
+.swarm-graph__key {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.swarm-graph__swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.swarm-graph__swatch--against {
+  background: var(--semantic-danger);
+}
+
+.swarm-graph__swatch--for {
+  background: var(--semantic-success);
+}
+
+.swarm-graph__swatch--undecided {
+  background: var(--text-muted);
+}
+
+.swarm-graph__count {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Over the canvas rather than beside it: the graph is already as wide as the
+ * column, and pushing it narrower to make room would shrink the thing being
+ * read to make space for a note about it. */
+.swarm-graph__detail {
+  position: absolute;
+  left: var(--space-3);
+  bottom: 46px;
+  max-width: 300px;
+  padding: var(--space-2) var(--space-3);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-control);
+  background: var(--surface-popover);
+  box-shadow: var(--shadow-raised);
+}
+
+.swarm-graph__who {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.swarm-graph__name {
+  color: var(--text-primary);
+  font-size: var(--type-meta);
+}
+
+.swarm-graph__role {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+}
+
+.swarm-graph__stance {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  text-transform: capitalize;
+}
+
+.swarm-graph__said {
+  margin: var(--space-1) 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  line-height: 1.45;
+  font-style: italic;
+}

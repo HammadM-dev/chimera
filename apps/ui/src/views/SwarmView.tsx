@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
 import './swarm.css';
+import { SwarmGraph, type GraphData, type Stance } from './SwarmGraph.tsx';
 
 // The swarm section: a population, and every question ever put to it.
 //
@@ -31,6 +32,8 @@ interface Round {
   movement: number;
   distribution: Distribution;
   said: { name: string; position: number; said: string }[];
+  /** Absent on rounds recorded before the graph existed. */
+  stances?: Stance[];
 }
 
 interface Result {
@@ -41,6 +44,8 @@ interface Result {
   final: Distribution;
   rounds: Round[];
   personas: { id: string; name: string; description: string; kind: string; influence: number }[];
+  /** Absent on threads recorded before the graph existed. */
+  graph?: GraphData;
 }
 
 interface Turn {
@@ -132,6 +137,8 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   const [listOpen, setListOpen] = useState(true);
   const [question, setQuestion] = useState('');
   const [asking, setAsking] = useState(false);
+  const [graph, setGraph] = useState<GraphData | null>(null);
+  const [stances, setStances] = useState<Stance[]>([]);
   const [live, setLive] = useState<Round | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [modelKey, setModelKey] = useState('');
@@ -157,8 +164,16 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   // Rounds as they land. A population of two thousand takes a minute, and a
   // minute of spinner is a minute of wondering whether it broke.
   useEffect(() => {
-    return bridge().on<Round & { swarmId: string }>('swarm:round', (round) => {
+    return bridge().on<GraphData & { swarmId: string }>('swarm:population', (population) => {
+      setGraph(population);
+      setStances([]);
+    });
+  }, []);
+
+  useEffect(() => {
+    return bridge().on<Round & { swarmId: string; stances?: Stance[] }>('swarm:round', (round) => {
       setLive(round);
+      if (round.stances) setStances(round.stances);
     });
   }, []);
 
@@ -353,6 +368,22 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
                 </>
               )}
 
+              {turn.result?.graph && turn.result.graph.nodes.length > 0 && (
+                <SwarmGraph
+                  graph={turn.result.graph}
+                  stances={turn.result.rounds[turn.result.rounds.length - 1]?.stances ?? []}
+                  said={
+                    new Map(
+                      (turn.result.rounds[turn.result.rounds.length - 1]?.said ?? []).map((one) => [
+                        one.name,
+                        one.said,
+                      ]),
+                    )
+                  }
+                  live={false}
+                />
+              )}
+
               <div className="swarm-turn__answer">{turn.answer}</div>
 
               {turn.result && turn.result.rounds.length > 0 && (
@@ -380,17 +411,38 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
 
           {asking && (
             <section className="swarm-turn swarm-turn--live" data-testid="swarm-live">
-              {live === null ? (
+              {live === null && graph === null ? (
                 <p className="swarm-turn__how">Writing the population…</p>
               ) : (
                 <>
-                  <p className="swarm-turn__how">Round {live.round} — the population is still moving</p>
-                  <Split split={live.distribution} />
-                  <ul className="round__voices">
-                    {live.said.slice(0, 6).map((voice, index) => (
-                      <Voice key={`${voice.name}-${String(index)}`} voice={voice} />
-                    ))}
-                  </ul>
+                  <p className="swarm-turn__how">
+                    {live === null
+                      ? 'The crowd is assembled — they are starting to think'
+                      : `Round ${String(live.round)} — the population is still moving`}
+                  </p>
+
+                  {/* The crowd itself, while it argues. A number at the end is
+                      a poor account of a few hundred people changing their
+                      minds; this is the same information as a thing to watch. */}
+                  {graph !== null && (
+                    <SwarmGraph
+                      graph={graph}
+                      stances={stances}
+                      said={new Map((live?.said ?? []).map((one) => [one.name, one.said]))}
+                      live
+                    />
+                  )}
+
+                  {live !== null && (
+                    <>
+                      <Split split={live.distribution} />
+                      <ul className="round__voices">
+                        {live.said.slice(0, 6).map((voice, index) => (
+                          <Voice key={`${voice.name}-${String(index)}`} voice={voice} />
+                        ))}
+                      </ul>
+                    </>
+                  )}
                 </>
               )}
             </section>

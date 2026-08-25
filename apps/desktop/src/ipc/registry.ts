@@ -735,6 +735,15 @@ export const connectionCatalogue = defineInvokeChannel({
   }),
 });
 
+/** One app's logo, as data. See `toolkitLogo` for why it cannot be a URL. */
+export const composioLogo = defineInvokeChannel({
+  channel: 'composio:logo',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ slug: z.string(), url: z.string() }),
+  responseSchema: z.object({ dataUri: z.string() }),
+});
+
 export const composioToolkits = defineInvokeChannel({
   channel: 'composio:toolkits',
   v: 1,
@@ -752,6 +761,12 @@ export const composioToolkits = defineInvokeChannel({
         slug: z.string(),
         isNoAuth: z.boolean(),
         connected: z.boolean(),
+        description: z.string(),
+        logo: z.string(),
+        categories: z.array(z.string()),
+        toolsCount: z.number(),
+        authSchemes: z.array(z.string()),
+        appUrl: z.string(),
       }),
     ),
     reason: z.string(),
@@ -902,6 +917,34 @@ export const swarmForRun = defineInvokeChannel({
 
 // Rounds as they happen, so a population of two thousand is something to watch
 // rather than a spinner.
+/**
+ * The population, pushed once it exists.
+ *
+ * Separate from `swarm:round` because it is sent once and is much larger: a
+ * few hundred nodes and the ties between them, where a round is a handful of
+ * numbers. Putting the graph on every round would send it twenty times over.
+ */
+export const swarmPopulation = defineEventChannel({
+  channel: 'swarm:population',
+  v: 1,
+  sensitive: false,
+  payloadSchema: z.object({
+    swarmId: z.string(),
+    nodes: z.array(
+      z.object({
+        id: z.string(),
+        name: z.string(),
+        kind: z.enum(['archetype', 'follower']),
+        follows: z.string(),
+        influence: z.number(),
+      }),
+    ),
+    ties: z.array(z.object({ from: z.string(), to: z.string(), weight: z.number() })),
+    drawn: z.number(),
+    total: z.number(),
+  }),
+});
+
 export const swarmRound = defineEventChannel({
   channel: 'swarm:round',
   v: 1,
@@ -917,6 +960,7 @@ export const swarmRound = defineEventChannel({
       weighted: z.number(),
     }),
     said: z.array(z.object({ name: z.string(), position: z.number(), said: z.string() })),
+    stances: z.array(z.object({ id: z.string(), position: z.number(), confidence: z.number() })),
   }),
 });
 
@@ -1767,10 +1811,12 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   swarmRename,
   swarmArchive,
   swarmForRun,
+  swarmPopulation,
   swarmRound,
   composioGet,
   composioSet,
   connectionCatalogue,
+  composioLogo,
   composioToolkits,
   composioSearch,
   composioConnect,

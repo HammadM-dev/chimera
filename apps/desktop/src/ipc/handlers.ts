@@ -80,6 +80,7 @@ import {
   getComposio,
   listToolkits,
   searchTools,
+  toolkitLogo,
   setComposio,
 } from '../composio/service.ts';
 import {
@@ -232,6 +233,7 @@ registerHandler(channels.composioSet, (payload) => setComposio(payload));
 registerHandler(channels.connectionCatalogue, (input) => catalogueOf(input.connectionId));
 registerHandler(channels.composioToolkits, (input) => listToolkits(input));
 registerHandler(channels.composioSearch, (input) => searchTools(input));
+registerHandler(channels.composioLogo, (input) => toolkitLogo(input));
 registerHandler(channels.composioConnect, (payload) => connectToolkit(payload));
 
 registerHandler(channels.swarmList, () => listThreads());
@@ -244,6 +246,21 @@ registerHandler(channels.swarmAsk, (payload, context) =>
     // Rounds are pushed as they land. A population of two thousand takes a
     // minute of real time and should be something to watch rather than a
     // spinner that eventually turns into an answer.
+    onPopulation: (graph) => {
+      const channel = getChannel('swarm:population');
+      if (!channel || context.webContents.isDestroyed()) return;
+      context.webContents.send(EVENT_CHANNEL, {
+        v: channel.v,
+        channel: 'swarm:population',
+        payload: {
+          swarmId: graph.swarmId,
+          nodes: graph.nodes,
+          ties: graph.ties,
+          drawn: graph.drawn,
+          total: graph.total,
+        },
+      });
+    },
     onRound: (round) => {
       const channel = getChannel('swarm:round');
       if (!channel || context.webContents.isDestroyed()) return;
@@ -256,6 +273,7 @@ registerHandler(channels.swarmAsk, (payload, context) =>
           movement: round.movement,
           distribution: round.distribution,
           said: round.said,
+          stances: round.stances,
         },
       });
     },
