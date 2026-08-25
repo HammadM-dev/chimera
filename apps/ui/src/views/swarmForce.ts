@@ -72,16 +72,40 @@ export function layoutOf(
 ): Layout {
   const index = new Map(nodes.map((node, at) => [node.id, at]));
 
+  // Archetypes first, spread evenly around a ring; each follower starts beside
+  // the one it listens to.
+  //
+  // This was a single ring for everybody, and it produced exactly the wrong
+  // picture: a sunburst, with the archetypes collapsed into one knot at the
+  // centre and a hundred followers in a perfect circle around them. Springs
+  // pull a follower towards its archetype, so if they all start equidistant
+  // from all of them there is nothing to break the symmetry, and the layout
+  // has no reason to form the clusters that are the whole point.
+  const archetypes = nodes.filter((node) => node.kind === 'archetype');
+  const seats = new Map(archetypes.map((node, at) => [node.id, at]));
+  const spread = Math.max(1, archetypes.length);
+
+  const seatOf = (at: number): { x: number; y: number } => {
+    const angle = (at / spread) * Math.PI * 2;
+    return {
+      x: size.width / 2 + Math.cos(angle) * size.width * 0.3,
+      y: size.height / 2 + Math.sin(angle) * size.height * 0.3,
+    };
+  };
+
   const placed: ForceNode[] = nodes.map((node, at) => {
-    // A deterministic starting ring: archetypes near the middle, their
-    // followers further out, spread by index. Starting from a shape rather than
-    // from noise means far fewer steps to something legible.
-    const angle = (at / Math.max(1, nodes.length)) * Math.PI * 2;
-    const ring = node.kind === 'archetype' ? 0.22 : 0.42;
+    const seat = seats.get(node.kind === 'archetype' ? node.id : node.follows);
+    const home = seatOf(seat ?? at % spread);
+    // Deterministic scatter around the seat, from the index — so a follower
+    // does not start exactly on top of its archetype, and reopening a thread
+    // draws the same arrangement.
+    const spin = at * 2.39996;
+    const reach = node.kind === 'archetype' ? 0 : 18 + ((at * 7) % 46);
+
     return {
       id: node.id,
-      x: size.width / 2 + Math.cos(angle) * size.width * ring,
-      y: size.height / 2 + Math.sin(angle) * size.height * ring,
+      x: home.x + Math.cos(spin) * reach,
+      y: home.y + Math.sin(spin) * reach,
       vx: 0,
       vy: 0,
       radius: node.kind === 'archetype' ? 5 + node.influence * 5 : 2.5 + node.influence * 2,
@@ -96,11 +120,13 @@ export function layoutOf(
 
   let movement = Number.POSITIVE_INFINITY;
 
-  // Repulsion is shared out as the crowd grows. The force on one node is the
-  // sum over every other, so a fixed constant means three hundred nodes push
-  // each other roughly ten times as hard as thirty — the same layout at a
-  // different size behaves like a different simulation.
-  const repulsion = REPULSION * (24 / Math.max(24, placed.length));
+  // Repulsion eases off as the crowd grows, but by the square root rather than
+  // linearly. Dividing by the headcount outright made it far too weak to
+  // matter at a hundred nodes: everybody stayed wherever they started and the
+  // springs did all the work, which is how the first version came out as a
+  // ring that never moved. Stability comes from the speed cap below, not from
+  // making the forces small.
+  const repulsion = REPULSION * Math.sqrt(24 / Math.max(24, placed.length));
 
   const step = (): void => {
     let moved = 0;

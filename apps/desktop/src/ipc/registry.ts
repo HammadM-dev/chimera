@@ -806,6 +806,11 @@ const swarmResultSchema = z.object({
         weighted: z.number(),
       }),
       said: z.array(z.object({ name: z.string(), position: z.number(), said: z.string() })),
+      // Optional: threads recorded before the graph existed have no stances,
+      // and a schema that demanded them would make those threads unreadable.
+      stances: z
+        .array(z.object({ id: z.string(), position: z.number(), confidence: z.number() }))
+        .optional(),
     }),
   ),
   personas: z.array(
@@ -820,6 +825,29 @@ const swarmResultSchema = z.object({
       follows: z.string(),
     }),
   ),
+  // The drawn population. Optional for the same reason as `stances` above.
+  //
+  // Left out when this was added, and the omission is invisible in a way worth
+  // recording: a Zod object strips what it does not name, so the graph was
+  // stored correctly, read back correctly, and then quietly removed on its way
+  // through the IPC boundary. Nothing errored — the picture was simply absent
+  // on every finished thread while working perfectly during the run.
+  graph: z
+    .object({
+      nodes: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          kind: z.enum(['archetype', 'follower']),
+          follows: z.string(),
+          influence: z.number(),
+        }),
+      ),
+      ties: z.array(z.object({ from: z.string(), to: z.string(), weight: z.number() })),
+      drawn: z.number(),
+      total: z.number(),
+    })
+    .optional(),
 });
 
 const swarmTurnSchema = z.object({

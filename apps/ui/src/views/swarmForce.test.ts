@@ -117,3 +117,58 @@ test('a tie naming a node that is not drawn is dropped, not crashed on', () => {
   assert.equal(layout.links.length, 0);
   layout.step();
 });
+
+test('a realistic population forms clusters and uses the canvas', () => {
+  // The picture this exists to produce, asserted as numbers. The first version
+  // drew a sunburst: every archetype collapsed into one knot at the centre and
+  // every follower on a single perfect ring around them, because they all
+  // started equidistant from all of them and nothing broke the symmetry.
+  const nodes = [
+    ...Array.from({ length: 8 }, (_, at) => ({
+      id: `a${String(at)}`,
+      influence: 0.6,
+      kind: 'archetype' as const,
+      follows: '',
+    })),
+    ...Array.from({ length: 112 }, (_, at) => ({
+      id: `f${String(at)}`,
+      influence: 0.3,
+      kind: 'follower' as const,
+      follows: `a${String(at % 8)}`,
+    })),
+  ];
+  const ties = nodes
+    .filter((node) => node.kind === 'follower')
+    .map((node) => ({ from: node.id, to: node.follows, weight: 0.8 }));
+
+  const stage = { width: 900, height: 320 };
+  const layout = layoutOf(nodes, ties, stage);
+  for (let i = 0; i < 900 && !layout.settled; i += 1) layout.step();
+
+  const at = (id: string) => layout.nodes[nodes.findIndex((node) => node.id === id)];
+  const gap = (one: string, other: string) => {
+    const a = at(one);
+    const b = at(other);
+    return Math.hypot((a?.x ?? 0) - (b?.x ?? 0), (a?.y ?? 0) - (b?.y ?? 0));
+  };
+
+  // Nearly every follower should sit closest to the archetype it listens to.
+  let clustered = 0;
+  const followers = nodes.filter((node) => node.kind === 'follower');
+  for (const follower of followers) {
+    const nearest = nodes
+      .filter((node) => node.kind === 'archetype')
+      .map((node) => ({ id: node.id, distance: gap(follower.id, node.id) }))
+      .sort((a, b) => a.distance - b.distance)[0];
+    if (nearest?.id === follower.follows) clustered += 1;
+  }
+  assert.ok(
+    clustered >= followers.length * 0.9,
+    `expected clusters; ${String(clustered)}/${String(followers.length)} followers were nearest their own`,
+  );
+
+  // And it should fill the stage rather than huddling in the middle.
+  const xs = layout.nodes.map((node) => node.x);
+  const span = Math.max(...xs) - Math.min(...xs);
+  assert.ok(span > stage.width * 0.6, `expected the layout to spread; span was ${String(Math.round(span))}`);
+});
