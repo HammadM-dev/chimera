@@ -104,7 +104,17 @@ test.describe('M0-8 splash sequence', () => {
       await page.waitForLoadState('domcontentloaded');
 
       expect(page.url()).toContain('splash=1');
-      await expect(page.locator('.splash')).toBeAttached();
+      // Twenty seconds, not the five `expect` defaults to. Measured on this
+      // machine: Electron takes 21–28 seconds to produce a window, another
+      // ~3 seconds to fire domcontentloaded, and ~2 seconds more for React to
+      // boot and mount the splash. Two of five against a budget of five is one
+      // slow moment from failing, and it started failing. The sibling test has
+      // always used `waitForSelector`, whose default is thirty.
+      //
+      // Nothing after this line is affected: the schedule assertions are what
+      // this test is about, and they read declared CSS values rather than
+      // wall-clock time.
+      await expect(page.locator('.splash')).toBeAttached({ timeout: 20_000 });
 
       await captureSchedule(page);
       const animations = await readSchedule(page);
