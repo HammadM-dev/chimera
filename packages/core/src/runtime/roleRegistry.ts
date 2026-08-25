@@ -189,7 +189,7 @@ export const STARTER_ROLES: readonly Role[] = [
   },
   {
     id: 'app-operator',
-    name: 'App operator',
+    name: 'App operator (Composio)',
     systemPrompt: [
       'You do things in the apps somebody already uses — Gmail, Slack, Notion, Jira, Sheets, HubSpot, Stripe and several hundred others — through Composio.',
       '',

@@ -22,8 +22,30 @@ function backend(over: Partial<ComposioBackend> = {}): ComposioBackend {
     toolkits: (input) =>
       Promise.resolve(
         [
-          { name: 'Gmail', slug: 'gmail', isNoAuth: false, connected: true },
-          { name: 'Hacker News', slug: 'hackernews', isNoAuth: true, connected: false },
+          {
+            name: 'Gmail',
+            slug: 'gmail',
+            isNoAuth: false,
+            connected: true,
+            description: 'Google’s email service.',
+            logo: 'https://logos.composio.dev/api/gmail',
+            categories: ['email'],
+            toolsCount: 61,
+            authSchemes: ['OAUTH2'],
+            appUrl: 'https://mail.google.com',
+          },
+          {
+            name: 'Hacker News',
+            slug: 'hackernews',
+            isNoAuth: true,
+            connected: false,
+            description: 'Reads stories and comments.',
+            logo: '',
+            categories: ['news'],
+            toolsCount: 6,
+            authSchemes: [],
+            appUrl: '',
+          },
         ].filter(
           (toolkit) =>
             (input?.search === undefined || toolkit.slug.includes(input.search)) &&

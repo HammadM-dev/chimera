@@ -1116,3 +1116,189 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+
+/* ---- The Composio app directory -----------------------------------------
+ *
+ * A thousand apps, and the job is letting somebody find one and understand it
+ * without leaving the panel. A row is a logo, a name, a sentence about what the
+ * app is, and one button — which is enough to decide with, where a name alone
+ * was not.
+ *
+ * Rows rather than a card grid, deliberately: names and descriptions vary
+ * wildly in length, and a grid of unequal cards in a narrow panel reads as
+ * debris. A list has one strong left edge and scans in one direction. */
+
+.directory__bar {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.directory__bar .control {
+  flex: 1;
+  min-width: 0;
+}
+
+.directory__meta {
+  margin-top: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+.directory__cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+}
+
+.cat {
+  padding: 2px var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  text-transform: capitalize;
+  cursor: pointer;
+  transition:
+    color var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard);
+}
+
+.cat:hover {
+  color: var(--text-primary);
+  border-color: var(--border-stronger);
+}
+
+.cat--on {
+  color: var(--text-primary);
+  border-color: var(--border-control);
+}
+
+.directory__list {
+  max-height: 460px;
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.app {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-2);
+  border-radius: var(--radius-control);
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.app:hover {
+  background: var(--surface-raised);
+}
+
+/* A connected app is settled, and reads as settled: a rule down the side,
+ * the same device the shorter list used, so the two agree. */
+.app--on {
+  border-left: 2px solid var(--semantic-success);
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.app__logo {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  border-radius: var(--radius-control);
+  object-fit: contain;
+  /* Many of these logos are dark marks drawn for a white page. A light plate
+   * behind them keeps them legible in the dark theme without inverting
+   * anybody's brand colours. */
+  background: var(--surface-popover);
+  padding: 3px;
+}
+
+.app__logo--letter {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: var(--surface-raised);
+  border: var(--border-width) solid var(--border-hairline);
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  text-transform: uppercase;
+}
+
+.app__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.app__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.app__name {
+  color: var(--text-primary);
+  font-size: var(--type-meta);
+}
+
+.app__count {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  flex: none;
+}
+
+.app__what {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.app__guide {
+  margin-top: var(--space-2);
+  padding-left: var(--space-2);
+  border-left: var(--border-width) solid var(--border-hairline);
+}
+
+.app__step {
+  margin: 0 0 var(--space-1);
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  line-height: 1.5;
+}
+
+.app__step--url {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.app__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.app__more {
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.app__more:hover {
+  color: var(--text-primary);
+}

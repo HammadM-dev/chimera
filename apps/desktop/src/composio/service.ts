@@ -38,15 +38,6 @@ const DEFAULT: ComposioSettings = { enabled: false, authRef: '', userId: '' };
 /** Composio rejects anything above fifty. */
 const TOOLKIT_PAGE_SIZE = 50;
 
-/**
- * How many pages to walk before stopping.
- *
- * Six is three hundred apps, which is more than a person scrolls and four
- * round trips fewer than it sounds. A search narrows to one page in practice,
- * so this bound is only reached by the unfiltered list.
- */
-const MAX_TOOLKIT_PAGES = 6;
-
 function read(): ComposioSettings {
   const stored = settingsRepository.read(getStore()).composio;
   return stored ?? DEFAULT;
@@ -150,6 +141,21 @@ interface SearchAnswer {
   nextStepsGuidance?: string[];
 }
 
+/** One entry of Composio's account-level catalogue. Verified live 2026-08-25. */
+interface CatalogueToolkit {
+  name?: string;
+  slug?: string;
+  noAuth?: boolean;
+  authSchemes?: string[];
+  meta?: {
+    description?: string;
+    logo?: string;
+    appUrl?: string;
+    toolsCount?: number;
+    categories?: { slug?: string; name?: string }[];
+  };
+}
+
 async function session(): Promise<{
   toolkits: (options?: {
     search?: string;
@@ -170,6 +176,32 @@ async function session(): Promise<{
   const { Composio } = await import('@composio/core');
   const composio = new Composio({ apiKey: key });
   return (await composio.create(read().userId)) as never;
+}
+
+/**
+ * The whole directory, with what each app is and what it will ask for.
+ *
+ * A different endpoint from the session's `toolkits()`: that one knows which
+ * apps this workspace has signed into and nothing else about them, while this
+ * one carries the description, the logo, the categories and the auth scheme and
+ * knows nothing about connections. The panel needs both, so both are read and
+ * merged.
+ *
+ * One call, up to a thousand apps — the entire catalogue, which is what makes
+ * searching and filtering here honest rather than a search of whatever page
+ * happened to load.
+ */
+async function catalogue(): Promise<CatalogueToolkit[]> {
+  const key = apiKey();
+  if (key === '') return [];
+
+  const { Composio } = await import('@composio/core');
+  const composio = new Composio({ apiKey: key });
+  // `get`, not `getToolkits`: the latter is the same call but marked private
+  // in the SDK's types, and reaching past that would break on any release that
+  // took the word seriously.
+  const listed = (await composio.toolkits.get({ limit: 1000 })) as unknown;
+  return Array.isArray(listed) ? (listed as CatalogueToolkit[]) : [];
 }
 
 /**
@@ -236,41 +268,64 @@ export function composioBackend(): ComposioBackend {
       const live = await session();
       if (live === null) throw new Error(offline);
 
-      // Composio serves these a page at a time — 50 at most, and there were 28
-      // pages of them the day this was written. The first version took the
-      // default page and returned it, so the panel showed twenty apps out of
-      // roughly fourteen hundred and gave no sign that it was a first page.
-      //
-      // Paging through all of them is 28 round trips for a list nobody reads
-      // end to end, so a search is passed to the server instead and the paging
-      // here is bounded. Unfiltered, this is "the first few hundred", and the
-      // panel says so rather than implying it is everything.
-      const collected: ComposioToolkit[] = [];
-      let cursor: string | undefined;
-
-      for (let page = 0; page < MAX_TOOLKIT_PAGES; page += 1) {
-        const answer = await live.toolkits({
-          limit: TOOLKIT_PAGE_SIZE,
-          ...(input?.search === undefined || input.search === '' ? {} : { search: input.search }),
-          ...(input?.connectedOnly === true ? { isConnected: true } : {}),
-          ...(cursor === undefined ? {} : { cursor }),
-        });
-
-        for (const item of answer.items) {
-          collected.push({
-            name: item.name,
-            slug: item.slug,
-            isNoAuth: item.isNoAuth,
-            connected: item.connection?.isActive === true,
-          });
+      // Which apps this workspace has actually signed into. One page is
+      // plenty: nobody connects fifty.
+      const connected = new Set<string>();
+      try {
+        const signedIn = await live.toolkits({ limit: TOOLKIT_PAGE_SIZE, isConnected: true });
+        for (const item of signedIn.items) {
+          if (item.connection?.isActive === true) connected.add(item.slug);
         }
-
-        const next = answer.cursor;
-        if (next === null || next === undefined || next === '' || answer.items.length === 0) break;
-        cursor = next;
+      } catch {
+        // A directory with every app marked "not connected" is still worth
+        // showing; each row's Connect button tells the truth either way.
       }
 
-      return collected;
+      const all = (await catalogue()).flatMap((entry): ComposioToolkit[] => {
+        const slug = entry.slug ?? '';
+        if (slug === '') return [];
+        return [
+          {
+            name: entry.name ?? slug,
+            slug,
+            isNoAuth: entry.noAuth === true,
+            connected: connected.has(slug),
+            description: entry.meta?.description ?? '',
+            logo: entry.meta?.logo ?? '',
+            categories: (entry.meta?.categories ?? [])
+              .map((category) => category.slug ?? '')
+              .filter((category) => category !== ''),
+            toolsCount: entry.meta?.toolsCount ?? 0,
+            authSchemes: entry.authSchemes ?? [],
+            appUrl: entry.meta?.appUrl ?? '',
+          },
+        ];
+      });
+
+      // Filtering happens here rather than at Composio's end, and that is
+      // correct now for the reason it was wrong before: this is the whole
+      // catalogue, not the first page of it. Their `search` parameter ranks
+      // rather than filters — asking for "gmail" returned a thousand rows
+      // beginning with Gmail — so using it would quietly show everything.
+      const needle = (input?.search ?? '').trim().toLowerCase();
+      const wanted = all.filter(
+        (toolkit) =>
+          (input?.connectedOnly !== true || toolkit.connected) &&
+          (needle === '' ||
+            toolkit.name.toLowerCase().includes(needle) ||
+            toolkit.slug.includes(needle) ||
+            toolkit.description.toLowerCase().includes(needle) ||
+            toolkit.categories.some((category) => category.includes(needle))),
+      );
+
+      // Connected first, then the ones with the most to offer.
+      wanted.sort(
+        (a, b) =>
+          Number(b.connected) - Number(a.connected) ||
+          b.toolsCount - a.toolsCount ||
+          a.name.localeCompare(b.name),
+      );
+      return wanted;
     },
 
     async search(input): Promise<ComposioSearchResult> {
@@ -323,6 +378,66 @@ export async function connectToolkit(input: {
 }
 
 /** What the Providers panel lists. Empty when Composio is off or unreachable. */
+/**
+ * App logos, fetched here and handed to the renderer as data.
+ *
+ * The renderer has no network egress of its own — `connect-src 'self'` and
+ * `img-src 'self' data: blob:` — which is deliberate and worth keeping: it is
+ * the property that makes a compromised renderer unable to phone anywhere. So
+ * an `<img src="https://logos.composio.dev/...">` simply does not load, and a
+ * directory of a thousand apps with no logos is a directory of a thousand
+ * identical grey rows.
+ *
+ * Cached for the life of the process. A logo is a few kilobytes and never
+ * changes; refetching one per render of a scrolling list would be a request
+ * storm for no benefit.
+ */
+const logos = new Map<string, string>();
+
+/** Beyond this a "logo" is something else, and not something to inline. */
+const MAX_LOGO_BYTES = 256 * 1024;
+
+export async function toolkitLogo(input: {
+  slug: string;
+  url: string;
+}): Promise<{ dataUri: string }> {
+  const cached = logos.get(input.slug);
+  if (cached !== undefined) return { dataUri: cached };
+
+  // Only Composio's own logo host. This function takes a URL from a response
+  // body, which is exactly the kind of value that must not be allowed to
+  // address anything it likes — an attacker-controlled catalogue entry would
+  // otherwise make the main process fetch a URL of its choosing.
+  let parsed: URL;
+  try {
+    parsed = new URL(input.url);
+  } catch {
+    return { dataUri: '' };
+  }
+  if (parsed.protocol !== 'https:' || parsed.hostname !== 'logos.composio.dev') {
+    return { dataUri: '' };
+  }
+
+  try {
+    const response = await fetch(parsed.toString(), { redirect: 'error' });
+    if (!response.ok) return { dataUri: '' };
+
+    const type = response.headers.get('content-type') ?? '';
+    if (!type.startsWith('image/')) return { dataUri: '' };
+
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (bytes.byteLength > MAX_LOGO_BYTES) return { dataUri: '' };
+
+    const dataUri = `data:${type.split(';')[0] ?? 'image/png'};base64,${bytes.toString('base64')}`;
+    logos.set(input.slug, dataUri);
+    return { dataUri };
+  } catch {
+    // A logo that will not load is a row without a picture, which is a normal
+    // thing for a row to be.
+    return { dataUri: '' };
+  }
+}
+
 /** The tools that fit a job. Empty with a reason when Composio is unreachable. */
 export async function searchTools(input: {
   query: string;

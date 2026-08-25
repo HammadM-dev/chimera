@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { HowTo, Step, Steps } from './HowTo.tsx';
+import { ComposioDirectory } from './ComposioDirectory.tsx';
 
 // Composio: hundreds of apps behind one account.
 //
@@ -30,22 +31,16 @@ interface Toolkit {
 
 export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.Element {
   const [state, setState] = useState<State | null>(null);
-  const [toolkits, setToolkits] = useState<Toolkit[]>([]);
-  const [filter, setFilter] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(false);
-  /** Only the apps actually signed into, kept apart from search results. */
   const [connectedApps, setConnectedApps] = useState<Toolkit[]>([]);
   const [question, setQuestion] = useState('');
   const [probing, setProbing] = useState(false);
   const [probe, setProbe] = useState<ToolProbe>({ tools: [], toolkits: [] });
 
-  // Composio has well over a thousand apps, served fifty to a page. Filtering
-  // here rather than at their end would search whatever the first few pages
-  // happened to hold, which is how this panel came to show twenty apps and call
-  // it the list.
+  // Just the connected ones, for the section at the top. The whole catalogue
+  // and its search live in `ComposioDirectory`, which owns that job entirely.
   const loadConnected = useCallback(async () => {
     try {
       const result = await bridge().invoke<{ toolkits: Toolkit[] }>('composio:toolkits', {
@@ -75,48 +70,17 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
     }
   }, []);
 
-  const loadToolkits = useCallback(async (search = '') => {
-    setLoading(true);
-    try {
-      const result = await bridge().invoke<{ toolkits: Toolkit[]; reason: string }>(
-        'composio:toolkits',
-        search.trim() === '' ? {} : { search: search.trim() },
-      );
-      setToolkits(result.toolkits);
-      if (result.reason !== '') setNote(result.reason);
-    } catch (err) {
-      setNote(describeError(err).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     void (async () => {
       try {
         const loaded = await bridge().invoke<State>('composio:get', {});
         setState(loaded);
-        if (loaded.enabled && loaded.hasKey) {
-          await loadToolkits();
-          await loadConnected();
-        }
+        if (loaded.enabled && loaded.hasKey) await loadConnected();
       } catch (err) {
         setNote(describeError(err).message);
       }
     })();
-  }, [refreshToken, loadToolkits, loadConnected]);
-
-  // Typing goes to Composio, a moment after the typing stops. Every keystroke
-  // would be a request per letter for a list that is not worth that.
-  useEffect(() => {
-    if (state === null || !state.enabled || !state.hasKey) return undefined;
-    const timer = setTimeout(() => {
-      void loadToolkits(filter);
-    }, 300);
-    return () => {
-      clearTimeout(timer);
-    };
-  }, [filter, state, loadToolkits]);
+  }, [refreshToken, loadConnected]);
 
   const save = useCallback(
     async (enabled: boolean, key?: string) => {
@@ -129,42 +93,18 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
         });
         setState(saved);
         setApiKey('');
-        if (saved.enabled && saved.hasKey) {
-          await loadToolkits();
-          await loadConnected();
-        } else {
-          setToolkits([]);
-          setConnectedApps([]);
-        }
+        if (saved.enabled && saved.hasKey) await loadConnected();
+        else setConnectedApps([]);
       } catch (err) {
         setNote(describeError(err).message);
       } finally {
         setBusy(false);
       }
     },
-    [loadToolkits, loadConnected],
+    [loadConnected],
   );
 
-  const connect = useCallback(async (slug: string) => {
-    setNote('');
-    try {
-      const result = await bridge().invoke<{ url: string; reason: string }>('composio:connect', {
-        toolkit: slug,
-      });
-      if (result.url !== '') {
-        window.open(result.url, '_blank');
-        setNote('Finish signing in on the page that opened, then choose Refresh.');
-      } else {
-        setNote(result.reason);
-      }
-    } catch (err) {
-      setNote(describeError(err).message);
-    }
-  }, []);
-
   if (state === null) return <p className="agent-card__prompt">Loading.</p>;
-
-  const shown = toolkits;
 
   return (
     <div data-testid="composio">
@@ -269,66 +209,9 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
 
               <section className="composio__section">
                 <header className="composio__head">
-                  <h4 className="composio__title">Add an app</h4>
-                  <span className="composio__count">
-                    {filter.trim() === ''
-                      ? 'over a thousand available'
-                      : `${String(toolkits.length)} matching`}
-                  </span>
+                  <h4 className="composio__title">Every app Composio reaches</h4>
                 </header>
-
-                <input
-                  className="control"
-                  data-testid="composio-filter"
-                  placeholder="gmail, slack, notion, jira…"
-                  value={filter}
-                  onChange={(event) => {
-                    setFilter(event.target.value);
-                  }}
-                />
-
-                <div className="toolkits scroll" data-testid="composio-toolkits">
-                  {shown.length === 0 && (
-                    <p className="agent-card__prompt">
-                      {loading
-                        ? 'Looking.'
-                        : filter.trim() === ''
-                          ? 'No apps loaded yet.'
-                          : 'No app matches that name.'}
-                    </p>
-                  )}
-                  {shown.slice(0, 60).map((toolkit) => (
-                    <div key={toolkit.slug} className="toolkit">
-                      <span className="toolkit__name">{toolkit.name}</span>
-                      {toolkit.connected ? (
-                        <span className="chip chip--ok">Connected</span>
-                      ) : toolkit.isNoAuth ? (
-                        <span className="toolkit__note">No sign-in needed</span>
-                      ) : (
-                        <button
-                          type="button"
-                          className="button button--quiet"
-                          data-testid={`composio-connect-${toolkit.slug}`}
-                          onClick={() => void connect(toolkit.slug)}
-                        >
-                          Connect
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  type="button"
-                  className="button button--quiet"
-                  data-testid="composio-refresh"
-                  onClick={() => {
-                    void loadToolkits(filter);
-                    void loadConnected();
-                  }}
-                >
-                  Refresh
-                </button>
+                <ComposioDirectory refreshToken={refreshToken} onNote={setNote} />
               </section>
 
               {/* The question this panel could not answer: what can it actually
@@ -399,8 +282,8 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
               {/* The missing link. Apps were connectable and there was nothing
                   anywhere saying which agent uses them. */}
               <p className="agent-card__prompt">
-                To use these, add an <strong>App operator</strong> step to an automation. It
-                searches Composio for the right tool and asks before anything sends, posts or
+                To use these, add an <strong>App operator (Composio)</strong> step to an automation.
+                It searches Composio for the right tool and asks before anything sends, posts or
                 deletes.
               </p>
             </>

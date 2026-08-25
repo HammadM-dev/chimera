@@ -27,6 +27,18 @@ export interface ComposioToolkit {
   /** True when the app needs no login at all. */
   isNoAuth: boolean;
   connected: boolean;
+  /** What the app is, in Composio's own words. Empty when they give none. */
+  description: string;
+  /** Composio's logo URL. Fetched through the main process — see the CSP. */
+  logo: string;
+  /** Slugs like `email`, `crm`, `productivity`. */
+  categories: string[];
+  /** How many actions this app exposes. */
+  toolsCount: number;
+  /** `OAUTH2`, `API_KEY`, `BEARER_TOKEN`… — what signing in will ask for. */
+  authSchemes: string[];
+  /** The app's own site, for a person who wants to check what they are joining. */
+  appUrl: string;
 }
 
 export interface ComposioTool {
