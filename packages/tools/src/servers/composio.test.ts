@@ -198,3 +198,46 @@ test('running a Composio tool always needs a person to have said yes', () => {
   assert.equal(isIrreversible('composio.toolkits', {}), false);
   assert.equal(isIrreversible('composio.search', { query: 'x' }), false);
 });
+
+test('a per-app server is judged by the same rules as the shared one', () => {
+  // An App operator pointed at one app is given its own server —
+  // `composio-gmail` — holding that app's tools and nothing else. The tools are
+  // the same three with the same consequences, so the reversibility rules have
+  // to reach them.
+  //
+  // Getting this wrong is not a small mistake in either direction. Left to the
+  // unknown-server default, `composio-gmail.search` would be irreversible, and
+  // an operator narrowed to one app could not look up which tools exist without
+  // an approval step in front of it. And a rule that stopped at the shared
+  // server would let `composio-gmail.execute` through the gate entirely.
+  assert.equal(isIrreversible('composio-gmail.execute', {}), true);
+  assert.equal(isIrreversible('composio-google_sheets.execute', {}), true);
+  assert.equal(isIrreversible('composio-gmail.search', { query: 'send mail' }), false);
+  assert.equal(isIrreversible('composio-gmail.toolkits', {}), false);
+
+  // A server that merely starts with the same letters is still unknown, and an
+  // unknown server is irreversible.
+  assert.equal(isIrreversible('composiofake.search', {}), true);
+});
+
+test('a narrowed server tells the model which app it holds', () => {
+  // The limit is in the backend and stays there. This is about the model not
+  // spending three turns planning around a tool it will be refused: an operator
+  // that knows it holds Gmail and nothing else says so to the person, rather
+  // than forming a perfect Slack call and failing at the last step.
+  const shared = createComposioServer(backend());
+  const scoped = createComposioServer(backend(), 'gmail');
+
+  const describe = (server: ReturnType<typeof createComposioServer>): string =>
+    JSON.stringify(
+      (server as unknown as { _registeredTools: Record<string, { description?: string }> })
+        ._registeredTools,
+    );
+
+  assert.ok(!describe(shared).includes('reaches gmail and nothing else'));
+  const said = describe(scoped);
+  assert.ok(said.includes('reaches gmail and nothing else'), said.slice(0, 200));
+  // On all three tools, not just the one that acts: an agent that thinks it can
+  // search every app will plan to.
+  assert.equal(said.split('reaches gmail and nothing else').length - 1, 3);
+});

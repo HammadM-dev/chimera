@@ -163,6 +163,15 @@ const briefSchema = z.object({
       instruction: z.string(),
       connectionId: z.string(),
       model: z.string(),
+      // Which connected apps an App operator step may reach. Absent means all
+      // of them, which is every automation saved before this existed.
+      //
+      // Named here rather than left to travel on its own: `z.object` drops any
+      // key its schema does not list, silently and with no error at either
+      // end. A field added to the canvas and not added here is stored, read
+      // back, and thrown away at this boundary — which is exactly what
+      // happened to the swarm graph, and it took a screenshot to find.
+      apps: z.array(z.string()).optional(),
     }),
   ),
   edges: z.array(z.tuple([z.string(), z.string()])),

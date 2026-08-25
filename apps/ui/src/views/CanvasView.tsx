@@ -93,6 +93,15 @@ export interface StepSettings {
   swarmQuestion: string;
   population: number;
   everyoneUpTo: number;
+  /**
+   * App operator: which connected apps this step may reach, by Composio slug.
+   *
+   * Empty means all of them. On the step rather than on the agent, for the
+   * same reason the model is: an App operator is a kind of worker, and which
+   * mailbox it works in is a fact about this automation. Two of them here can
+   * hold different apps.
+   */
+  apps: string[];
 }
 
 const DEFAULT_SETTINGS: StepSettings = {
@@ -122,6 +131,7 @@ const DEFAULT_SETTINGS: StepSettings = {
   swarmQuestion: '',
   population: 300,
   everyoneUpTo: 24,
+  apps: [],
 };
 
 export interface StepNodeData extends Record<string, unknown> {
@@ -557,6 +567,8 @@ interface BriefStepWire {
   instruction: string;
   connectionId: string;
   model: string;
+  /** App operator: the connected apps this step may reach. Absent means all. */
+  apps?: string[];
 }
 
 /** What starts this automation when nobody presses Run. */
@@ -609,6 +621,7 @@ function CanvasInner({
   onSaved,
   onBuildAgent,
   onOpenSwarm,
+  onOpenApps,
   rolesToken = 0,
 }: CanvasProps): JSX.Element {
   const roles = useRoles(rolesToken);
@@ -822,6 +835,7 @@ function CanvasInner({
           if (kind === 'agent' && role === null) return;
           const at = loaded.definition.layout?.find((entry) => entry.nodeId === step.nodeId);
           const settings = { ...DEFAULT_SETTINGS };
+          if (step.apps !== undefined) settings.apps = step.apps;
 
           const config = step.config;
           if (config && config['type'] === 'condition') {
@@ -1078,6 +1092,7 @@ function CanvasInner({
         connectionId: node.data.binding?.connectionId ?? '',
         model: node.data.binding?.model ?? '',
         ...(node.data.tier === undefined ? {} : { tier: node.data.tier }),
+        ...(settings.apps.length === 0 ? {} : { apps: settings.apps }),
       };
 
       switch (node.data.kind) {
@@ -2502,6 +2517,38 @@ function CanvasInner({
                 onChange={bind}
               />
 
+              {/* Only for an agent that actually holds Composio. Offering an
+                  app choice to a summariser would be offering a setting that
+                  changes nothing, which is worse than not offering it. */}
+              {(selected.data.role?.toolAllowlist ?? []).some((tool) =>
+                tool.startsWith('composio'),
+              ) && (
+                <>
+                  <p className="canvas__section">Apps this step uses</p>
+                  <AppPicker
+                    chosen={selected.data.settings.apps}
+                    onConnect={() => {
+                      onOpenApps?.();
+                    }}
+                    onChange={(apps) => {
+                      setNodes((current) =>
+                        current.map((node) =>
+                          node.id === selectedId
+                            ? {
+                                ...node,
+                                data: {
+                                  ...node.data,
+                                  settings: { ...node.data.settings, apps },
+                                },
+                              }
+                            : node,
+                        ),
+                      );
+                    }}
+                  />
+                </>
+              )}
+
               {(stepOutput[selected.id] ?? '') !== '' && (
                 <>
                   <p className="canvas__section">What it produced</p>
@@ -2655,6 +2702,116 @@ function ModelPicker({
         </option>
       ))}
     </select>
+  );
+}
+
+/**
+ * Which connected apps one App operator step may reach.
+ *
+ * The same shape of choice as the model picker above it, because it is the same
+ * kind of choice: a step's binding to something the workspace holds, made per
+ * step so two operators in one automation can hold different things. Choosing
+ * none means every connected app, which is what an operator nobody has narrowed
+ * has always had.
+ *
+ * The narrowing is real rather than advisory. A step that names Gmail is given
+ * the `composio-gmail` server and no other, so its tool list has no Slack tool
+ * in it to misuse — see `narrowedToApps` in the engine.
+ */
+function AppPicker({
+  chosen,
+  onChange,
+  onConnect,
+}: {
+  chosen: readonly string[];
+  onChange: (apps: string[]) => void;
+  onConnect: () => void;
+}): JSX.Element {
+  const [apps, setApps] = useState<{ name: string; slug: string }[]>([]);
+  const [state, setState] = useState<'loading' | 'off' | 'ready'>('loading');
+
+  useEffect(() => {
+    let alive = true;
+    void (async () => {
+      try {
+        const composio = await bridge().invoke<{ enabled: boolean; hasKey: boolean }>(
+          'composio:get',
+          {},
+        );
+        if (!composio.enabled || !composio.hasKey) {
+          if (alive) setState('off');
+          return;
+        }
+        const listed = await bridge().invoke<{ toolkits: { name: string; slug: string }[] }>(
+          'composio:toolkits',
+          { connectedOnly: true },
+        );
+        if (!alive) return;
+        setApps(listed.toolkits.map((one) => ({ name: one.name, slug: one.slug })));
+        setState('ready');
+      } catch {
+        if (alive) setState('off');
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  if (state === 'loading') return <p className="canvas__prompt">Looking for connected apps.</p>;
+
+  if (state === 'off' || apps.length === 0) {
+    return (
+      <div className="canvas__appsEmpty" data-testid="node-apps-empty">
+        <p className="canvas__prompt">
+          {state === 'off'
+            ? 'Composio is not set up in this workspace yet, so there is nothing for this step to act in.'
+            : 'No apps connected yet. Connect one and this step can be pointed at it.'}
+        </p>
+        <button
+          type="button"
+          className="button"
+          data-testid="node-apps-connect"
+          onClick={onConnect}
+        >
+          Connect an app
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="canvas__apps" data-testid="node-apps">
+        {apps.map((app) => {
+          const on = chosen.includes(app.slug);
+          return (
+            <button
+              key={app.slug}
+              type="button"
+              className={`cat${on ? ' cat--on' : ''}`}
+              data-testid={`node-app-${app.slug}`}
+              aria-pressed={on}
+              onClick={() => {
+                onChange(
+                  on ? chosen.filter((slug) => slug !== app.slug) : [...chosen, app.slug],
+                );
+              }}
+            >
+              {app.name}
+            </button>
+          );
+        })}
+      </div>
+      <p className="canvas__prompt">
+        {chosen.length === 0
+          ? 'Every connected app. Choose one or more to narrow this step to just those — it will not be given the others’ tools at all.'
+          : `This step reaches ${chosen.join(', ')} and nothing else.`}{' '}
+        <button type="button" className="canvas__link" onClick={onConnect}>
+          Connect another
+        </button>
+      </p>
+    </>
   );
 }
 
@@ -3318,6 +3475,14 @@ export interface CanvasProps {
    * find by name.
    */
   onOpenSwarm?: (threadId: string) => void;
+  /**
+   * Opens the Apps section, from a step that has no app to point at.
+   *
+   * The dead end this removes: an App operator on a canvas with nothing
+   * connected could say only "nothing connected", with no way from there to
+   * the place where connecting happens.
+   */
+  onOpenApps?: () => void;
 }
 
 export function CanvasView({
@@ -3327,6 +3492,7 @@ export function CanvasView({
   onSaved,
   onBuildAgent,
   onOpenSwarm,
+  onOpenApps,
   rolesToken = 0,
 }: CanvasProps): JSX.Element {
   // The provider owns the viewport, so `screenToFlowPosition` can turn a drop
@@ -3341,6 +3507,7 @@ export function CanvasView({
         rolesToken={rolesToken}
         {...(onBuildAgent ? { onBuildAgent } : {})}
         {...(onOpenSwarm ? { onOpenSwarm } : {})}
+        {...(onOpenApps ? { onOpenApps } : {})}
       />
     </ReactFlowProvider>
   );

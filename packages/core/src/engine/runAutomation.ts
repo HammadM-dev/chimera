@@ -16,6 +16,7 @@ import { createTraceSink } from '../runtime/trace.ts';
 import type { TraceEvent } from '../runtime/trace.ts';
 import { finalizeRun } from '../runtime/runOutcome.ts';
 import type { Role } from '../runtime/roleRegistry.ts';
+import { narrowedToApps } from './appScope.ts';
 import type { ToolObservation } from '../runtime/promptAssembly.ts';
 import { executionOrder, validateBrief, type BriefStep, type RunBrief } from './runBrief.ts';
 import { applyTransform, evaluateCondition } from './nodeTypes.ts';
@@ -956,7 +957,8 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
 
   /** Runs one agent step: a real model call, through the Governor. */
   const runAgentStep = async (step: BriefStep, seedAttachments: boolean): Promise<StepOutcome> => {
-    const role = roles.find((candidate) => candidate.id === step.roleId);
+    const found = roles.find((candidate) => candidate.id === step.roleId);
+    const role = found === undefined ? undefined : narrowedToApps(found, step.apps);
     if (!role) {
       return {
         nodeId: step.nodeId,

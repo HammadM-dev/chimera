@@ -22,7 +22,13 @@ export interface AgentRole {
 
 export const AGENT_GROUPS: { label: string; ids: string[] }[] = [
   { label: 'Planning', ids: ['planner'] },
-  { label: 'Working', ids: ['coder', 'researcher', 'browser-operator', 'data-extractor'] },
+  // `app-operator` belongs here and was missing, which put it under "Yours" —
+  // the group for agents the user built. A shipped agent filed as somebody's
+  // own is one they will not trust and will not find.
+  {
+    label: 'Working',
+    ids: ['coder', 'researcher', 'browser-operator', 'app-operator', 'data-extractor'],
+  },
   { label: 'Review', ids: ['reviewer', 'qa'] },
   { label: 'Combining', ids: ['summariser'] },
 ];

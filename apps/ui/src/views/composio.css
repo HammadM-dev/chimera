@@ -1,0 +1,175 @@
+/* Apps — Composio, as a place rather than a panel.
+ *
+ * A full section, so it can afford the two things a panel could not: a setup
+ * path written out in full for somebody who has never heard of Composio, and
+ * the connected apps shown as things with faces rather than as a list of
+ * words. Everything below `.apps` is namespaced to it; the app rows in the
+ * directory keep the `.app` classes they already had, which live in views.css
+ * and are shared with nothing else. */
+
+.apps {
+  max-width: 900px;
+  padding-bottom: var(--space-6);
+}
+
+.apps__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.apps__title {
+  margin: 0;
+  font-size: var(--type-title);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.apps__sub {
+  margin: var(--space-2) 0 0;
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  line-height: 1.55;
+}
+
+.apps__status {
+  flex: none;
+  padding: 2px var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  white-space: nowrap;
+}
+
+.apps__panel {
+  margin-top: var(--space-4);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+
+.apps__panelTitle {
+  margin: 0 0 var(--space-3);
+  font-size: var(--type-meta);
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+/* The connected apps. A grid rather than the directory's rows, because these
+ * are few and each one is a thing somebody chose — a row would file them away
+ * as more list. */
+.apps__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.mine {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-left: 2px solid var(--semantic-success);
+  border-radius: var(--radius-control);
+  background: var(--surface-canvas);
+}
+
+.mine__body {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.mine__name {
+  color: var(--text-primary);
+  font-size: var(--type-meta);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mine__count {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The setup path. Numbered because it genuinely is a sequence: step four does
+ * not work until step three has happened, and that is the information the
+ * numbers carry. */
+.setup {
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+
+.setup__steps {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.setup__step {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.setup__num {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+}
+
+.setup__what {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--type-meta);
+}
+
+.setup__why {
+  margin: var(--space-1) 0 var(--space-2);
+  max-width: 62ch;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  line-height: 1.55;
+}
+
+.setup__why code {
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+/* The per-app guide's numbered steps, in the directory rows. */
+.app__steps {
+  margin: var(--space-1) 0 var(--space-2);
+  padding-left: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.app__links {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}

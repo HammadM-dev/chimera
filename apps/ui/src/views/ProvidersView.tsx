@@ -10,7 +10,6 @@ import { FileGrantsPanel } from './FileGrantsPanel.tsx';
 import { EmailAccountsPanel } from './EmailAccountsPanel.tsx';
 import { SearchPanel } from './SearchPanel.tsx';
 import { UsageStatsPanel } from './UsageStatsPanel.tsx';
-import { ComposioPanel } from './ComposioPanel.tsx';
 import { OmniRouteSetup } from '../onboarding/OmniRouteSetup.tsx';
 import './views.css';
 
@@ -163,7 +162,16 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
         </div>
         <div className="panel">
           <h3 className="panel__title">Apps, through Composio</h3>
-          <ComposioPanel refreshToken={refreshToken} />
+          {/* Moved out to its own section. Connecting somebody's mailbox and
+              their CRM is not a setting, and it does not belong three scrolls
+              down a settings page between the plugins and the answer cache —
+              it is a place you come back to and search. A pointer stays here
+              because this is where people who remember the old arrangement
+              will look. */}
+          <p className="agent-card__prompt">
+            Gmail, Slack, Notion, Jira and several hundred others now live in <strong>Apps</strong>,
+            in the sidebar — the key, the whole catalogue, and the guide to connecting each one.
+          </p>
         </div>
         <div className="panel">
           <h3 className="panel__title">Web search</h3>

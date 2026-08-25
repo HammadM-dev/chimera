@@ -51,6 +51,20 @@ export interface BriefStep {
    * workflow that only runs where it was written.
    */
   tier?: 'cheap' | 'standard' | 'frontier';
+  /**
+   * Which connected apps this step may reach, by Composio slug.
+   *
+   * Only meaningful for a step whose agent holds Composio at all. Empty or
+   * absent means every app the workspace has connected, which is what an
+   * operator nobody has narrowed gets.
+   *
+   * On the step rather than on the role, deliberately, and for the same reason
+   * the model is: an App operator is a kind of worker, and which mailbox it
+   * works in is a fact about this automation. Two of them in one automation can
+   * hold different apps, so the one reading support mail is not also the one
+   * that can post in Slack.
+   */
+  apps?: string[];
 }
 
 export interface RunBrief {

@@ -109,8 +109,3 @@ export function remove(db: Database.Database, id: string): { removed: boolean } 
   return { removed: info.changes > 0 };
 }
 
-/** True when the table has never been seeded. */
-export function isEmpty(db: Database.Database): boolean {
-  const row = db.prepare('SELECT COUNT(*) AS count FROM roles').get() as { count: number };
-  return row.count === 0;
-}

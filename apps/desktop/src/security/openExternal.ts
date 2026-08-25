@@ -28,10 +28,19 @@
  * anything this process has a say in.
  */
 const ALLOWED_HOSTS = new Set([
+  // Where `authorize` redirects land.
   'connect.composio.dev',
+  // Signing up, and the dashboard the sign-up lands on. `app.composio.dev` and
+  // `platform.composio.dev` both redirect to `dashboard.composio.dev`; all
+  // three are listed because a redirect is followed by the browser, not by
+  // this process, and which one a link points at changes with their marketing.
   'composio.dev',
   'app.composio.dev',
   'platform.composio.dev',
+  'dashboard.composio.dev',
+  // One page per app: `docs.composio.dev/toolkits/<slug>`. Checked live —
+  // gmail, notion, slack and hubspot all answer 200, and a slug that does not
+  // exist answers 404 rather than redirecting somewhere unexpected.
   'docs.composio.dev',
 ]);
 

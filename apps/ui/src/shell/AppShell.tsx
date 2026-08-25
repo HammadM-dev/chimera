@@ -13,12 +13,22 @@ import { bridge } from '../chat/useChimera.ts';
 import './shell.css';
 import { useProfile } from '../useProfile.ts';
 import { SwarmView } from '../views/SwarmView.tsx';
+import { ComposioView } from '../views/ComposioView.tsx';
 
 // CHIMERA is a place you build automations, so the frame is a sidebar of places
 // and one surface that changes — not a chat window with settings around it.
 // M4's canvas replaces the builder's middle column; the frame does not move.
 
-type View = 'home' | 'build' | 'swarm' | 'runs' | 'agents' | 'memory' | 'providers' | 'chat';
+type View =
+  | 'home'
+  | 'build'
+  | 'swarm'
+  | 'runs'
+  | 'agents'
+  | 'apps'
+  | 'memory'
+  | 'providers'
+  | 'chat';
 
 const NAV: { view: View; label: string; icon: JSX.Element }[] = [
   {
@@ -70,6 +80,19 @@ const NAV: { view: View; label: string; icon: JSX.Element }[] = [
         <circle cx="5.5" cy="9.5" r="1.3" />
         <circle cx="10.5" cy="10" r="1.3" />
         <circle cx="8" cy="13" r="1.3" />
+      </>
+    ),
+  },
+  {
+    view: 'apps',
+    label: 'Apps',
+    // A plug going into a socket. The apps section is about somebody's own
+    // working life being joined to this one, and a plug is what that looks
+    // like everywhere else.
+    icon: (
+      <>
+        <rect x="4.5" y="6.5" width="7" height="6" rx="1.5" />
+        <path d="M6.5 6.5V3.5M9.5 6.5V3.5" />
       </>
     ),
   },
@@ -126,6 +149,11 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   agents: {
     title: 'Agents',
     subtitle: 'The roster an automation draws from. Editing these is a workspace-wide change.',
+  },
+  apps: {
+    title: 'Apps',
+    subtitle:
+      'Connect Gmail, Slack, Notion and several hundred others through Composio, then point an App operator at the ones you want it to use.',
   },
   providers: {
     title: 'Providers',
@@ -325,6 +353,9 @@ export function AppShell(): JSX.Element {
                   setOpenSwarmId(threadId);
                   setView('swarm');
                 }}
+                onOpenApps={() => {
+                  setView('apps');
+                }}
               />
             )}
             {view === 'chat' && <ChatPanel />}
@@ -339,6 +370,11 @@ export function AppShell(): JSX.Element {
                   setOpenSwarmId(null);
                 }}
               />
+            )}
+            {view === 'apps' && (
+              <div className="view__body scroll">
+                <ComposioView />
+              </div>
             )}
             {view === 'memory' && <MemoryView />}
             {view === 'agents' && (

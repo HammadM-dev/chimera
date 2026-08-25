@@ -103,14 +103,29 @@ function failure(message: string): {
   return { content: [{ type: 'text', text: message }], isError: true };
 }
 
-export function createComposioServer(backend: ComposioBackend): McpServer {
+/**
+ * @param scope The one app this server is narrowed to, or '' for all of them.
+ *
+ * It changes only the wording. The limit itself is in the backend, which is the
+ * point: a description is something a model reads, and a model that reads
+ * "Gmail only" and asks for a Slack tool anyway must still be refused. But a
+ * model told what it holds asks for the right thing in the first place, and an
+ * operator that knows it has Gmail and nothing else says so to the person
+ * instead of failing at the last step.
+ */
+export function createComposioServer(backend: ComposioBackend, scope = ''): McpServer {
   const server = new McpServer({ name: 'chimera-composio', version: '0.0.0' });
+  const only =
+    scope === ''
+      ? ''
+      : ` This one reaches ${scope} and nothing else — it is the ${scope} operator. A tool belonging to any other app will be refused, so do not plan around one.`;
 
   server.registerTool(
     'toolkits',
     {
       description:
-        'Lists the apps reachable through Composio and says which are already connected. Check this before assuming you can reach somebody’s Gmail or Slack — an app that is not connected cannot be used, and saying so is more useful than trying and failing. There are well over a thousand, so name what you are looking for rather than asking for all of them.',
+        'Lists the apps reachable through Composio and says which are already connected. Check this before assuming you can reach somebody’s Gmail or Slack — an app that is not connected cannot be used, and saying so is more useful than trying and failing. There are well over a thousand, so name what you are looking for rather than asking for all of them.' +
+        only,
       inputSchema: {
         search: z
           .string()
@@ -141,7 +156,8 @@ export function createComposioServer(backend: ComposioBackend): McpServer {
     'search',
     {
       description:
-        'Finds the Composio tools that fit a job, described in plain words — "add a row to a Google Sheet", "find recent messages in a Slack channel". Use this rather than guessing a tool name: there are thousands, and their names are not guessable. Returns each tool’s slug and argument schema, whether its app is connected, and the mistakes Composio knows people make with it. Read the connection status before planning around a tool — an app nobody has signed into cannot be used no matter how well the call is formed.',
+        'Finds the Composio tools that fit a job, described in plain words — "add a row to a Google Sheet", "find recent messages in a Slack channel". Use this rather than guessing a tool name: there are thousands, and their names are not guessable. Returns each tool’s slug and argument schema, whether its app is connected, and the mistakes Composio knows people make with it. Read the connection status before planning around a tool — an app nobody has signed into cannot be used no matter how well the call is formed.' +
+        only,
       inputSchema: {
         query: z.string().describe('What you are trying to do, in plain words.'),
         toolkits: z
@@ -172,7 +188,8 @@ export function createComposioServer(backend: ComposioBackend): McpServer {
     'execute',
     {
       description:
-        'Runs one Composio tool, by the slug `search` gave you, with the arguments its schema asks for. This does the thing for real — it sends the email, creates the issue, posts the message. Get the slug and the argument names from `search` rather than inventing them.',
+        'Runs one Composio tool, by the slug `search` gave you, with the arguments its schema asks for. This does the thing for real — it sends the email, creates the issue, posts the message. Get the slug and the argument names from `search` rather than inventing them. A person has to approve this before it happens.' +
+        only,
       inputSchema: {
         slug: z.string().describe('The tool slug, exactly as `search` returned it.'),
         arguments: z

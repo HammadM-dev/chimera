@@ -157,6 +157,7 @@ export type { BucketPolicy, RateLimitPolicy, RateVerdict } from './governor/rate
 export { runAutomation } from './engine/runAutomation.ts';
 export type { RunAutomationDeps, RunOutcomeSummary, StepOutcome } from './engine/runAutomation.ts';
 export { validateBrief, executionOrder } from './engine/runBrief.ts';
+export { narrowedToApps, serverIdForApp } from './engine/appScope.ts';
 export { validateForSave } from './engine/validator.ts';
 export { parseCron, nextFireAfter, firedInLastMinute, describeCron } from './triggers/cron.ts';
 export type { CronFields } from './triggers/cron.ts';

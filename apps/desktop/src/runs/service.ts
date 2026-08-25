@@ -2,7 +2,13 @@ import { randomUUID } from 'node:crypto';
 import type { WebContents } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
-import { Governor, createRoleRegistry, runAutomation, type RunBrief } from '@chimera/core';
+import {
+  Governor,
+  createRoleRegistry,
+  runAutomation,
+  serverIdForApp,
+  type RunBrief,
+} from '@chimera/core';
 import {
   getSecret,
   nodeStatesRepository,
@@ -30,7 +36,7 @@ import { capabilitiesLookup, connectionFor } from '../providers/service.ts';
 import { emitRunEvent, subscribe } from './subscriptions.ts';
 import { createActivityReader, type Activity } from './activity.ts';
 import { askSwarm } from '../swarm/threads.ts';
-import { composioBackend } from '../composio/service.ts';
+import { composioBackend, connectedToolkitSlugs } from '../composio/service.ts';
 import { localBackend } from '../memory/backend.ts';
 import { assertRunnable } from '../automations/store.ts';
 import { pageForWorkspace } from './browser.ts';
@@ -396,6 +402,31 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
     'composio',
     await connectInProcess(createComposioServer(composioBackend())),
   );
+
+  // And one server per connected app, so an App operator can be pointed at a
+  // single one of them.
+  //
+  // The same arrangement as the mailboxes below, for the same reason: an agent
+  // is granted *an account*, not a category. A step that triages support mail
+  // and a step that posts release notes should not both be able to reach both,
+  // and the way that is made true rather than merely asked for is that the one
+  // holding `composio-slack` has no Gmail tool in its list at all.
+  //
+  // Only the connected ones. There are over a thousand apps and registering a
+  // server for each would be a thousand servers to hold an agent's attention;
+  // an app nobody has signed into has nothing to offer anyway.
+  for (const slug of await connectedToolkitSlugs()) {
+    try {
+      await tools.registerServer(
+        serverIdForApp(slug),
+        await connectInProcess(createComposioServer(composioBackend([slug]), slug)),
+      );
+    } catch {
+      // A duplicate id or a server that would not start is one app an
+      // operator cannot be narrowed to. The unscoped `composio` above still
+      // works, so the run goes ahead.
+    }
+  }
 
   // Every mailbox the workspace holds, each under its own server id so an
   // agent is granted one account rather than "email". A workspace with two

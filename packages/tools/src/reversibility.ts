@@ -93,6 +93,26 @@ const CONTAINED: readonly string[] = [
 ];
 
 /**
+ * Folds a per-app Composio server back onto the rules written for `composio`.
+ *
+ * An App operator can be pointed at one app rather than at everything the
+ * workspace has connected, and the way that is enforced is that it gets its own
+ * server — `composio-gmail` — holding only that app's tools. Same three tools,
+ * same consequences: `composio-gmail.execute` sends an email exactly as
+ * `composio.execute` does, and `composio-gmail.search` reads exactly as
+ * `composio.search` does.
+ *
+ * Without this they would both fall through to the unknown-server default and
+ * be treated as irreversible, so an operator pointed at one app could not even
+ * look up which tools exist without an approval step in front of it.
+ */
+function canonicalId(toolId: string): string {
+  if (!toolId.startsWith('composio-')) return toolId;
+  const dot = toolId.indexOf('.');
+  return dot === -1 ? toolId : `composio.${toolId.slice(dot + 1)}`;
+}
+
+/**
  * Whether one call, with these arguments, is irreversible.
  *
  * Arguments matter for exactly one tool today: an HTTP GET reads and a POST
@@ -103,7 +123,8 @@ const CONTAINED: readonly string[] = [
  * server CHIMERA has never seen is not a server whose side effects it can
  * vouch for.
  */
-export function isIrreversible(toolId: string, args: Record<string, unknown> = {}): boolean {
+export function isIrreversible(rawToolId: string, args: Record<string, unknown> = {}): boolean {
+  const toolId = canonicalId(rawToolId);
   if (ALWAYS.includes(toolId)) return true;
   if (CONTAINED.includes(toolId)) return false;
 

@@ -260,9 +260,81 @@ function readSearch(answer: SearchAnswer): ComposioSearchResult {
   return { tools, toolkits, guidance, pitfalls };
 }
 
-/** The backend the tool server runs on. Absent key means every call says so. */
-export function composioBackend(): ComposioBackend {
-  const offline = 'Composio is not connected in this workspace — add its key in Providers.';
+/**
+ * The apps this workspace has actually signed into.
+ *
+ * One page. Nobody connects fifty, and a run that stalled enumerating a
+ * thousand apps before its first step would be a worse failure than a missing
+ * one.
+ */
+export async function connectedToolkitSlugs(): Promise<string[]> {
+  const live = await session();
+  if (live === null) return [];
+  try {
+    const signedIn = await live.toolkits({ limit: TOOLKIT_PAGE_SIZE, isConnected: true });
+    return signedIn.items
+      .filter((item) => item.connection?.isActive === true)
+      .map((item) => item.slug)
+      .filter((slug) => slug !== '');
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Which app a tool slug belongs to, from Composio rather than from its name.
+ *
+ * The name looks like it would do: `GMAIL_SEND_EMAIL` belongs to `gmail`, and
+ * a prefix match would get it right. It would also get `ZOHO_MAIL_MESSAGES_
+ * SEND_EMAIL` wrong for an operator scoped to `zoho`, because `ZOHO` and
+ * `ZOHO_MAIL` are both real toolkits — twenty-five pairs like that in the
+ * catalogue, measured. A capability limit that is right most of the time is
+ * not a capability limit, so this asks.
+ *
+ * Empty when the slug is unknown, and the caller refuses on empty. Failing
+ * closed is the point: an invented slug is exactly the case this exists for.
+ */
+async function toolkitOf(slug: string): Promise<string> {
+  const key = apiKey();
+  if (key === '') return '';
+  try {
+    const { Composio } = await import('@composio/core');
+    const composio = new Composio({ apiKey: key });
+    const raw = (await (
+      composio.tools as unknown as {
+        getRawComposioTools: (input: { tools: string[] }) => Promise<
+          { slug?: string; toolkit?: { slug?: string } }[]
+        >;
+      }
+    ).getRawComposioTools({ tools: [slug] })) as { slug?: string; toolkit?: { slug?: string } }[];
+    const found = raw.find((tool) => (tool.slug ?? '').toUpperCase() === slug.toUpperCase());
+    return (found?.toolkit?.slug ?? '').toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * The backend the tool server runs on. Absent key means every call says so.
+ *
+ * `only` narrows it to a set of apps, and is how one App operator step can hold
+ * somebody's Gmail while another in the same automation holds only Notion.
+ * Empty means every app the workspace has connected, which is what an operator
+ * nobody has narrowed gets.
+ *
+ * Every part of the narrowing is enforced here rather than passed to Composio.
+ * Their `search` takes a `toolkits` argument and it is a ranking hint, not a
+ * filter: measured against the live API, `['GMAIL']` came back with Outlook and
+ * Resend in it, and `['gmail']` came back with AgentMail and no Gmail at all.
+ * Sending the hint is still worth it — it improves the ranking — but the limit
+ * is the filter below, on this side, where it can be relied on.
+ */
+export function composioBackend(only: readonly string[] = []): ComposioBackend {
+  const offline = 'Composio is not connected in this workspace — connect it in Apps.';
+  const scope = only.map((slug) => slug.toLowerCase()).filter((slug) => slug !== '');
+  const inScope = (toolkit: string): boolean =>
+    scope.length === 0 || scope.includes(toolkit.toLowerCase());
+  const named = scope.join(', ');
 
   return {
     async toolkits(input): Promise<ComposioToolkit[]> {
@@ -311,6 +383,7 @@ export function composioBackend(): ComposioBackend {
       const needle = (input?.search ?? '').trim().toLowerCase();
       const wanted = all.filter(
         (toolkit) =>
+          inScope(toolkit.slug) &&
           (input?.connectedOnly !== true || toolkit.connected) &&
           (needle === '' ||
             toolkit.name.toLowerCase().includes(needle) ||
@@ -332,12 +405,48 @@ export function composioBackend(): ComposioBackend {
     async search(input): Promise<ComposioSearchResult> {
       const live = await session();
       if (live === null) throw new Error(offline);
-      return readSearch(await live.search(input));
+
+      // The scope goes out as a hint and comes back enforced here. See the
+      // note on `composioBackend`: their filter is a ranking, not a limit.
+      const answer = readSearch(
+        await live.search({
+          query: input.query,
+          ...(input.toolkits !== undefined
+            ? { toolkits: input.toolkits }
+            : scope.length === 0
+              ? {}
+              : { toolkits: scope.map((slug) => slug.toUpperCase()) }),
+        }),
+      );
+
+      return {
+        ...answer,
+        tools: answer.tools.filter((tool) => inScope(tool.toolkit)),
+        toolkits: answer.toolkits.filter((status) => inScope(status.toolkit)),
+      };
     },
 
     async execute(input): Promise<{ ok: boolean; output: string }> {
       const live = await session();
       if (live === null) throw new Error(offline);
+
+      // The narrowing, at the only point that matters. Everything above this
+      // shapes what the agent is shown; this is what it is allowed to do.
+      if (scope.length > 0) {
+        const toolkit = await toolkitOf(input.slug);
+        if (toolkit === '') {
+          return {
+            ok: false,
+            output: `There is no Composio tool called "${input.slug}". Use search to find the real slug.`,
+          };
+        }
+        if (!inScope(toolkit)) {
+          return {
+            ok: false,
+            output: `This step is connected to ${named} and nothing else, so it cannot run a ${toolkit} tool. Point it at ${toolkit} in the automation, or use a tool from ${named}.`,
+          };
+        }
+      }
 
       // `{ data, error, logId }` — there is no `successful` flag, whatever the
       // first version of this checked for. A failure usually arrives as a

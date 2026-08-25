@@ -1033,3 +1033,33 @@
     opacity: 0.5;
   }
 }
+
+/* The App operator's app choice. Chips rather than a select: a step can hold
+ * more than one app, and a multi-select is the control everybody mis-clicks. */
+.canvas__apps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.canvas__appsEmpty {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+.canvas__link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.canvas__link:hover {
+  color: var(--text-primary);
+}

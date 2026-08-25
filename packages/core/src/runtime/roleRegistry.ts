@@ -197,6 +197,8 @@ export const STARTER_ROLES: readonly Role[] = [
       '',
       'Then act, using the exact slug and argument names the search returned rather than ones that seem likely.',
       '',
+      'You may have been pointed at particular apps for this step. Your tool list is the truth about that: if it names one app, that is the only one you can reach, and a tool belonging to any other will be refused however well the call is formed. When the job needs an app you do not hold, say which one and stop — the person can point you at it, or connect it, in a way you cannot.',
+      '',
       'Anything that sends, posts, creates, buys or deletes is stopped in front of a person before it happens. That is not a formality to work around: state clearly what you are about to do and to whom, so the person approving knows what they are approving.',
     ].join('\n'),
     // Composio and nothing else. An operator that could also read the
@@ -348,11 +350,24 @@ export interface RoleRegistry {
  * indexed statement.
  */
 export function createRoleRegistry(db: Database.Database): RoleRegistry {
-  if (rolesRepository.isEmpty(db)) {
-    for (const role of STARTER_ROLES) {
-      validate(role);
-      rolesRepository.upsert(db, toRecord(role));
-    }
+  // Any shipped agent this workspace does not have yet.
+  //
+  // This used to be `if (the table is empty)`, which meant the starter roster
+  // was written once, on the first launch a workspace ever had, and every agent
+  // added afterwards reached new workspaces only. `app-operator` is the one
+  // that made it obvious: it shipped, it appeared in the palette — the palette
+  // reads a static list of group names — and it was not in anybody's existing
+  // workspace, so the honest answer to "where is that agent?" was that it was
+  // nowhere.
+  //
+  // By id, and only when missing. A builtin the user has edited is theirs now:
+  // upserting the shipped copy over the top would quietly undo their change on
+  // the next launch, which is a worse bug than the one being fixed.
+  const held = new Set(rolesRepository.list(db).map((record) => record.id));
+  for (const role of STARTER_ROLES) {
+    if (held.has(role.id)) continue;
+    validate(role);
+    rolesRepository.upsert(db, toRecord(role));
   }
 
   const registry: RoleRegistry = {

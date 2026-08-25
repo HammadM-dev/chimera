@@ -195,3 +195,52 @@ test('a role that permits no work, or grants everything, is refused', () => {
     fs.rmSync(dir, { recursive: true, force: true });
   }
 });
+
+test('an agent added after a workspace was made still reaches it', () => {
+  // The bug this replaced: the roster was seeded once, on the very first
+  // launch a workspace ever had, guarded by "is the table empty". Every agent
+  // shipped after that reached new workspaces only — so `app-operator` was in
+  // the palette, in the docs, and in nobody's actual workspace, and the honest
+  // answer to "where is that agent?" was that it was nowhere.
+  //
+  // Simulated by deleting one from an already-seeded workspace, which is
+  // exactly the state an older workspace was in.
+  const { db, dir } = openTemp();
+  try {
+    createRoleRegistry(db);
+    db.prepare('DELETE FROM roles WHERE id = ?').run('app-operator');
+    assert.equal(
+      createRoleRegistry(db)
+        .list()
+        .filter((role) => role.id === 'app-operator').length,
+      1,
+      'a shipped agent that is missing should be put back on the next launch',
+    );
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a shipped agent the user has edited is not overwritten on the next launch', () => {
+  // The other half, and the reason this is "add what is missing" rather than
+  // "write them all again". A builtin is editable; upserting the shipped copy
+  // over the top every launch would undo somebody's change overnight, with no
+  // error and nothing to point at.
+  const { db, dir } = openTemp();
+  try {
+    const registry = createRoleRegistry(db);
+    const coder = registry.get('coder');
+    assert.ok(coder);
+    registry.save({ ...coder, systemPrompt: 'You write only Haskell.' });
+
+    assert.equal(
+      createRoleRegistry(db).get('coder')?.systemPrompt,
+      'You write only Haskell.',
+      'the edit should survive',
+    );
+  } finally {
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
