@@ -31,14 +31,45 @@ export interface ComposioToolkit {
 
 export interface ComposioTool {
   slug: string;
+  /** Which app it belongs to, so the agent can tell what it needs connected. */
+  toolkit: string;
   description: string;
   /** JSON Schema for the arguments, as Composio gives it. */
-  inputParameters: unknown;
+  inputSchema: unknown;
+}
+
+/** Whether one app is reachable, and what to do when it is not. */
+export interface ComposioToolkitStatus {
+  toolkit: string;
+  connected: boolean;
+  note: string;
+}
+
+/**
+ * What a search comes back with.
+ *
+ * Composio does not answer a search with a list of tools — it answers with a
+ * plan: the tools that do the job, which of their apps are actually connected,
+ * how it suggests going about it, and the mistakes it knows people make. All of
+ * that is worth passing on. An agent told "GMAIL_SEND_EMAIL exists" and an agent
+ * told "GMAIL_SEND_EMAIL exists, Gmail is not connected, and it rate-limits at
+ * 429" behave differently, and only one of them is worth the call.
+ */
+export interface ComposioSearchResult {
+  tools: ComposioTool[];
+  toolkits: ComposioToolkitStatus[];
+  guidance: string[];
+  pitfalls: string[];
 }
 
 export interface ComposioBackend {
-  toolkits: () => Promise<ComposioToolkit[]>;
-  search: (input: { query: string; toolkits?: string[] }) => Promise<ComposioTool[]>;
+  toolkits: (input?: {
+    /** Server-side match on name and slug. */
+    search?: string;
+    /** Only the ones this workspace has actually connected. */
+    connectedOnly?: boolean;
+  }) => Promise<ComposioToolkit[]>;
+  search: (input: { query: string; toolkits?: string[] }) => Promise<ComposioSearchResult>;
   execute: (input: {
     slug: string;
     arguments: Record<string, unknown>;
@@ -67,12 +98,27 @@ export function createComposioServer(backend: ComposioBackend): McpServer {
     'toolkits',
     {
       description:
-        'Lists the apps reachable through Composio and says which are already connected. Check this before assuming you can reach somebody’s Gmail or Slack — an app that is not connected cannot be used, and saying so is more useful than trying and failing.',
-      inputSchema: {},
+        'Lists the apps reachable through Composio and says which are already connected. Check this before assuming you can reach somebody’s Gmail or Slack — an app that is not connected cannot be used, and saying so is more useful than trying and failing. There are well over a thousand, so name what you are looking for rather than asking for all of them.',
+      inputSchema: {
+        search: z
+          .string()
+          .optional()
+          .describe('Narrow it to apps matching this, by name or slug. Strongly preferred.'),
+        connectedOnly: z
+          .boolean()
+          .optional()
+          .describe('Only the apps this workspace has already connected.'),
+      },
     },
-    async () => {
+    async ({ search, connectedOnly }) => {
       try {
-        return text(await backend.toolkits());
+        const found = await backend.toolkits({
+          ...(search === undefined ? {} : { search }),
+          ...(connectedOnly === undefined ? {} : { connectedOnly }),
+        });
+        return found.length === 0
+          ? text('No app matched. Try a different name, or search without a filter.')
+          : text(found);
       } catch (err) {
         return failure(err instanceof Error ? err.message : String(err));
       }
@@ -83,7 +129,7 @@ export function createComposioServer(backend: ComposioBackend): McpServer {
     'search',
     {
       description:
-        'Finds the Composio tools that fit a job, described in plain words — "add a row to a Google Sheet", "find recent messages in a Slack channel". Use this rather than guessing a tool name: there are thousands, and their names are not guessable. Returns each tool’s slug and what arguments it takes.',
+        'Finds the Composio tools that fit a job, described in plain words — "add a row to a Google Sheet", "find recent messages in a Slack channel". Use this rather than guessing a tool name: there are thousands, and their names are not guessable. Returns each tool’s slug and argument schema, whether its app is connected, and the mistakes Composio knows people make with it. Read the connection status before planning around a tool — an app nobody has signed into cannot be used no matter how well the call is formed.',
       inputSchema: {
         query: z.string().describe('What you are trying to do, in plain words.'),
         toolkits: z
@@ -99,7 +145,7 @@ export function createComposioServer(backend: ComposioBackend): McpServer {
           query,
           ...(toolkits === undefined ? {} : { toolkits }),
         });
-        return found.length === 0
+        return found.tools.length === 0
           ? text(
               'Nothing matched. Try describing the job differently, or check with `toolkits` that the app is connected.',
             )

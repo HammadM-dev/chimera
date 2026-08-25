@@ -30,17 +30,25 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
   const [apiKey, setApiKey] = useState('');
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const loadToolkits = useCallback(async () => {
+  // Composio has well over a thousand apps, served fifty to a page. Filtering
+  // here rather than at their end would search whatever the first few pages
+  // happened to hold, which is how this panel came to show twenty apps and call
+  // it the list.
+  const loadToolkits = useCallback(async (search = '') => {
+    setLoading(true);
     try {
       const result = await bridge().invoke<{ toolkits: Toolkit[]; reason: string }>(
         'composio:toolkits',
-        {},
+        search.trim() === '' ? {} : { search: search.trim() },
       );
       setToolkits(result.toolkits);
       if (result.reason !== '') setNote(result.reason);
     } catch (err) {
       setNote(describeError(err).message);
+    } finally {
+      setLoading(false);
     }
   }, []);
 
@@ -55,6 +63,18 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
       }
     })();
   }, [refreshToken, loadToolkits]);
+
+  // Typing goes to Composio, a moment after the typing stops. Every keystroke
+  // would be a request per letter for a list that is not worth that.
+  useEffect(() => {
+    if (state === null || !state.enabled || !state.hasKey) return undefined;
+    const timer = setTimeout(() => {
+      void loadToolkits(filter);
+    }, 300);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [filter, state, loadToolkits]);
 
   const save = useCallback(
     async (enabled: boolean, key?: string) => {
@@ -97,10 +117,7 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
 
   if (state === null) return <p className="agent-card__prompt">Loading.</p>;
 
-  const shown = toolkits.filter(
-    (toolkit) =>
-      filter.trim() === '' || toolkit.name.toLowerCase().includes(filter.trim().toLowerCase()),
-  );
+  const shown = toolkits;
   const connected = toolkits.filter((toolkit) => toolkit.connected).length;
 
   return (
@@ -158,7 +175,9 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
           {state.hasKey && (
             <>
               <p className="agent-card__prompt">
-                {connected} of {toolkits.length} apps connected.
+                {filter.trim() === ''
+                  ? `${String(connected)} connected, of the first ${String(toolkits.length)} of well over a thousand apps. Search for the one you want.`
+                  : `${String(toolkits.length)} matching, ${String(connected)} connected.`}
               </p>
 
               <div className="field">
@@ -180,7 +199,11 @@ export function ComposioPanel({ refreshToken }: { refreshToken: number }): JSX.E
               <div className="toolkits scroll" data-testid="composio-toolkits">
                 {shown.length === 0 && (
                   <p className="agent-card__prompt">
-                    {toolkits.length === 0 ? 'No apps loaded yet.' : 'Nothing matches that.'}
+                    {loading
+                      ? 'Looking.'
+                      : filter.trim() === ''
+                        ? 'No apps loaded yet.'
+                        : 'No app matches that name.'}
                   </p>
                 )}
                 {shown.slice(0, 60).map((toolkit) => (

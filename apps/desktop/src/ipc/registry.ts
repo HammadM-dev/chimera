@@ -680,11 +680,48 @@ export const composioSet = defineInvokeChannel({
   responseSchema: composioStateSchema,
 });
 
+/**
+ * Which Composio tools fit a job, in plain words.
+ *
+ * The same call an agent makes through the MCP server, reachable from the
+ * renderer so a person can check what exists before building an automation
+ * around it — and so the live suite can assert on the one code path that
+ * cannot be proved against a stand-in.
+ */
+export const composioSearch = defineInvokeChannel({
+  channel: 'composio:search',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    query: z.string(),
+    toolkits: z.array(z.string()).optional(),
+  }),
+  responseSchema: z.object({
+    tools: z.array(
+      z.object({
+        slug: z.string(),
+        toolkit: z.string(),
+        description: z.string(),
+        inputSchema: z.unknown(),
+      }),
+    ),
+    toolkits: z.array(z.object({ toolkit: z.string(), connected: z.boolean(), note: z.string() })),
+    guidance: z.array(z.string()),
+    pitfalls: z.array(z.string()),
+    reason: z.string(),
+  }),
+});
+
 export const composioToolkits = defineInvokeChannel({
   channel: 'composio:toolkits',
   v: 1,
   sensitive: false,
-  requestSchema: z.object({}),
+  // Added fields, not changed ones — an older caller sending `{}` still gets
+  // the unfiltered list it always got.
+  requestSchema: z.object({
+    search: z.string().optional(),
+    connectedOnly: z.boolean().optional(),
+  }),
   responseSchema: z.object({
     toolkits: z.array(
       z.object({
@@ -1711,6 +1748,7 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   composioGet,
   composioSet,
   composioToolkits,
+  composioSearch,
   composioConnect,
   searchGet,
   searchSet,
