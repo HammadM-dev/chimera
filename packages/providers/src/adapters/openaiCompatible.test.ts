@@ -347,3 +347,42 @@ test('an unreachable user-supplied URL surfaces as PROVIDER_UNREACHABLE', async 
     assert.equal(err.code, 'PROVIDER_UNREACHABLE');
   }
 });
+
+test('our own request deadline is a typed provider error, not a bare abort', async () => {
+  // The defect this covers put the single word "timeout" on screen and ended a
+  // run that every retry loop in the product would happily have retried. The
+  // raw `Error('timeout')` escaped as itself, so `isRetryable` — which takes a
+  // ProviderError — never saw it.
+  const adapter = new OpenAiCompatibleAdapter(
+    { kind: 'openai-compatible', provider: 'Slowly', defaultBaseUrl: 'https://example.invalid/v1' },
+    {
+      transport: {
+        fetch: ((_url: string, init: RequestInit) =>
+          new Promise((_resolve, reject) => {
+            // Never answers; whatever aborts it decides the outcome.
+            init.signal?.addEventListener('abort', () => {
+              reject(init.signal?.reason ?? new Error('aborted'));
+            });
+          })) as unknown as typeof globalThis.fetch,
+      },
+      resolveSecret: () => 'sk-test',
+    },
+  );
+
+  // The caller's own cancellation still propagates untouched — that is the
+  // distinction the fix turns on, and collapsing the two would make a stop
+  // button look like a provider fault.
+  const cancelled = new AbortController();
+  const inFlight = adapter.chat(
+    { model: 'm', messages: [{ role: 'user', content: 'hi' }] },
+    { authRef: 'vault:connection:0'.padEnd(48, '0') as never, signal: cancelled.signal },
+  );
+  cancelled.abort(new DOMException('cancelled', 'AbortError'));
+  await assert.rejects(inFlight, (err: unknown) => {
+    assert.ok(
+      !(err instanceof ProviderError),
+      'a caller cancellation must not become a provider error',
+    );
+    return true;
+  });
+});

@@ -59,6 +59,40 @@ export interface RoundReport {
   /** How far the whole population moved. */
   movement: number;
   distribution: Distribution;
+  /**
+   * Where the drawn population stands after this round.
+   *
+   * The graph's whole point is watching opinion move through a crowd, which
+   * needs a position per node per round rather than a summary. Limited to the
+   * nodes actually drawn — see `SwarmGraph` — because a two-thousand-person
+   * swarm would otherwise put two thousand numbers into every round of a
+   * record that is kept for good.
+   */
+  stances: { id: string; position: number; confidence: number }[];
+}
+
+/**
+ * The population as something you can look at.
+ *
+ * Nodes and the ties between them, capped: past a few hundred a force layout
+ * stops being legible and starts being a cloud, and the interesting structure
+ * — who listens to whom, which archetype a follower came from — is already
+ * visible well below that. Archetypes are always included, since they are the
+ * ones who actually think; followers fill the remaining room.
+ */
+export interface SwarmGraph {
+  nodes: {
+    id: string;
+    name: string;
+    kind: 'archetype' | 'follower';
+    /** The archetype this one follows, or '' for an archetype. */
+    follows: string;
+    influence: number;
+  }[];
+  ties: { from: string; to: string; weight: number }[];
+  /** How many of the population are drawn, of how many there are. */
+  drawn: number;
+  total: number;
 }
 
 export interface Distribution {
@@ -77,7 +111,12 @@ export interface SwarmResult {
   final: Distribution;
   stopped: 'settled' | 'rounds' | 'cancelled';
   personas: Persona[];
+  /** Absent on threads recorded before the graph existed. */
+  graph?: SwarmGraph;
 }
+
+/** Nodes drawn, at most. Past this a force layout is a cloud, not a picture. */
+export const MAX_DRAWN_NODES = 320;
 
 export interface SimulateDeps {
   /** Writes the cast. One model call. */
@@ -105,6 +144,14 @@ export interface SimulateDeps {
   onRound?: (report: RoundReport) => void;
   /** Seeds the deterministic jitter. The run id, so a run repeats exactly. */
   seed: string;
+  /**
+   * Called once, as soon as the cast is written and wired.
+   *
+   * The graph is in the result too, but the result arrives at the end and the
+   * picture is worth having from the start — the crowd forming, then changing
+   * colour round by round, is the thing worth watching.
+   */
+  onPopulation?: (graph: SwarmGraph) => void;
   /**
    * How many personas may be asked at once.
    *
@@ -225,12 +272,42 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
       final: { for: 0, against: 0, undecided: 0, weighted: 0 },
       stopped: 'rounds',
       personas: [],
+      graph: { nodes: [], ties: [], drawn: 0, total: 0 },
     };
   }
 
   const people = grow(archetypes, spec.population, random);
   const ties = wire(people, random);
   const thinkers = people.filter((person) => person.kind === 'archetype');
+
+  // Who gets drawn. Archetypes always — they are the ones who think, and the
+  // followers hanging off them are only legible in relation to them — then
+  // followers in order until the cap. Taking them in order rather than at
+  // random keeps each archetype's cluster whole, which is the structure worth
+  // seeing.
+  const drawn = [...thinkers, ...people.filter((person) => person.kind === 'follower')].slice(
+    0,
+    MAX_DRAWN_NODES,
+  );
+  const drawnIds = new Set(drawn.map((person) => person.id));
+
+  const graph: SwarmGraph = {
+    nodes: drawn.map((person) => ({
+      id: person.id,
+      name: person.name,
+      kind: person.kind,
+      follows: person.follows,
+      influence: person.influence,
+    })),
+    // Only ties with both ends on screen. A line to a node that is not drawn
+    // is a line into nowhere.
+    ties: ties
+      .filter((tie) => drawnIds.has(tie.from) && drawnIds.has(tie.to))
+      .map((tie) => ({ from: tie.from, to: tie.to, weight: tie.weight })),
+    drawn: drawn.length,
+    total: people.length,
+  };
+  deps.onPopulation?.(graph);
 
   // ---- stage three: rounds -------------------------------------------------
   let stances: Stance[] = people.map((person) => ({
@@ -256,19 +333,34 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
       thinkers,
       deps.concurrency ?? DEFAULT_CONCURRENCY,
       async (persona) => {
-        const answer = await deps.ask({
-          persona,
-          question: spec.question,
-          background: spec.background,
-          heard: heardBy(persona, ties, stances, people),
-          round,
-        });
-        return {
-          personaId: persona.id,
-          position: Math.max(-1, Math.min(1, answer.position)),
-          confidence: Math.max(0, Math.min(1, answer.confidence)),
-          said: answer.said,
-        };
+        const previous = stances.find((stance) => stance.personaId === persona.id);
+        try {
+          const answer = await deps.ask({
+            persona,
+            question: spec.question,
+            background: spec.background,
+            heard: heardBy(persona, ties, stances, people),
+            round,
+          });
+          return {
+            personaId: persona.id,
+            position: Math.max(-1, Math.min(1, answer.position)),
+            confidence: Math.max(0, Math.min(1, answer.confidence)),
+            said: answer.said,
+          };
+        } catch {
+          // One person who could not be reached is one person who said nothing
+          // this round, and they keep the view they already held. Failing the
+          // whole simulation instead throws away every other answer in the
+          // round and every round before it — which is what used to happen,
+          // and on a rate-limited free model it happened most times.
+          return {
+            personaId: persona.id,
+            position: previous?.position ?? 0,
+            confidence: previous?.confidence ?? 0.3,
+            said: '',
+          };
+        }
       },
     );
 
@@ -287,6 +379,13 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
       })),
       movement: movement(stances, next),
       distribution: distributionOf(people, next),
+      stances: next
+        .filter((stance) => drawnIds.has(stance.personaId))
+        .map((stance) => ({
+          id: stance.personaId,
+          position: stance.position,
+          confidence: stance.confidence,
+        })),
     };
 
     rounds.push(report);
@@ -301,6 +400,7 @@ export async function simulate(spec: SwarmSpec, deps: SimulateDeps): Promise<Swa
   }
 
   return {
+    graph,
     mode,
     population: people.length,
     thinking: thinkers.length,

@@ -1,7 +1,9 @@
 import { swarmsRepository } from '@chimera/store';
-import type { Persona, RoundReport, SwarmResult } from '@chimera/core';
+import { DEFAULT_CONCURRENCY } from '@chimera/core';
+import type { Persona, RoundReport, SwarmGraph, SwarmResult } from '@chimera/core';
 import { getStore } from '../store/lifecycle.ts';
 import { report, runSwarm } from './service.ts';
+import { SwarmThrottle } from './throttle.ts';
 
 // A swarm thread: the population, and everything that has been asked of it.
 //
@@ -104,6 +106,7 @@ export function archiveThread(input: { id: string }): { archived: boolean } {
 }
 
 export interface AskDeps {
+  onPopulation?: (graph: SwarmGraph & { swarmId: string }) => void;
   onRound?: (report: RoundReport & { swarmId: string }) => void;
   cancellation?: { readonly cancelled: boolean };
 }
@@ -173,14 +176,26 @@ export async function askSwarm(
     ...(cast.length === 0 ? {} : { cast }),
   };
 
+  // One throttle for the whole ask. The write-up is the fiftieth request in a
+  // minute, not the first, and treating it as a fresh start is how a swarm
+  // came to do all its thinking successfully and then fail writing it up.
+  const throttle = new SwarmThrottle({ permits: DEFAULT_CONCURRENCY });
+
   const result = await runSwarm(spec, {
+    throttle,
     ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
+    ...(deps.onPopulation
+      ? {
+          onPopulation: (graph: SwarmGraph) =>
+            deps.onPopulation?.({ ...graph, swarmId: thread.id }),
+        }
+      : {}),
     ...(deps.onRound
       ? { onRound: (round: RoundReport) => deps.onRound?.({ ...round, swarmId: thread.id }) }
       : {}),
   });
 
-  const written = await report(spec, result);
+  const written = await report(spec, result, throttle);
 
   const turn = swarmsRepository.addTurn(db, {
     swarmId: thread.id,

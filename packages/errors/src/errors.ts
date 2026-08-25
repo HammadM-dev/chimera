@@ -105,3 +105,33 @@ export class SidecarError extends ChimeraError {
     super(code, message, details);
   }
 }
+
+/**
+ * Whether retrying this failure could plausibly work.
+ *
+ * One definition, used by every retry loop in the product, because the answer
+ * is a property of the error and not of the caller. It was three definitions:
+ * the agent loop retried rate limits and unreachable connections, the swarm
+ * copied that list, and neither retried a 5xx — so a provider having a bad
+ * thirty seconds failed a run outright. OpenRouter returning a 503 mid-swarm
+ * is exactly that, and it ended the whole thing.
+ *
+ * What is *not* here matters as much. A rejected credential, a model the plan
+ * will not run, a malformed request: retrying those produces the same answer
+ * more slowly, and hides a fixable problem behind a delay.
+ */
+export function isRetryable(error: unknown): boolean {
+  if (!(error instanceof ProviderError)) return false;
+
+  return (
+    error.code === 'PROVIDER_RATE_LIMITED' ||
+    // The connection never landed: DNS, a dropped socket, a refused port.
+    error.code === 'PROVIDER_UNREACHABLE' ||
+    // 5xx. The provider is having a moment; that is what backoff is for.
+    error.code === 'PROVIDER_SERVER_ERROR' ||
+    // A gateway that answered with something unreadable is usually an error
+    // page from in front of the provider rather than the provider itself,
+    // which is the same transient condition wearing a different hat.
+    error.code === 'PROVIDER_INVALID_RESPONSE'
+  );
+}

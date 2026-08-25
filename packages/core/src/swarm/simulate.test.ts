@@ -291,3 +291,50 @@ test('every persona is still asked, and answers land on the right one', async ()
     assert.equal(spoke.said, spoke.name, 'an answer landed on the wrong persona');
   }
 });
+
+test('one persona failing does not throw away the whole round', async () => {
+  // On a rate-limited free model this was the common case rather than the
+  // rare one: a single refused call ended the simulation and discarded every
+  // answer already gathered, so the user saw an error instead of a result the
+  // run had very nearly finished producing.
+  let asked = 0;
+
+  const result = await simulate(
+    {
+      question: 'Should we raise prices?',
+      background: '',
+      population: 12,
+      maxRounds: 1,
+      everyoneUpTo: 50,
+      settleAt: 0.03,
+    },
+    {
+      seed: 'one-bad-apple',
+      concurrency: 2,
+      buildPersonas: ({ count }) =>
+        Promise.resolve(
+          Array.from({ length: count }, (_, index) => ({
+            id: `a${String(index)}`,
+            name: `person ${String(index)}`,
+            description: '',
+            traits: [],
+            susceptibility: 0.5,
+            influence: 0.5,
+            kind: 'archetype' as const,
+            follows: '',
+          })),
+        ),
+      ask: ({ persona }) => {
+        asked += 1;
+        if (persona.id === 'a3') return Promise.reject(new Error('rate limited'));
+        return Promise.resolve({ position: 0.6, confidence: 0.7, said: 'in favour' });
+      },
+    },
+  );
+
+  assert.equal(asked, 12, 'every persona should still have been asked');
+  assert.equal(result.rounds.length, 1);
+  // Eleven spoke; the twelfth held its position and said nothing.
+  assert.equal(result.rounds[0]?.said.filter((one) => one.said !== '').length, 11);
+  assert.ok(result.final.for > 0, 'the round still produced a distribution');
+});

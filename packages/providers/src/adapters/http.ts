@@ -71,10 +71,27 @@ function retryAfterMs(headers: Headers): number | undefined {
  */
 export const REQUEST_TIMEOUT_MS = 120_000;
 
-/** An abort signal that fires on timeout, combined with any caller's own. */
-export function withTimeout(signal?: AbortSignal): { signal: AbortSignal; done: () => void } {
+/**
+ * An abort signal that fires on timeout, combined with any caller's own.
+ *
+ * `timedOut` distinguishes the two reasons this signal can fire, and the
+ * difference matters: a caller cancelling a run must propagate untouched, while
+ * our own deadline is a transient provider condition that callers should be
+ * free to retry. Without the flag both arrive as an abort, the raw
+ * `Error('timeout')` escaped as itself, and every retry loop in the product
+ * ignored it — `isRetryable` takes a `ProviderError` and this was not one. A
+ * swarm that met one slow request gave up on the spot and put the word
+ * "timeout" on screen.
+ */
+export function withTimeout(signal?: AbortSignal): {
+  signal: AbortSignal;
+  done: () => void;
+  readonly timedOut: boolean;
+} {
   const controller = new AbortController();
+  let timedOut = false;
   const timer = setTimeout(() => {
+    timedOut = true;
     controller.abort(new Error('timeout'));
   }, REQUEST_TIMEOUT_MS);
 
@@ -90,6 +107,9 @@ export function withTimeout(signal?: AbortSignal): { signal: AbortSignal; done: 
     signal: controller.signal,
     done: () => {
       clearTimeout(timer);
+    },
+    get timedOut() {
+      return timedOut;
     },
   };
 }
@@ -227,6 +247,16 @@ async function send(options: PostOptions): Promise<Response> {
       signal: timeout.signal,
     });
   } catch (err) {
+    // Our own deadline, not the caller's cancellation. Typed, so the retry
+    // loops can see it for what it is: the provider was slow, which is worth
+    // trying again, rather than an unknown error worth giving up on.
+    if (timeout.timedOut) {
+      throw new ProviderError(
+        'PROVIDER_UNREACHABLE',
+        `${options.provider} accepted the connection and sent nothing back within ${String(REQUEST_TIMEOUT_MS / 1000)}s.`,
+        { provider: options.provider },
+      );
+    }
     // A transport failure is not a provider failure — surface it as one
     // typed error rather than letting a raw TypeError from fetch escape.
     if (err instanceof Error && err.name === 'AbortError') throw err;
@@ -267,6 +297,14 @@ export async function getJson<T>(options: Omit<PostOptions, 'body'>): Promise<T>
       signal: timeout.signal,
     });
   } catch (err) {
+    // Our own deadline, as above: typed so a caller may retry it.
+    if (timeout.timedOut) {
+      throw new ProviderError(
+        'PROVIDER_UNREACHABLE',
+        `${options.provider} did not answer within ${String(REQUEST_TIMEOUT_MS / 1000)}s.`,
+        { provider: options.provider },
+      );
+    }
     if (err instanceof Error && err.name === 'AbortError') throw err;
     const message = scrub(err instanceof Error ? err.message : String(err), options.secrets ?? []);
     throw new ProviderError(

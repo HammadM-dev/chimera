@@ -1,8 +1,10 @@
 import {
+  DEFAULT_CONCURRENCY,
   Governor,
   simulate,
   type Persona,
   type RoundReport,
+  type SwarmGraph,
   type SwarmResult,
 } from '@chimera/core';
 import {
@@ -11,7 +13,8 @@ import {
   type ProviderAdapter,
   type AdapterCallOptions,
 } from '@chimera/providers';
-import { ProviderError, ProviderRateLimitError } from '@chimera/errors';
+import { ProviderError, ProviderRateLimitError, isRetryable } from '@chimera/errors';
+import { SwarmThrottle } from './throttle.ts';
 import { connectionFor } from '../providers/service.ts';
 
 // The swarm, driven by real models.
@@ -35,6 +38,8 @@ export interface SwarmRunSpec {
   maxRounds: number;
   everyoneUpTo: number;
   seed: string;
+  /** Simultaneous model calls. Lowered automatically when limits are hit. */
+  concurrency?: number;
   /**
    * The cast, when this thread already has one.
    *
@@ -99,17 +104,57 @@ function parseJson(text: string): Record<string, unknown> {
   }
 }
 
+/**
+ * How many times one swarm call may be retried.
+ *
+ * Far more than the agent loop allows, on purpose. An agent step is one
+ * expensive call in a sequence a person is waiting on, so failing fast and
+ * saying why is right. A swarm call is small, idempotent, one of a hundred, and
+ * the run around it takes minutes anyway — and on a free tier a refusal is
+ * routine rather than exceptional. Measured against OpenRouter's free models:
+ * 429 on a request issued right after a successful one, clearing within
+ * seconds. Four attempts covered about eight seconds of that and gave up in
+ * the middle of a round; the user saw "rate limit reached" on models that
+ * worked perfectly well one call at a time.
+ */
+const SWARM_RETRIES = 14;
+
 function clamp(value: unknown, low: number, high: number, fallback: number): number {
   const number = typeof value === 'number' ? value : Number(value);
   return Number.isFinite(number) ? Math.max(low, Math.min(high, number)) : fallback;
 }
 
 export interface SwarmRunDeps {
+  /** Shared with `report`, so the write-up is not treated as a fresh start. */
+  throttle?: SwarmThrottle;
+  onPopulation?: (graph: SwarmGraph) => void;
   onRound?: (report: RoundReport) => void;
   cancellation?: { readonly cancelled: boolean };
 }
 
-export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Promise<SwarmResult> {
+/**
+ * A model call that waits its turn and retries what is worth retrying.
+ *
+ * Lifted out of `runSwarm` because `report` was calling `adapter.chat`
+ * directly, with no throttle and no retry at all. It is the last call a swarm
+ * makes, so on a rate-limited provider the entire population would think for
+ * thirteen minutes, finish, and then die writing up the answer — throwing away
+ * every round. The symptom was "rate limit reached" arriving long after the
+ * work was done, which is exactly what it looked like.
+ *
+ * One throttle is shared across a whole ask for the same reason: the report is
+ * not a fresh start, it is the fiftieth request in a minute.
+ */
+export function swarmCaller(
+  spec: Pick<SwarmRunSpec, 'connectionId' | 'model' | 'seed'>,
+  throttle: SwarmThrottle,
+): (
+  system: string,
+  user: string,
+  expectedOutput: number,
+  purpose: 'plan' | 'act',
+  nodeId?: string,
+) => Promise<string> {
   const connection = connectionFor(spec.connectionId);
   const adapter = adapterFor(connection.kind);
   const options: AdapterCallOptions = {
@@ -122,15 +167,10 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
   // round caps are what bound the spend, and they are on the request.
   const governor = new Governor('permissive');
 
-  const call = async (
-    system: string,
-    user: string,
-    expectedOutput: number,
-    purpose: 'plan' | 'act',
-  ): Promise<string> => {
+  return async (system, user, expectedOutput, purpose, nodeId = 'swarm') => {
     const authorization = governor.authorizeModelCall({
       runId: spec.seed,
-      nodeId: 'swarm',
+      nodeId,
       roleId: 'swarm',
       iteration: 0,
       depth: 0,
@@ -145,14 +185,9 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
       throw new ProviderError('SWARM_DENIED', authorization.message);
     }
 
-    // Retried on a rate limit, the way the agent loop retries one.
-    //
-    // A swarm is the most request-dense thing this app does — a round is one
-    // call per thinking persona — so it meets provider rate limits that
-    // nothing else here ever does. Without this, one 429 anywhere in a round
-    // failed the entire swarm, and the message that reached the user was
-    // "rate limit reached" on a workspace whose models were fine, which reads
-    // as a false accusation rather than as "slow down".
+    // Every worker queues behind the same gate before it sends.
+    await throttle.wait();
+
     for (let attempt = 0; ; attempt += 1) {
       try {
         return textOf(
@@ -168,23 +203,29 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
           ),
         );
       } catch (err) {
-        const retryable =
-          err instanceof ProviderRateLimitError ||
-          (err instanceof ProviderError && err.code === 'PROVIDER_UNREACHABLE');
-        if (!retryable || attempt >= governor.maxRetries) throw err;
+        if (!isRetryable(err) || attempt >= SWARM_RETRIES) throw err;
 
         if (err instanceof ProviderRateLimitError) {
-          const retryAfterMs = Number(err.details.retryAfterMs);
-          governor.recordRateLimit(
-            spec.connectionId,
-            Number.isFinite(retryAfterMs) ? retryAfterMs : undefined,
-          );
+          const retryAfterMs = Number(err.details['retryAfterMs']);
+          throttle.penalise(Number.isFinite(retryAfterMs) ? retryAfterMs : undefined);
         }
 
-        await new Promise((resolve) => setTimeout(resolve, governor.backoffFor(attempt)));
+        // Capped low deliberately: these refusals clear in seconds, and the
+        // Governor's default backoff climbs to thirty, which would spend a
+        // swarm's whole budget waiting out a limit that had already lifted.
+        await new Promise((resolve) =>
+          setTimeout(resolve, Math.min(6_000, governor.backoffFor(attempt))),
+        );
+        await throttle.wait();
       }
     }
   };
+}
+
+export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Promise<SwarmResult> {
+  const throttle =
+    deps.throttle ?? new SwarmThrottle({ permits: spec.concurrency ?? DEFAULT_CONCURRENCY });
+  const call = swarmCaller(spec, throttle);
 
   return simulate(
     {
@@ -197,6 +238,13 @@ export async function runSwarm(spec: SwarmRunSpec, deps: SwarmRunDeps = {}): Pro
     },
     {
       seed: spec.seed,
+      // Read per round rather than fixed at the start: a swarm that met a limit
+      // in round one should not open the same number of connections in round
+      // two, and the throttle is what knows that.
+      get concurrency() {
+        return throttle.concurrency;
+      },
+      ...(deps.onPopulation ? { onPopulation: deps.onPopulation } : {}),
       ...(deps.onRound ? { onRound: deps.onRound } : {}),
       ...(deps.cancellation ? { cancellation: deps.cancellation } : {}),
 
@@ -305,14 +353,15 @@ export interface SwarmReport {
  * worth running is *why* the population went where it did, and that is in what
  * they said to each other.
  */
-export async function report(spec: SwarmRunSpec, result: SwarmResult): Promise<SwarmReport> {
-  const connection = connectionFor(spec.connectionId);
-  const adapter = adapterFor(connection.kind);
-  const options: AdapterCallOptions = {
-    authRef: connection.authRef,
-    ...(connection.baseUrl === null ? {} : { baseUrl: connection.baseUrl }),
-  };
-  const governor = new Governor('permissive');
+export async function report(
+  spec: SwarmRunSpec,
+  result: SwarmResult,
+  throttle?: SwarmThrottle,
+): Promise<SwarmReport> {
+  const call = swarmCaller(
+    spec,
+    throttle ?? new SwarmThrottle({ permits: spec.concurrency ?? DEFAULT_CONCURRENCY }),
+  );
 
   const transcript = result.rounds
     .map((round) =>
@@ -335,35 +384,7 @@ export async function report(spec: SwarmRunSpec, result: SwarmResult): Promise<S
     transcript,
   ].join('\n');
 
-  const authorization = governor.authorizeModelCall({
-    runId: spec.seed,
-    nodeId: 'swarm-report',
-    roleId: 'swarm',
-    iteration: 0,
-    depth: 0,
-    purpose: 'act',
-    connectionId: spec.connectionId,
-    model: spec.model,
-    estimatedInputTokens: Math.ceil((REPORT_SYSTEM.length + asked.length) / 4),
-    estimatedOutputTokens: 700,
-    requiredCapabilities: [],
-  });
-  if (authorization.decision === 'deny') {
-    throw new ProviderError('SWARM_DENIED', authorization.message);
-  }
-
-  const text = textOf(
-    await adapter.chat(
-      {
-        model: authorization.request.model,
-        messages: [
-          { role: 'system', content: REPORT_SYSTEM },
-          { role: 'user', content: asked },
-        ],
-      },
-      options,
-    ),
-  );
+  const text = await call(REPORT_SYSTEM, asked, 700, 'act', 'swarm-report');
 
   const title = /^TITLE:\s*(.+)$/m.exec(text)?.[1]?.trim() ?? '';
   return { answer: text.replace(/^TITLE:.*$/m, '').trim(), title };

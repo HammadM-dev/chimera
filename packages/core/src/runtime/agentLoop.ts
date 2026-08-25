@@ -1,4 +1,9 @@
-import { GovernorLimitError, ProviderError, ProviderRateLimitError } from '@chimera/errors';
+import {
+  GovernorLimitError,
+  ProviderError,
+  ProviderRateLimitError,
+  isRetryable,
+} from '@chimera/errors';
 import type {
   AdapterCallOptions,
   Message,
@@ -530,11 +535,10 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         }
         return answer;
       } catch (err) {
-        const retryable =
-          err instanceof ProviderRateLimitError ||
-          (err instanceof ProviderError && err.code === 'PROVIDER_UNREACHABLE');
-
-        if (!retryable || attempt >= governor.maxRetries) {
+        // One rule, in `@chimera/errors`. This list used to live here and be
+        // copied wherever else a retry was needed; both copies omitted 5xx, so
+        // a provider having a bad thirty seconds failed a run outright.
+        if (!isRetryable(err) || attempt >= governor.maxRetries) {
           // Out of retries, or an error retrying cannot fix. The checkpoint
           // written after the last completed step is the run's last-good state,
           // so this is resumable once the cause is fixed.
@@ -561,7 +565,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
             attempt: attempt + 1,
             delayMs,
             connectionId: approved.connectionId,
-            reason: err.code,
+            reason: err instanceof ProviderError ? err.code : 'unknown',
           },
         });
         await sleep(delayMs);
