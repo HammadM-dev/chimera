@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { applyCsp } from './security/cspPolicy.ts';
 import { applyPermissionHandler } from './security/permissionHandler.ts';
 import { applyNavigationGuard } from './security/navigationGuard.ts';
+import { hideMenuBar } from './menu.ts';
 import { connectionCount } from './providers/service.ts';
 import { consumeSplashDecision } from './settings/localSettings.ts';
 
@@ -58,6 +59,7 @@ export function openRunWindow(runId: string, name: string): BrowserWindow | null
   });
 
   applyNavigationGuard(win);
+  hideMenuBar(win);
   void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
     query: { view: 'run', runId, name, splash: '0', onboarding: '0' },
   });
@@ -116,6 +118,7 @@ export function createWindow(): BrowserWindow {
   });
 
   applyNavigationGuard(win);
+  hideMenuBar(win);
 
   // E2E tests pass a full absolute path to a fixture file; production code
   // carries no knowledge of where e2e/fixtures lives (it isn't shipped).

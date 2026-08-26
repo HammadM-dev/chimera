@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import { createWindow } from './windows.ts';
+import { applyApplicationMenu } from './menu.ts';
 import { startUsageReporting, setAppVersion } from './telemetry/usageCount.ts';
 import { setProfileDirectory } from './settings/profile.ts';
 import { setTemplateDirectory } from './templates/service.ts';
@@ -56,6 +57,10 @@ void app.whenReady().then(() => {
   // to trust.
   void registerPanicKey();
   startControlBroadcast();
+  // Before the first window: Electron builds a default menu if nothing sets
+  // one, and the default is a white File/Edit/View/Window strip across the top
+  // of a dark application, holding entries for a text editor.
+  applyApplicationMenu();
   createWindow();
 
   // After the window, deliberately. See the file: one line a day, and nothing
