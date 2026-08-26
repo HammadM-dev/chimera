@@ -54,6 +54,15 @@
   --type-meta: 12px;
   --type-floor: 11px;
   --type-heading-max: 22px;
+  /* A section's own heading, and the step above it.
+   *
+   * Both were already being used — `--type-title` in runs.css and in the Apps
+   * section — and neither was ever defined, so those headings quietly inherited
+   * their parent's size and had been doing so since they were written. An
+   * undefined custom property does not fail loudly; it falls back to inherit,
+   * which is the shape of typography bug that survives review. */
+  --type-title: 19px;
+  --type-heading: 16px;
   --font-weight-regular: 400;
   --font-weight-medium: 500;
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
@@ -87,6 +96,9 @@
   --surface-raised: #fbfaf7;
   --surface-popover: #ffffff;
   --surface-logo-plate: #ffffff;
+  /* Lighter than the dark theme's. The same alpha over a pale page is a
+   * blackout rather than a dim. */
+  --surface-scrim: rgba(26, 24, 21, 0.42);
 
   --text-primary: #1a1815;
   --text-secondary: #55524b;
@@ -188,6 +200,10 @@ body {
 
   --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.4);
   --shadow-popover: 0 8px 24px rgba(0, 0, 0, 0.45);
+  /* What sits between a full-screen thing and the app behind it. Heavier on
+   * the dark theme than a light one needs, because the same alpha over a near
+   * black reads as almost no dimming at all. */
+  --surface-scrim: rgba(0, 0, 0, 0.62);
 
   --motion-fast: 90ms;
   --motion-base: 160ms;

@@ -1,0 +1,162 @@
+/* The guided tour.
+ *
+ * A spotlight and a card. The whole visual argument is that the app is still
+ * there behind it — dimmed, not replaced — because the thing being taught is
+ * where everything lives, and a modal that covers the app teaches nothing about
+ * the app. */
+
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  /* The overlay does not eat clicks: the veil and the hole below take them, and
+   * the card takes its own. That way the shape of the app underneath stays
+   * legible rather than feeling frozen. */
+  pointer-events: none;
+}
+
+.tour__veil,
+.tour__hole {
+  position: absolute;
+  pointer-events: auto;
+}
+
+.tour__veil {
+  inset: 0;
+  background: var(--surface-scrim);
+}
+
+/* The hole is cut with one enormous shadow rather than four rectangles around
+ * the target. Four rectangles have seams, and the seams show on every layout
+ * whose numbers are not whole. */
+.tour__hole {
+  border-radius: var(--radius-control);
+  box-shadow:
+    0 0 0 9999px var(--surface-scrim),
+    inset 0 0 0 1px var(--border-stronger);
+  transition:
+    top var(--motion-slow) var(--ease-standard),
+    left var(--motion-slow) var(--ease-standard),
+    width var(--motion-slow) var(--ease-standard),
+    height var(--motion-slow) var(--ease-standard);
+}
+
+.tour__card {
+  position: absolute;
+  width: 400px;
+  max-width: calc(100vw - 40px);
+  padding: var(--space-4);
+  border: var(--border-width) solid var(--border-strong);
+  border-radius: var(--radius-card);
+  background: var(--surface-popover);
+  box-shadow: var(--shadow-popover);
+  pointer-events: auto;
+  animation: tour-card-in var(--motion-slow) var(--ease-standard) both;
+}
+
+.tour__card--centre {
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 440px;
+}
+
+@keyframes tour-card-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.tour__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.tour__mark {
+  color: var(--text-muted);
+}
+
+.tour__eyebrow {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.tour__title {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-serif);
+  font-size: var(--type-heading);
+  font-weight: var(--font-weight-regular);
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.tour__body {
+  margin: 0 0 var(--space-3);
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  line-height: 1.6;
+}
+
+/* The one thing to try. Set apart because a tour people read and do not act on
+ * is a tour they forget by the next screen. */
+.tour__tip {
+  margin: 0 0 var(--space-3);
+  padding-left: var(--space-3);
+  border-left: 2px solid var(--border-control);
+  color: var(--text-primary);
+  font-size: var(--type-floor);
+  line-height: 1.55;
+}
+
+.tour__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tour__skip {
+  margin-left: auto;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  cursor: pointer;
+}
+
+.tour__skip:hover {
+  color: var(--text-primary);
+}
+
+.tour__pips {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--space-3);
+}
+
+.tour__pip {
+  flex: 1;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--border-hairline);
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.tour__pip--on {
+  background: var(--text-muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tour__hole,
+  .tour__card,
+  .tour__pip {
+    transition: none;
+    animation: none;
+  }
+}

@@ -577,6 +577,29 @@ export const pinnedSet = defineInvokeChannel({
   responseSchema: z.object({ pinned: z.array(z.string()) }),
 });
 
+/**
+ * Whether this machine has been offered the guided tour.
+ *
+ * Device-local rather than workspace state, like the splash flag: it is about
+ * what this person has seen on this screen. Opening the same workspace on a new
+ * machine has not taught anybody anything.
+ */
+export const tourGet = defineInvokeChannel({
+  channel: 'tour:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ seen: z.boolean() }),
+});
+
+export const tourSet = defineInvokeChannel({
+  channel: 'tour:set',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ seen: z.boolean() }),
+  responseSchema: z.object({ seen: z.boolean() }),
+});
+
 // Notes and reminders — shared ground between the person and the agents.
 const noteSchema = z.object({
   id: z.string(),
@@ -1984,6 +2007,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   tiersSet,
   pinnedGet,
   pinnedSet,
+  tourGet,
+  tourSet,
   noteList,
   noteSave,
   noteDone,

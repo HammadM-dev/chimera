@@ -103,7 +103,9 @@ export function App(): JSX.Element {
 
   return (
     <>
-      <AppShell />
+      {/* The tour waits for setup, and AppShell owns it because the tour moves
+          between sections and that is AppShell's to do. */}
+      <AppShell setupDone={splashDone && setupDone} />
       {/* Setup waits for the splash: two things animating in at once is one
           too many, and the guide's entrance is the first thing it says. */}
       {splashDone && !setupDone && (

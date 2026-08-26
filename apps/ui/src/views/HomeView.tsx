@@ -17,6 +17,15 @@ interface Props {
   /** Opens the canvas with a draft the planner built, or with a bare goal. */
   onDescribe: (description: string, template: AutomationTemplate | null) => void;
   onBrowseAgents: () => void;
+  /**
+   * Starts the guided tour again.
+   *
+   * Here rather than in the sidebar footer, which was deliberately cleared of a
+   * "Replay intro" button once already: that rail is prime space somebody looks
+   * at all day, and a rewind control does not earn it. Home is where a new
+   * person is and where the tour's own last line says to look.
+   */
+  onStartTour?: () => void;
 }
 
 const STARTERS = [
@@ -25,7 +34,7 @@ const STARTERS = [
   'Extract invoice totals into a spreadsheet',
 ];
 
-export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
+export function HomeView({ onDescribe, onBrowseAgents, onStartTour }: Props): JSX.Element {
   const [description, setDescription] = useState('');
   const { choices } = useConnections();
   const [modelKey, setModelKey] = useState('');
@@ -117,6 +126,16 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
           {greetingFor(new Date().getHours(), profile?.firstName ?? '')}
         </h1>
         <p className="home__sub">What should CHIMERA automate?</p>
+        {onStartTour !== undefined && (
+          <button
+            type="button"
+            className="home__tour"
+            data-testid="home-tour"
+            onClick={onStartTour}
+          >
+            Take the tour
+          </button>
+        )}
       </div>
 
       {turns.length > 0 && (

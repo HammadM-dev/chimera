@@ -187,8 +187,20 @@ export async function dismissOnboarding(page: Page): Promise<void> {
   // its budget and made it fail under load. The guide mounts in the same React
   // commit that unmounts the splash, and `goTo` has already waited for that,
   // so there is no race left to wait out.
-  if ((await skip.count()) === 0) return;
-  await skip.click();
+  if ((await skip.count()) > 0) await skip.click();
+
+  // And the tour, which comes up behind it on a fresh profile.
+  //
+  // Not optional politeness: the tour dims the app and takes clicks, so every
+  // test that starts on a fresh profile — which is every test here — would
+  // otherwise find its first click swallowed by a veil. Dismissed the way a
+  // person would rather than by writing the "seen" flag behind the app's back,
+  // so this exercises the same path they take.
+  const tourSkip = page.getByTestId('tour-skip').first();
+  if ((await tourSkip.count()) === 0) return;
+  await tourSkip.click();
+  await page.getByTestId('tour-skip-confirmed').click();
+  await page.getByTestId('tour').waitFor({ state: 'detached', timeout: 10_000 });
 }
 
 /**

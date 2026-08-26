@@ -15,6 +15,7 @@ import { useProfile } from '../useProfile.ts';
 import { SwarmView } from '../views/SwarmView.tsx';
 import { ComposioView } from '../views/ComposioView.tsx';
 import { NotesView } from '../views/NotesView.tsx';
+import { Tour } from '../tour/Tour.tsx';
 
 // CHIMERA is a place you build automations, so the frame is a sidebar of places
 // and one surface that changes — not a chat window with settings around it.
@@ -187,10 +188,33 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   },
 };
 
-export function AppShell(): JSX.Element {
+export function AppShell({ setupDone = true }: { setupDone?: boolean } = {}): JSX.Element {
   const { profile, save } = useProfile();
   const theme = profile?.theme ?? 'dark';
   const [view, setView] = useState<View>('home');
+  /**
+   * Whether the guided tour is running.
+   *
+   * `null` while the answer is still being read: showing it and then taking it
+   * away is worse than a moment with nothing, and a tour that flashes on every
+   * launch for somebody who finished it months ago is the definition of
+   * nagging.
+   */
+  const [touring, setTouring] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    if (!setupDone) return;
+    void (async () => {
+      try {
+        const seen = await bridge().invoke<{ seen: boolean }>('tour:get', {});
+        setTouring(!seen.seen);
+      } catch {
+        // Unreadable means do not interrupt. A tour is an offer, and an offer
+        // nobody can decline is an imposition.
+        setTouring(false);
+      }
+    })();
+  }, [setupDone]);
   const [goal, setGoal] = useState('');
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
   const [canvasKey, setCanvasKey] = useState(0);
@@ -345,6 +369,9 @@ export function AppShell(): JSX.Element {
             onBrowseAgents={() => {
               setView('agents');
             }}
+            onStartTour={() => {
+              setTouring(true);
+            }}
           />
         ) : (
           <section className="view">
@@ -450,6 +477,19 @@ export function AppShell(): JSX.Element {
       />
 
       <StatusBar changed={refreshToken} />
+
+      {/* Last, so it sits over everything — and rendered by the shell because
+          the tour moves between sections, which is the shell's to do. */}
+      {touring === true && (
+        <Tour
+          onView={(next) => {
+            setView(next);
+          }}
+          onDone={() => {
+            setTouring(false);
+          }}
+        />
+      )}
     </div>
   );
 }

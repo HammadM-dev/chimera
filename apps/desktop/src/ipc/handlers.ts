@@ -204,6 +204,17 @@ registerHandler(channels.tiersGet, () => getTiers());
 registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));
 registerHandler(channels.pinnedGet, () => getPinnedModels());
 registerHandler(channels.pinnedSet, (payload) => setPinnedModels(payload.pinned));
+// Imported inside the handler, not at the top of the file. `localSettings`
+// reaches for `app.getPath('userData')`, and `electron` is a CommonJS module
+// with no named exports — so a static import of it fails to instantiate under
+// Node's ESM loader, which is what runs the unit tests. It took the whole IPC
+// registry suite down once already, through `openExternal`.
+registerHandler(channels.tourGet, async () =>
+  (await import('../settings/localSettings.ts')).getTourState(),
+);
+registerHandler(channels.tourSet, async (payload) =>
+  (await import('../settings/localSettings.ts')).setTourSeen(payload.seen),
+);
 registerHandler(channels.noteList, (payload) => listNotes(payload));
 registerHandler(channels.noteSave, (payload) => saveNote(payload));
 registerHandler(channels.noteDone, (payload) => setNoteDone(payload));

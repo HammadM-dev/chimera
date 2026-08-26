@@ -18,6 +18,24 @@ test.describe('look', () => {
       const page = await app.firstWindow();
       await page.setViewportSize({ width: 1440, height: 900 });
 
+      // The tour comes up on a fresh profile, so photograph it before it is
+      // dismissed — including a step that points at something.
+      await page.waitForSelector('[data-testid="app-shell"]');
+      await page.waitForSelector('.splash', { state: 'detached', timeout: 20_000 });
+      const skip = page.getByTestId('intro-skip').first();
+      if ((await skip.count()) > 0) await skip.click();
+      await page.getByTestId('tour').waitFor({ timeout: 20_000 });
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: `${SHOTS}/tour-1.png` });
+      await page.getByTestId('tour-next').click();
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: `${SHOTS}/tour-2.png` });
+      await page.getByTestId('tour-skip').click();
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: `${SHOTS}/tour-skip.png` });
+      await page.getByTestId('tour-skip-confirmed').click();
+      await page.waitForTimeout(400);
+
       // Home first: the mark sits above the greeting there. Through `goTo` so
       // first-run setup is dismissed — it is a full-screen overlay, and a click
       // made underneath it is intercepted rather than delivered.

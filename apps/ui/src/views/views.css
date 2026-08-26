@@ -44,6 +44,24 @@
   gap: var(--space-3);
 }
 
+/* Quiet, and under the prompt rather than beside it: an offer, not a call to
+ * action competing with the box the person came here to type in. */
+.home__tour {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.home__tour:hover {
+  color: var(--text-primary);
+}
+
 .home__mark {
   /* Quieter than the greeting under it. A logo that outshouts the sentence
    * next to it is a logo doing the sentence's job. */
