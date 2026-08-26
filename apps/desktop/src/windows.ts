@@ -1,5 +1,6 @@
 import { BrowserWindow, session } from 'electron';
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { applyCsp } from './security/cspPolicy.ts';
 import { applyPermissionHandler } from './security/permissionHandler.ts';
@@ -72,6 +73,23 @@ export function openRunWindow(runId: string, name: string): BrowserWindow | null
   return win;
 }
 
+/**
+ * Where the app icon is, in a built app and in a checkout.
+ *
+ * `build/` is electron-builder's `buildResources` directory, which is not
+ * copied into `dist/` — so a packaged app finds it beside the bundle and a
+ * development run finds it two levels up. Falling back rather than failing:
+ * a window with the default Electron icon is a cosmetic problem, and refusing
+ * to open one over it would not be.
+ */
+function appIconPath(): string {
+  const candidates = [
+    path.join(moduleDir, 'icon.png'),
+    path.join(moduleDir, '..', 'build', 'icon.png'),
+  ];
+  return candidates.find((candidate) => existsSync(candidate)) ?? '';
+}
+
 export function createWindow(): BrowserWindow {
   applyCsp(session.defaultSession);
   applyPermissionHandler(session.defaultSession);
@@ -80,6 +98,13 @@ export function createWindow(): BrowserWindow {
     width: 1200,
     height: 800,
     show: false,
+    // The mark, for the taskbar and the window itself.
+    //
+    // Only Linux and Windows read this: macOS takes the icon from the bundle
+    // that electron-builder assembles, so setting it here would be ignored
+    // there and misleading here. `icon.png` is the packaged build's source
+    // icon too — one file, so the window and the launcher cannot disagree.
+    ...(process.platform === 'darwin' ? {} : { icon: appIconPath() }),
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,

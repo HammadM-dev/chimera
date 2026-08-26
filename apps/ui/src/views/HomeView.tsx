@@ -4,6 +4,7 @@ import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
 import { useProfile } from '../useProfile.ts';
 import { greetingFor } from './greeting.ts';
+import { Mark } from '../assets/brand/Mark.tsx';
 import type { AutomationTemplate, StepKind, StepSettings } from './CanvasView.tsx';
 import { useTemplates } from './useTemplates.ts';
 import './views.css';
@@ -107,7 +108,11 @@ export function HomeView({ onDescribe, onBrowseAgents }: Props): JSX.Element {
 
   return (
     <section className="home" data-testid="home-view">
-      <div>
+      <div className="home__welcome">
+        {/* The mark sits above the greeting, at the size a signature is: big
+            enough to be the thing you see first on an empty screen, small
+            enough that the sentence under it is still the thing you read. */}
+        <Mark size={44} className="home__mark" />
         <h1 className="home__greeting" data-testid="home-greeting">
           {greetingFor(new Date().getHours(), profile?.firstName ?? '')}
         </h1>

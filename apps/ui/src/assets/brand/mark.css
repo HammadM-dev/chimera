@@ -1,0 +1,20 @@
+/* The mark, filled with whatever colour it inherits.
+ *
+ * A mask rather than an <img>: the artwork is one shape, and the two themes
+ * want it in two colours. Masking means the colour comes from `currentColor`
+ * like everything else on the page, so there is no second file to keep in step
+ * and no theme the mark can be wrong in. */
+
+.brandmark {
+  display: block;
+  flex: none;
+  background-color: currentColor;
+  -webkit-mask-image: var(--brand-mark);
+  mask-image: var(--brand-mark);
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}

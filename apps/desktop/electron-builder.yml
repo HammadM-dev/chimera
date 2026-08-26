@@ -17,6 +17,9 @@ executableName: chimera
 
 directories:
   output: release
+  # `icon.png` lives here. electron-builder picks it up by name and renders the
+  # per-platform sizes from it, so there is one source image rather than a
+  # folder of them that can drift apart.
   buildResources: build
 
 # The main and preload bundles are self-contained (Vite bundles everything

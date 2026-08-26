@@ -32,6 +32,15 @@ const copies = [
     hint: 'packages/store/src/migrations is missing from the working tree.',
   },
   {
+    // The app icon, next to the bundle. `build/` is electron-builder's own
+    // resources directory and is not packaged, so without this a built app
+    // has no icon to hand to BrowserWindow — see `appIconPath` in windows.ts.
+    label: 'icon',
+    from: path.join(desktopRoot, 'build', 'icon.png'),
+    to: path.join(desktopRoot, 'dist', 'icon.png'),
+    hint: 'apps/desktop/build/icon.png is missing from the working tree.',
+  },
+  {
     label: 'templates',
     from: path.resolve(repoRoot, 'templates'),
     to: path.join(desktopRoot, 'dist', 'templates'),

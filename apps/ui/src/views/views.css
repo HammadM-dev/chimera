@@ -36,6 +36,20 @@
   margin-bottom: auto;
 }
 
+/* The welcome: mark, greeting, prompt — one centred column. */
+.home__welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.home__mark {
+  /* Quieter than the greeting under it. A logo that outshouts the sentence
+   * next to it is a logo doing the sentence's job. */
+  color: var(--text-secondary);
+}
+
 .home__greeting {
   margin: 0;
   font-family: var(--font-serif);

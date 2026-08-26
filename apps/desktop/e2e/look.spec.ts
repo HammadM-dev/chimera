@@ -18,6 +18,18 @@ test.describe('look', () => {
       const page = await app.firstWindow();
       await page.setViewportSize({ width: 1440, height: 900 });
 
+      // Home first: the mark sits above the greeting there. Through `goTo` so
+      // first-run setup is dismissed — it is a full-screen overlay, and a click
+      // made underneath it is intercepted rather than delivered.
+      await goTo(page, 'home');
+      await page.waitForTimeout(700);
+      await page.screenshot({ path: `${SHOTS}/home-dark.png` });
+      await page.getByTestId('nav-theme').click();
+      await page.waitForTimeout(700);
+      await page.screenshot({ path: `${SHOTS}/home-light.png` });
+      await page.getByTestId('nav-theme').click();
+      await page.waitForTimeout(400);
+
       await goTo(page, 'apps');
       await page.waitForTimeout(1200);
       await page.screenshot({ path: `${SHOTS}/apps-setup.png` });
