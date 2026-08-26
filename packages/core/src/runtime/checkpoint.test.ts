@@ -137,9 +137,12 @@ test('a run journals a node_states row after every completed step', async () => 
     const final = nodeStatesRepository.get(db, 'run-1', 'node-1');
     assert.ok(final);
     assert.equal(final.status, 'succeeded');
-    assert.equal(final.iterationCount, 1);
+    // Two iterations and four steps: plan, act, verify, and the turn where the
+    // agent reports what its tool actually returned. Everything it had said
+    // before that was said before the results existed — see `outputIsStale`.
+    assert.equal(final.iterationCount, 2);
     const checkpoint = JSON.parse(final.checkpointJson ?? '{}') as { steps: unknown[] };
-    assert.equal(checkpoint.steps.length, 3);
+    assert.equal(checkpoint.steps.length, 4);
   } finally {
     await tools.close();
     db.close();

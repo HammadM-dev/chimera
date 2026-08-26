@@ -115,7 +115,11 @@ test('an agent plans, acts, verifies and completes a real task in its sandbox', 
     );
 
     assert.equal(result.status, 'succeeded');
-    assert.equal(result.iterations, 2);
+    // Three, not two: everything this agent had said so far was said before its
+    // tools ran, so it takes one more turn to report what it found. See
+    // `outputIsStale` — a step that hands on its plan instead of its results is
+    // the defect that turn exists to close.
+    assert.equal(result.iterations, 3);
     assert.equal(result.verification?.verified, true);
 
     // The file is really on disk, inside the sandbox and nowhere else.
@@ -124,9 +128,10 @@ test('an agent plans, acts, verifies and completes a real task in its sandbox', 
       'complete',
     );
 
-    // Every model call and every tool call went through the Governor: five
-    // model calls (plan, two acts, two verifies) and two tool calls.
-    assert.equal(governor.modelCalls, 5);
+    // Every model call and every tool call went through the Governor: six
+    // model calls (plan, two acts, two verifies, and the closing turn where the
+    // agent reports what it found) and two tool calls.
+    assert.equal(governor.modelCalls, 6);
     assert.equal(governor.toolCalls, 2);
 
     // Only allowlisted tools were used. The coder may write and shell out; it
@@ -172,8 +177,11 @@ test('an agent plans, acts, verifies and completes a real task in its sandbox', 
     // Prompts and responses pair up, and the responses carry usage.
     const prompts = events.filter((event) => event.eventType === 'prompt');
     const responses = events.filter((event) => event.eventType === 'response');
-    assert.equal(prompts.length, 5);
-    assert.equal(responses.length, 5);
+    // Derived from the Governor's own count rather than written out again: two
+    // statements of the same number is one that goes stale, and this file has
+    // now had three of them drift together.
+    assert.equal(prompts.length, governor.modelCalls);
+    assert.equal(responses.length, governor.modelCalls);
     assert.ok(responses.every((event) => (event.tokensIn ?? 0) > 0));
 
     // A tool result is recorded for every tool call, and it says whether it was

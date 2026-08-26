@@ -130,6 +130,10 @@ test('the loop runs plan, act, observe, verify, decide and exits on verified suc
             params: { path: 'hello.txt', content: 'hello' },
           },
           VERIFIED,
+          // The answering turn. Everything the step has said so far was said
+          // before its tool ran, so it has not yet reported anything — see
+          // `outputIsStale`. This is the turn where it does.
+          { kind: 'text', content: 'Wrote hello.txt; it contains "hello".' },
         ],
       },
     }),
@@ -145,11 +149,13 @@ test('the loop runs plan, act, observe, verify, decide and exits on verified suc
     });
 
     assert.equal(result.status, 'succeeded');
-    assert.equal(result.iterations, 1);
+    assert.equal(result.iterations, 2);
     assert.deepEqual(
       result.steps.map((step) => step.purpose),
-      ['plan', 'act', 'verify'],
+      ['plan', 'act', 'verify', 'act'],
     );
+    // And what it hands on is the report, not the plan it opened with.
+    assert.match(result.output, /contains "hello"/);
 
     // The tool actually ran, and the file it wrote is really there. The loop is
     // not being graded on its own description of what it did.
@@ -191,15 +197,25 @@ test('every model call and every tool call is authorized before it is dispatched
     });
 
     // One authorization per model call, and one per tool call, in the order
-    // the loop makes them. Three model calls reached the provider and three
+    // the loop makes them. Four model calls reached the provider and four
     // authorizations preceded them.
     assert.deepEqual(governor.events, [
       'authorizeModelCall:plan',
       'authorizeModelCall:act',
       'authorizeToolCall:filesystem.writeFile',
       'authorizeModelCall:verify',
+      // The answering turn, and the point of listing it: it is a model call
+      // like any other and it goes through the Governor like any other. A new
+      // call added to this loop that did not appear here would be the bypass
+      // CLAUDE.md's first hard rule forbids.
+      'authorizeModelCall:act',
     ]);
-    assert.equal(provider.calls, 3);
+    assert.equal(provider.calls, 4);
+    assert.equal(
+      governor.events.filter((event) => event.startsWith('authorizeModelCall')).length,
+      provider.calls,
+      'a model call reached the provider without an authorization in front of it',
+    );
   } finally {
     await h.cleanup();
   }
@@ -1071,6 +1087,55 @@ test('a step that runs out of turns still says what it found', async () => {
     assert.equal(result.status, 'exhausted');
     assert.match(result.output, /I got as far as/);
     assert.doesNotMatch(result.output, /Next I will write the file/);
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a plan is an intention too, even when the acting turn says nothing', async () => {
+  // The shape a real model actually produced, and the one that survived the
+  // first fix. The narration went in the *planning* turn — "I'll fetch the
+  // order record now." — and the acting turn was a bare tool call with no text
+  // at all. Nothing after that ever overwrote the plan, so the step reported
+  // success with a sentence about the future as its findings.
+  //
+  // Scripted here exactly as it came back from OpenRouter, because the version
+  // of this test that put the narration on the acting turn passed against the
+  // bug.
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'I will write the file now.' },
+          {
+            kind: 'toolCall',
+            toolId: 'filesystem__writeFile',
+            toolName: 'filesystem__writeFile',
+            params: { path: 'hello.txt', content: 'hello' },
+          },
+          VERIFIED,
+          { kind: 'text', content: 'Done: hello.txt contains "hello".' },
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(taskFor(), {
+      governor: new Governor('permissive'),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.equal(result.status, 'succeeded');
+    assert.doesNotMatch(
+      result.output,
+      /I will write the file now/,
+      'the step handed on its plan instead of its result',
+    );
+    assert.match(result.output, /contains "hello"/);
   } finally {
     await h.cleanup();
   }

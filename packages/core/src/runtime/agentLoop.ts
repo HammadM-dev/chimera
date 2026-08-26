@@ -395,12 +395,25 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
 
   let output = restored.output;
   /**
-   * True when `output` is something the model said *before* its tools ran.
+   * How many observations existed when `output` was last set.
    *
-   * A sentence attached to a tool call is an intention, not a result. Cleared
-   * by any turn that speaks without calling anything.
+   * The question "is this answer stale?" is exactly "have any tool results
+   * arrived since it was written?", and this is the cheapest way to ask it.
+   *
+   * Two earlier attempts at the same idea were both wrong in an instructive
+   * way. Flagging text that arrived alongside a tool call missed the shape the
+   * real model produced — narration in the *planning* turn and a silent tool
+   * call after it. Flagging every plan then broke the opposite case, which is
+   * also real and already tested: a data extractor that produces the whole
+   * correct answer while planning and calls nothing at all has answered, and
+   * making it speak again would be paying for a worse copy.
+   *
+   * Counting observations distinguishes them without having to guess which
+   * turn the model chose to talk in.
    */
-  let outputIsIntention = false;
+  let outputAtObservations = 0;
+  /** True when tool results have landed since `output` was written. */
+  const outputIsStale = (): boolean => observations.length > outputAtObservations;
   /**
    * True while the step is going round only to put its findings into words.
    *
@@ -780,7 +793,15 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     if ('denied' in planned) return denialResult(planned.denied);
     const plan = record('plan', planned.response);
     history.push({ role: 'assistant', content: plan });
+    // Kept so a step that never gets to act still has something to show — and
+    // marked as an intention, because that is exactly what a plan is. Missing
+    // this was the whole of the reported bug surviving its first fix: the unit
+    // test scripted the narration onto the acting turn, and the real model put
+    // it here instead. "I'll fetch the order record now." was the *plan*, the
+    // acting turn was a silent tool call, and so the flag was never set and a
+    // sentence about the future went downstream as the step's findings.
     output = plan;
+    outputAtObservations = observations.length;
     checkpoint('running');
   }
 
@@ -804,7 +825,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
       answering = false;
       if (actText.trim() !== '') {
         output = actText;
-        outputIsIntention = false;
+        outputAtObservations = observations.length;
         history.push({ role: 'assistant', content: actText });
         const contracted = await applyOutputContract();
         if (contracted !== null && 'denied' in contracted) return denialResult(contracted.denied);
@@ -822,16 +843,15 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     let failedThisIteration = 0;
     if (actText !== '') {
       output = actText;
-      // What a model says in the same turn as a tool call is what it is *about
-      // to* do. The results do not exist yet, so this cannot be the step's
-      // answer — and taking it as one is how an App operator that fetched
-      // somebody's email handed the next step "I'll fetch your GitHub emails
-      // now" and nothing else. The emails went nowhere.
+      // Stamped with the observation count as it stands *now*, before this
+      // turn's tools run. Anything the model says in the same turn as a call is
+      // what it is about to do — the results do not exist yet — so the results
+      // arriving is what makes this answer stale.
       //
-      // The old guard only caught an *empty* answer, which a real model almost
-      // never gives: they narrate. This is the same idea with the real
-      // condition.
-      outputIsIntention = acted.response.toolCalls.length > 0;
+      // This is how an App operator that fetched somebody's email handed the
+      // next step "I'll fetch your GitHub emails now" and nothing else. The
+      // emails went nowhere.
+      outputAtObservations = observations.length;
     }
     // Two assistant turns saying the same thing are one assistant turn saying
     // it twice, as far as the next model call is concerned. On a task simple
@@ -1090,7 +1110,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     // ordinary case.
     if (
       verification.verified &&
-      (output.trim() === '' || outputIsIntention) &&
+      (output.trim() === '' || outputIsStale()) &&
       iteration < task.role.maxIterations
     ) {
       answering = true;
@@ -1128,7 +1148,7 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   // the run still ends here, and the difference is whether what it found comes
   // out. Skipped when the step has already spoken with results in hand, which
   // is the case where there is nothing to add.
-  if (!cancelled() && (output.trim() === '' || outputIsIntention || observations.length > 0)) {
+  if (!cancelled() && (output.trim() === '' || outputIsStale())) {
     const lastWord = await callModel(
       'decide',
       [
