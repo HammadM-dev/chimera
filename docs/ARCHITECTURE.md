@@ -288,6 +288,20 @@ Written by the provider-call path in the runtime when a call completes and the w
 | `composio_json` | text | Whether Composio is on, the vault handle for its key, and which Composio "user" this workspace is — never the key |
 | `pinned_models_json` | text | `connectionId::model` keys kept at the top of every model picker, in the order they were pinned. A workspace that connects a router gets several hundred models in a dropdown, and this is the two or three anybody uses |
 
+**`notes`** — added by migration `0021`. Notes and reminders, shared ground between the person and the agents: both read it and both write to it. Deliberately *not* `memories` or `workspace_facts`, which look similar and are not — those are read by prompts so a later run reads better, this is read by people. An assistant that notices a licence expires next month should be able to leave that where somebody will find it.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | text | uuid |
+| `kind` | text | `note` or `reminder`. A reminder is a note with a time on it; one table, because splitting them would mean two lists and a decision every time somebody adds something they might want reminding of |
+| `title` | text | The line you read in the list |
+| `body` | text | The rest, optional |
+| `due_at` | text | ISO 8601, null for a note |
+| `done_at` | text | ISO 8601 when ticked off, null while outstanding. Completed items sink rather than vanishing |
+| `source` | text | `user`, `assistant`, or the id of the run that wrote it — a reminder a person set and one an automation set are not the same claim on their attention |
+| `created_at` | text | ISO 8601 |
+| `updated_at` | text | ISO 8601 |
+
 **`workspace_facts`** — added by migration `0004` for M2-10, F2.7's second memory tier: curated key-value knowledge that outlives a run. Deliberately not the `cache` table, which holds derived data under an eviction policy — evicting a note a person typed to make room for a cached embedding would be indefensible. `source` records `user` or the id of the run that wrote the fact, and travels with it into the prompt, because what an agent asserted and what a person stated are not equally trustworthy.
 
 | Column | Type | Notes |

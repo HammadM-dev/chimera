@@ -39,6 +39,8 @@ export type {
   ComposioSearchResult,
 } from './servers/composio.ts';
 export { createWorkspaceServer } from './servers/workspace.ts';
+export { createNotebookServer } from './servers/notebook.ts';
+export type { Note, NotebookBackend } from './servers/notebook.ts';
 export type {
   WorkspaceBackend,
   WorkspaceAutomation,

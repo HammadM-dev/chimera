@@ -300,6 +300,18 @@ const BUILT_IN_TOOLS = [
     id: 'workspace.planAutomation',
     description: 'Designs an automation from a description. Designs only — applies nothing.',
   },
+  {
+    id: 'notebook.list',
+    description: 'Reads the notes and reminders on this workspace’s board.',
+  },
+  {
+    id: 'notebook.add',
+    description: 'Leaves a note or a reminder where the person will see it.',
+  },
+  {
+    id: 'notebook.update',
+    description: 'Changes something on the notes board, or ticks it off.',
+  },
 ];
 
 /**

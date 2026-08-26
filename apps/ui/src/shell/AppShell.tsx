@@ -14,6 +14,7 @@ import './shell.css';
 import { useProfile } from '../useProfile.ts';
 import { SwarmView } from '../views/SwarmView.tsx';
 import { ComposioView } from '../views/ComposioView.tsx';
+import { NotesView } from '../views/NotesView.tsx';
 
 // CHIMERA is a place you build automations, so the frame is a sidebar of places
 // and one surface that changes — not a chat window with settings around it.
@@ -26,6 +27,7 @@ type View =
   | 'runs'
   | 'agents'
   | 'apps'
+  | 'notes'
   | 'memory'
   | 'providers'
   | 'chat';
@@ -97,6 +99,20 @@ const NAV: { view: View; label: string; icon: JSX.Element }[] = [
     ),
   },
   {
+    view: 'notes',
+    label: 'Notes',
+    // A page with a turned corner and two written lines. Not a pin or a bell:
+    // this holds notes as often as reminders, and a bell would promise
+    // notifications the app does not send.
+    icon: (
+      <>
+        <path d="M3.5 2.5h6l3 3v8a1 1 0 0 1-1 1h-8a1 1 0 0 1-1-1v-10a1 1 0 0 1 1-1z" />
+        <path d="M9.5 2.5v3h3" />
+        <path d="M5.5 9h5M5.5 11.5h3" />
+      </>
+    ),
+  },
+  {
     view: 'memory',
     label: 'Memory',
     icon: (
@@ -149,6 +165,12 @@ const TITLES: Record<View, { title: string; subtitle: string }> = {
   agents: {
     title: 'Agents',
     subtitle: 'The roster an automation draws from. Editing these is a workspace-wide change.',
+  },
+  notes: {
+    title: 'Notes',
+    // Short, because the frame truncates a long one and the fuller
+    // explanation is on the board itself where there is room for it.
+    subtitle: 'What you and your agents need to remember.',
   },
   apps: {
     title: 'Apps',
@@ -374,6 +396,11 @@ export function AppShell(): JSX.Element {
             {view === 'apps' && (
               <div className="view__body scroll">
                 <ComposioView />
+              </div>
+            )}
+            {view === 'notes' && (
+              <div className="view__body scroll">
+                <NotesView />
               </div>
             )}
             {view === 'memory' && <MemoryView />}

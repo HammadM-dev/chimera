@@ -90,7 +90,7 @@ export const STARTER_ROLES: readonly Role[] = [
     name: 'Planner',
     systemPrompt:
       'You break a goal into an ordered list of concrete steps. Each step names one action and how its result will be checked. You do not carry the steps out.',
-    toolAllowlist: ['memory.recall'],
+    toolAllowlist: ['memory.recall', 'notebook.list'],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 100_000 },
     outputContract: { format: 'json', schemaId: 'plan' },
@@ -229,7 +229,18 @@ export const STARTER_ROLES: readonly Role[] = [
     // the work may write memory, and it was right: an assistant quietly
     // recording notes during a conversation about the notes is a thing nobody
     // asked for and nobody would find.
-    toolAllowlist: ['workspace.*', 'memory.recall', 'search.web', 'http.request'],
+    // `notebook.*` writes, and it is the one thing here that does. A note is a
+    // row on a board the person is looking at, with an edit and a delete beside
+    // it — which is a different act from recording a memory that silently
+    // changes how later runs read. `memory.recall` stays read-only for that
+    // reason.
+    toolAllowlist: [
+      'workspace.*',
+      'notebook.*',
+      'memory.recall',
+      'search.web',
+      'http.request',
+    ],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 150_000, maxCostUsd: 1 },
     outputContract: { format: 'text', schemaId: null },

@@ -39,6 +39,39 @@ test.describe('look', () => {
         await page.screenshot({ path: `${SHOTS}/apps-guide.png` });
       }
 
+      await goTo(page, 'notes');
+      await page.waitForTimeout(500);
+      // Something on the board, including a line an agent left, because an
+      // empty board says nothing about how a full one reads.
+      await page.evaluate(async () => {
+        const chimera = (
+          window as unknown as {
+            chimera: { invoke: (c: string, p: unknown) => Promise<unknown> };
+          }
+        ).chimera;
+        const day = 24 * 60 * 60 * 1000;
+        await chimera.invoke('note:save', {
+          kind: 'reminder',
+          title: 'Chase the Rotterdam invoice',
+          body: 'Second reminder. They asked for a PO number.',
+          dueAt: new Date(Date.now() - 3 * day).toISOString(),
+        });
+        await chimera.invoke('note:save', {
+          kind: 'reminder',
+          title: 'Renew the Stripe restricted key',
+          dueAt: new Date(Date.now() + 2 * day).toISOString(),
+        });
+        await chimera.invoke('note:save', {
+          kind: 'note',
+          title: 'Design partner call notes',
+          body: 'They want per-seat pricing and an audit export.',
+        });
+      });
+      await page.reload();
+      await goTo(page, 'notes');
+      await page.waitForTimeout(900);
+      await page.screenshot({ path: `${SHOTS}/notes.png` });
+
       await goTo(page, 'build');
       await page.waitForTimeout(800);
       await page.screenshot({ path: `${SHOTS}/canvas.png` });

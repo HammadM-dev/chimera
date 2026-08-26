@@ -87,6 +87,7 @@ import {
   toolkitOf,
 } from '../composio/service.ts';
 import { openExternal } from '../security/openExternal.ts';
+import { listNotes, removeNote, saveNote, setNoteDone } from '../notes/service.ts';
 import {
   archiveThread,
   askSwarm,
@@ -203,6 +204,10 @@ registerHandler(channels.tiersGet, () => getTiers());
 registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));
 registerHandler(channels.pinnedGet, () => getPinnedModels());
 registerHandler(channels.pinnedSet, (payload) => setPinnedModels(payload.pinned));
+registerHandler(channels.noteList, (payload) => listNotes(payload));
+registerHandler(channels.noteSave, (payload) => saveNote(payload));
+registerHandler(channels.noteDone, (payload) => setNoteDone(payload));
+registerHandler(channels.noteRemove, (payload) => removeNote(payload));
 registerHandler(channels.cacheGet, () => getCachePolicy());
 registerHandler(channels.cacheSet, (payload) => setCachePolicy(payload.policy));
 registerHandler(channels.telemetryGet, () => getTelemetry());

@@ -28,6 +28,7 @@ import {
   createFilesystemServer,
   createSandbox,
   createMemoryServer,
+  createNotebookServer,
   createShellServer,
   createToolRegistry,
 } from '@chimera/tools';
@@ -45,6 +46,7 @@ import { registerPlugins, pluginSecrets } from '../plugins/service.ts';
 import { exportRun } from './otel.ts';
 import { screenshotSinkFor } from './screenshots.ts';
 import { readableFolders } from '../files/grants.ts';
+import { notebookBackend } from '../notes/service.ts';
 import {
   credentialsFor,
   emailSecrets,
@@ -427,6 +429,16 @@ async function execute(runId: string, brief: RunBrief, resume: boolean): Promise
       // works, so the run goes ahead.
     }
   }
+
+  // The notes board, credited to this run. An automation asked to follow
+  // something up can leave that where the person will find it rather than in a
+  // trace nobody opens — and the board records which run wrote it, because a
+  // reminder an automation set and one a person set are different claims on
+  // somebody's attention.
+  await tools.registerServer(
+    'notebook',
+    await connectInProcess(createNotebookServer(notebookBackend(runId))),
+  );
 
   // Every mailbox the workspace holds, each under its own server id so an
   // agent is granted one account rather than "email". A workspace with two

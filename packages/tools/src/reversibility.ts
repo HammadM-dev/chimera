@@ -84,6 +84,16 @@ const CONTAINED: readonly string[] = [
   // GMAIL_SEND_EMAIL should get.
   'composio.toolkits',
   'composio.search',
+  // The notes board, all of it including the writes.
+  //
+  // A note is a row on a board the person is looking at, with an edit and a
+  // delete next to it — the same call `memory.remember` gets, for the same
+  // reason. Gating it would mean an assistant that spotted something worth
+  // remembering had to interrupt somebody to ask permission to write it down,
+  // which is worse than the thing being written down.
+  'notebook.list',
+  'notebook.add',
+  'notebook.update',
   // Reading a mailbox changes nothing in it. Marking as read is not done here:
   // these fetch without touching flags, so a triage run leaves an inbox exactly
   // as it found it.

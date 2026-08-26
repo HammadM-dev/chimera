@@ -1,12 +1,18 @@
 import { Governor, createRoleRegistry, createTraceSink, runAgentLoop } from '@chimera/core';
 import type { Message } from '@chimera/providers';
 import { adapterFor } from '@chimera/providers';
-import { createToolRegistry, connectInProcess, createWorkspaceServer } from '@chimera/tools';
+import {
+  createToolRegistry,
+  connectInProcess,
+  createNotebookServer,
+  createWorkspaceServer,
+} from '@chimera/tools';
 import { runsRepository } from '@chimera/store';
 import { getStore } from '../store/lifecycle.ts';
 import { connectionFor } from '../providers/service.ts';
 import { workspaceBackend } from './workspaceBackend.ts';
 import { planAutomation } from '../automations/planner.ts';
+import { notebookBackend } from '../notes/service.ts';
 
 // The assistant on the home screen.
 //
@@ -87,6 +93,21 @@ export async function askAssistant(input: {
         }),
       ),
     ),
+  );
+
+  // The notes board. The assistant reads this workspace and, now, can write one
+  // specific kind of thing to it: a note or a reminder for the person.
+  //
+  // Worth saying plainly, because it narrows a property this file used to claim
+  // outright. The assistant was read-only by construction and that was
+  // deliberate — an assistant quietly recording memories during a conversation
+  // about the memories is a thing nobody asked for. This is the opposite case
+  // and was asked for: something written where the person will see it, on a
+  // board with an edit and a delete beside every row. `memory.remember` is
+  // still not granted here.
+  await tools.registerServer(
+    'notebook',
+    await connectInProcess(createNotebookServer(notebookBackend('assistant'))),
   );
 
   // A run row, because the Governor and the trace are both per-run and because

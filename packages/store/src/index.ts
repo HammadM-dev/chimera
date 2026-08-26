@@ -25,6 +25,8 @@ export type {
 } from './repositories/settings.ts';
 export { SEARCH_PROVIDERS } from './repositories/settings.ts';
 export * as rolesRepository from './repositories/roles.ts';
+export * as notesRepository from './repositories/notes.ts';
+export type { NoteRecord, NoteKind, NoteInput, NoteUpdate } from './repositories/notes.ts';
 export type { RoleRecord, UpsertRoleInput } from './repositories/roles.ts';
 export * as nodeStatesRepository from './repositories/nodeStates.ts';
 export type { NodeStateRecord, UpsertNodeStateInput } from './repositories/nodeStates.ts';

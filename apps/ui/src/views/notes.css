@@ -1,0 +1,264 @@
+/* The notes board.
+ *
+ * The one surface here that two kinds of author write to, and the design says
+ * so: a left rail carries state, and a line an agent left names what left it.
+ * Everything else is deliberately quiet — the board is read at a glance and
+ * then acted on, and a card that competes for attention with the card next to
+ * it defeats the grouping above it. */
+
+.notes {
+  max-width: 780px;
+  margin: 0 auto;
+  padding-bottom: var(--space-6);
+}
+
+.notes__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+/* The lede takes the room the row has. A flex item sizes to its content
+ * otherwise, and the prose wrapped at 400px inside a 780px column. */
+.notes__lede {
+  flex: 1;
+  min-width: 0;
+}
+
+.notes__sub {
+  margin: 0;
+  /* 72ch rather than 60: at this type size 60ch stopped at 400px in a 780px
+   * column and left the row looking like it had failed to load. */
+  max-width: 72ch;
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  line-height: 1.55;
+}
+
+.notes__count {
+  flex: none;
+  padding: 2px var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- writing something -------------------------------------------------- */
+
+.composer {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.composer__title {
+  font-size: var(--type-body);
+}
+
+.composer__body {
+  resize: vertical;
+  font: inherit;
+  font-size: var(--type-meta);
+  line-height: 1.5;
+}
+
+.composer__row {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.composer__when {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+}
+
+/* ---- the board ---------------------------------------------------------- */
+
+.notes__group {
+  margin-top: var(--space-5);
+}
+
+.notes__groupHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.notes__groupCount {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: normal;
+}
+
+.note {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-3) var(--space-2);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+  /* The rail. Transparent by default, because "you wrote it" is the ordinary
+   * case and marking every line marks nothing. */
+  border-left: 2px solid transparent;
+  transition: background var(--motion-fast) var(--ease-standard);
+}
+
+.note:hover {
+  background: var(--surface-raised);
+}
+
+.note[data-state='late'] {
+  border-left-color: var(--semantic-danger);
+}
+
+.note[data-state='today'] {
+  border-left-color: var(--semantic-warning);
+}
+
+.note[data-state='done'] {
+  border-left-color: var(--semantic-success);
+}
+
+.note[data-state='done'] .note__title {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.note__tick {
+  flex: none;
+  margin-top: 2px;
+  width: 17px;
+  height: 17px;
+  display: grid;
+  place-items: center;
+  border: var(--border-width) solid var(--border-control);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--semantic-success);
+  cursor: pointer;
+  transition: border-color var(--motion-fast) var(--ease-standard);
+}
+
+.note__tick:hover {
+  border-color: var(--border-stronger);
+}
+
+.note__body {
+  flex: 1;
+  min-width: 0;
+}
+
+.note__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--type-meta);
+  line-height: 1.45;
+}
+
+.note__detail {
+  margin: 3px 0 0;
+  color: var(--text-secondary);
+  font-size: var(--type-floor);
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.note__meta {
+  margin: var(--space-1) 0 0;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+}
+
+.note[data-state='late'] .note__due {
+  color: var(--semantic-danger);
+}
+
+/* Provenance. The one thing on this board a to-do list does not have, so it is
+ * set apart rather than run in with the date. */
+.note__who {
+  padding-left: var(--space-2);
+  border-left: var(--border-width) solid var(--border-hairline);
+  font-style: italic;
+}
+
+.note__actions {
+  flex: none;
+  display: flex;
+  gap: var(--space-2);
+  opacity: 0;
+  transition: opacity var(--motion-fast) var(--ease-standard);
+}
+
+.note:hover .note__actions,
+.note:focus-within .note__actions {
+  opacity: 1;
+}
+
+.note__act {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  cursor: pointer;
+}
+
+.note__act:hover {
+  color: var(--text-primary);
+}
+
+.notes__empty {
+  margin-top: var(--space-5);
+  padding: var(--space-5);
+  border: var(--border-width) dashed var(--border-hairline);
+  border-radius: var(--radius-card);
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  line-height: 1.6;
+  text-align: center;
+}
+
+.notes__reveal {
+  margin-top: var(--space-4);
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  cursor: pointer;
+}
+
+.notes__reveal:hover {
+  color: var(--text-primary);
+}
+
+/* Actions are revealed on hover, which a keyboard cannot do — so they are
+ * always there for one, and the focus ring is what shows them. */
+@media (prefers-reduced-motion: reduce) {
+  .note__actions {
+    opacity: 1;
+  }
+}

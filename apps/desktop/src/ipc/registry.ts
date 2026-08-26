@@ -577,6 +577,58 @@ export const pinnedSet = defineInvokeChannel({
   responseSchema: z.object({ pinned: z.array(z.string()) }),
 });
 
+// Notes and reminders — shared ground between the person and the agents.
+const noteSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['note', 'reminder']),
+  title: z.string(),
+  body: z.string(),
+  dueAt: z.string().nullable(),
+  doneAt: z.string().nullable(),
+  source: z.string(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+
+export const noteList = defineInvokeChannel({
+  channel: 'note:list',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ includeDone: z.boolean().optional() }),
+  responseSchema: z.object({ notes: z.array(noteSchema) }),
+});
+
+export const noteSave = defineInvokeChannel({
+  channel: 'note:save',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({
+    id: z.string().optional(),
+    kind: z.enum(['note', 'reminder']),
+    title: z.string(),
+    body: z.string().optional(),
+    dueAt: z.string().nullable().optional(),
+    done: z.boolean().optional(),
+  }),
+  responseSchema: z.object({ note: noteSchema.nullable() }),
+});
+
+export const noteDone = defineInvokeChannel({
+  channel: 'note:done',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string(), done: z.boolean() }),
+  responseSchema: z.object({ note: noteSchema.nullable() }),
+});
+
+export const noteRemove = defineInvokeChannel({
+  channel: 'note:remove',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ id: z.string() }),
+  responseSchema: z.object({ removed: z.boolean() }),
+});
+
 // What is armed right now, and where to post for a webhook.
 export const triggerList = defineInvokeChannel({
   channel: 'trigger:list',
@@ -1932,6 +1984,10 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   tiersSet,
   pinnedGet,
   pinnedSet,
+  noteList,
+  noteSave,
+  noteDone,
+  noteRemove,
   cacheGet,
   cacheSet,
   profileGet,

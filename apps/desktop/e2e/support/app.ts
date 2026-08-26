@@ -151,7 +151,17 @@ export async function pasteInto(page: Page, testId: string, text: string): Promi
 
 export async function goTo(
   page: Page,
-  view: 'home' | 'build' | 'swarm' | 'runs' | 'agents' | 'apps' | 'memory' | 'providers' | 'chat',
+  view:
+    | 'home'
+    | 'build'
+    | 'swarm'
+    | 'runs'
+    | 'agents'
+    | 'apps'
+    | 'notes'
+    | 'memory'
+    | 'providers'
+    | 'chat',
 ): Promise<void> {
   await page.waitForSelector('[data-testid="app-shell"]');
   // The splash first, then setup. Both are full-screen overlays, and a nav
