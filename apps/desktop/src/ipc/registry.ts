@@ -555,6 +555,28 @@ export const tiersSet = defineInvokeChannel({
   responseSchema: z.object({ tiers: tierMapSchema }),
 });
 
+/**
+ * The models this workspace keeps at the top of every picker.
+ *
+ * `connectionId::model` keys, in the order they were pinned. Order is the
+ * user's rather than a sort — "the ones I use" is a list somebody curates.
+ */
+export const pinnedGet = defineInvokeChannel({
+  channel: 'pinned:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: z.object({ pinned: z.array(z.string()) }),
+});
+
+export const pinnedSet = defineInvokeChannel({
+  channel: 'pinned:set',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({ pinned: z.array(z.string()) }),
+  responseSchema: z.object({ pinned: z.array(z.string()) }),
+});
+
 // What is armed right now, and where to post for a webhook.
 export const triggerList = defineInvokeChannel({
   channel: 'trigger:list',
@@ -1908,6 +1930,8 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   traceScreenshot,
   tiersGet,
   tiersSet,
+  pinnedGet,
+  pinnedSet,
   cacheGet,
   cacheSet,
   profileGet,

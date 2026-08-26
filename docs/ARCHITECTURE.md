@@ -285,6 +285,8 @@ Written by the provider-call path in the runtime when a call completes and the w
 | `cache_policy_json` | text | Whether answers are reused, and how closely they must match |
 | `telemetry_json` | text | Where runs are exported, if anywhere (M9-5) |
 | `search_json` | text | Which search API the agents use, and the vault handle for its key — never the key. Empty object means the built-in keyless search |
+| `composio_json` | text | Whether Composio is on, the vault handle for its key, and which Composio "user" this workspace is — never the key |
+| `pinned_models_json` | text | `connectionId::model` keys kept at the top of every model picker, in the order they were pinned. A workspace that connects a router gets several hundred models in a dropdown, and this is the two or three anybody uses |
 
 **`workspace_facts`** — added by migration `0004` for M2-10, F2.7's second memory tier: curated key-value knowledge that outlives a run. Deliberately not the `cache` table, which holds derived data under an eviction policy — evicting a note a person typed to make room for a cached embedding would be indefensible. `source` records `user` or the id of the run that wrote the fact, and travels with it into the prompt, because what an agent asserted and what a person stated are not equally trustworthy.
 

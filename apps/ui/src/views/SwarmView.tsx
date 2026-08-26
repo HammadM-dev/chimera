@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { useConnections } from './useConnections.ts';
+import { ModelOptions, PinButton } from './ModelOptions.tsx';
 import './swarm.css';
 import { SwarmGraph, type ActivityState, type GraphData, type Stance } from './SwarmGraph.tsx';
 
@@ -624,21 +625,16 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
             </label>
 
             {choices.length > 0 && (
-              <select
-                className="chat__control"
-                data-testid="swarm-model"
-                aria-label="Model"
-                value={modelKey === '' ? (choices[0]?.key ?? '') : modelKey}
-                onChange={(event) => {
-                  setModelKey(event.target.value);
-                }}
-              >
-                {choices.map((choice) => (
-                  <option key={choice.key} value={choice.key}>
-                    {choice.connectionLabel} · {choice.model}
-                  </option>
-                ))}
-              </select>
+              <div className="picker swarm__model">
+                <ModelOptions
+                  choices={choices}
+                  testId="swarm-model"
+                  placeholder=""
+                  value={modelKey === '' ? (choices[0]?.key ?? '') : modelKey}
+                  onChange={setModelKey}
+                />
+                <PinButton modelKey={modelKey === '' ? (choices[0]?.key ?? '') : modelKey} />
+              </div>
             )}
 
             <label

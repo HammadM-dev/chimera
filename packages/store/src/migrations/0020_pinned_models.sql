@@ -1,0 +1,11 @@
+-- The models somebody actually uses, kept at the top of every picker.
+--
+-- A workspace that connects OpenRouter gets four hundred models in a dropdown,
+-- and the two or three anybody uses are somewhere in the middle of it. Pinning
+-- is a workspace fact rather than a device one: it belongs with the model tiers
+-- it sits beside, and a person who set it up on one machine means it.
+--
+-- Stored as a JSON array of `connectionId::model` keys, in the order pinned, so
+-- the list reads as "mine, most recent first" rather than being re-sorted under
+-- somebody by a rule they did not choose.
+ALTER TABLE workspace_settings ADD COLUMN pinned_models_json TEXT NOT NULL DEFAULT '[]';

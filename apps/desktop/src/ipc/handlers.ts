@@ -14,6 +14,8 @@ import {
   sweepHealth,
   testConnection,
   getTiers,
+  getPinnedModels,
+  setPinnedModels,
   setTiers,
   getCachePolicy,
   setCachePolicy,
@@ -199,6 +201,8 @@ registerHandler(channels.evalsTagProduction, (payload) => tagProduction(payload.
 registerHandler(channels.traceScreenshot, (payload) => readScreenshot(payload.runId, payload.name));
 registerHandler(channels.tiersGet, () => getTiers());
 registerHandler(channels.tiersSet, (payload) => setTiers(payload.tiers));
+registerHandler(channels.pinnedGet, () => getPinnedModels());
+registerHandler(channels.pinnedSet, (payload) => setPinnedModels(payload.pinned));
 registerHandler(channels.cacheGet, () => getCachePolicy());
 registerHandler(channels.cacheSet, (payload) => setCachePolicy(payload.policy));
 registerHandler(channels.telemetryGet, () => getTelemetry());

@@ -113,6 +113,14 @@ const COMPOSIO_DEFAULT: ComposioSettings = { enabled: false, authRef: '', userId
 
 export interface WorkspaceSettings {
   localOnlyMode: boolean;
+  /**
+   * `connectionId::model` keys, in the order they were pinned.
+   *
+   * Order is the user's, not a sort: "the ones I use" is a list somebody
+   * curates, and re-ordering it under them by name or price would be a
+   * different feature wearing this one's name.
+   */
+  pinnedModels: string[];
   modelTiers: ModelTiers;
   cache: CachePolicySettings;
   telemetry: TelemetrySettings;
@@ -124,7 +132,7 @@ export function read(db: Database.Database): WorkspaceSettings {
   const row = db
     .prepare(
       `SELECT local_only_mode, model_tiers_json, cache_policy_json, telemetry_json, search_json,
-              composio_json
+              composio_json, pinned_models_json
        FROM workspace_settings WHERE id = 1`,
     )
     .get() as
@@ -135,8 +143,20 @@ export function read(db: Database.Database): WorkspaceSettings {
         telemetry_json: string;
         search_json: string;
         composio_json: string;
+        pinned_models_json: string;
       }
     | undefined;
+
+  let pinnedModels: string[] = [];
+  try {
+    const parsed = JSON.parse(row?.pinned_models_json ?? '[]') as unknown;
+    if (Array.isArray(parsed)) {
+      pinnedModels = parsed.filter((entry): entry is string => typeof entry === 'string');
+    }
+  } catch {
+    // A settings row somebody edited by hand is not a reason to refuse to open
+    // the workspace. An empty list is the same as never having pinned anything.
+  }
 
   let modelTiers = NO_TIERS;
   try {
@@ -191,6 +211,7 @@ export function read(db: Database.Database): WorkspaceSettings {
   // SQLite has no boolean type; 0/1 is the storage convention.
   return {
     localOnlyMode: (row?.local_only_mode ?? 0) === 1,
+    pinnedModels,
     modelTiers,
     cache,
     telemetry,
@@ -223,6 +244,16 @@ export function setCachePolicy(db: Database.Database, policy: CachePolicySetting
 export function setTelemetry(db: Database.Database, telemetry: TelemetrySettings): void {
   db.prepare('UPDATE workspace_settings SET telemetry_json = ? WHERE id = 1').run(
     JSON.stringify(telemetry),
+  );
+  notifyChanged(db);
+}
+
+export function setPinnedModels(db: Database.Database, pinned: readonly string[]): void {
+  // De-duplicated on the way in, first mention winning, so the order stays the
+  // one the user built.
+  const unique = [...new Set(pinned.filter((key) => key.trim() !== ''))];
+  db.prepare('UPDATE workspace_settings SET pinned_models_json = ? WHERE id = 1').run(
+    JSON.stringify(unique),
   );
   notifyChanged(db);
 }

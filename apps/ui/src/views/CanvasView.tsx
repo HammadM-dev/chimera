@@ -25,6 +25,7 @@ import {
 import '@xyflow/react/dist/style.css';
 import { AGENT_GROUPS, useRoles, type AgentRole } from './useRoles.ts';
 import { useConnections, useStandardTier, type ModelChoice } from './useConnections.ts';
+import { ModelOptions, PinButton } from './ModelOptions.tsx';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import './canvas.css';
 
@@ -2684,24 +2685,16 @@ function ModelPicker({
   }
 
   return (
-    <select
-      className="control"
-      data-testid="node-model"
-      value={value}
-      onChange={(event) => {
-        onChange(event.target.value);
-      }}
-    >
-      <option value="">Choose a model</option>
-      <option value="tier:cheap">Cheap tier — whatever this workspace calls cheap</option>
-      <option value="tier:standard">Standard tier</option>
-      <option value="tier:frontier">Frontier tier</option>
-      {choices.map((choice) => (
-        <option key={choice.key} value={choice.key}>
-          {choice.connectionLabel} · {choice.model}
-        </option>
-      ))}
-    </select>
+    <div className="picker">
+      <ModelOptions
+        choices={choices}
+        value={value}
+        testId="node-model"
+        onChange={onChange}
+        tiers
+      />
+      <PinButton modelKey={value} />
+    </div>
   );
 }
 

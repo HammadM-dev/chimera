@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
+import { PinButton } from './ModelOptions.tsx';
 
 // A connection's models, laid out so the two questions people actually ask can
 // be answered at a glance: what does this cost, and can it call tools.
@@ -176,6 +177,11 @@ export function ModelCatalogue({
                       </span>
                     )}
                   </span>
+                  {/* The pin, on the row rather than only beside a picker.
+                      This is the list somebody scrolls when deciding what they
+                      use; making them choose it in a dropdown first and pin it
+                      there would be the long way round. */}
+                  <PinButton modelKey={`${connectionId}::${model.id}`} />
                 </div>
               </div>
             ))}

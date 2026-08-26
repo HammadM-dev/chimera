@@ -3,6 +3,8 @@ import type { JSX } from 'react';
 import { bridge, describeError, type ChatDelta, type ConnectionSummary } from './useChimera.ts';
 import { recordExchange } from '../shell/sessionMeter.ts';
 import './chat.css';
+import { PinButton } from '../views/ModelOptions.tsx';
+import { usePinnedModels } from '../views/useConnections.ts';
 
 // A conversation, not a text box.
 //
@@ -29,6 +31,7 @@ export function ChatPanel(): JSX.Element {
   const [connections, setConnections] = useState<ConnectionSummary[]>([]);
   const [localOnlyMode, setLocalOnlyMode] = useState(false);
   const [selectedId, setSelectedId] = useState('');
+  const { pinned } = usePinnedModels();
   const [model, setModel] = useState('');
   const [prompt, setPrompt] = useState('');
   const [turns, setTurns] = useState<Turn[]>([]);
@@ -173,7 +176,21 @@ export function ChatPanel(): JSX.Element {
     }
   }, [selectedId, model, prompt]);
 
-  const availableModels = connections.find((entry) => entry.id === selectedId)?.models ?? [];
+  // Pinned first here too. This picker lists one connection's models rather
+  // than every choice in the workspace, so it cannot reuse `useConnections`'s
+  // ordering — but a pin that worked in the canvas and not here would be
+  // exactly the inconsistency pinning exists to remove.
+  const availableModels = (() => {
+    const all = connections.find((entry) => entry.id === selectedId)?.models ?? [];
+    const keyOf = (one: string): string => `${selectedId}::${one}`;
+    const kept = pinned.filter((key) => all.some((one) => keyOf(one) === key));
+    return [
+      ...kept.flatMap((key) => all.filter((one) => keyOf(one) === key)),
+      ...all.filter((one) => !pinned.includes(keyOf(one))),
+    ];
+  })();
+  const pinnedHere = availableModels.filter((one) => pinned.includes(`${selectedId}::${one}`));
+  const restHere = availableModels.filter((one) => !pinned.includes(`${selectedId}::${one}`));
   const lastAgentTurn = [...turns].reverse().find((turn) => turn.author === 'agent');
 
   return (
@@ -207,21 +224,44 @@ export function ChatPanel(): JSX.Element {
               when it does not. Typing an exact model id from memory is not a
               thing anyone can do against a gateway serving hundreds. */}
           {availableModels.length > 0 ? (
-            <select
-              id="chat-model"
-              className="chat__control"
-              data-testid="model-input"
-              value={model}
-              onChange={(event) => {
-                setModel(event.target.value);
-              }}
-            >
-              {availableModels.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
+            <div className="picker">
+              <select
+                id="chat-model"
+                className="chat__control picker__select"
+                data-testid="model-input"
+                value={model}
+                onChange={(event) => {
+                  setModel(event.target.value);
+                }}
+              >
+                {pinnedHere.length > 0 && (
+                  <optgroup label="Pinned">
+                    {pinnedHere.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {restHere.length > 0 &&
+                  (pinnedHere.length > 0 ? (
+                    <optgroup label="All models">
+                      {restHere.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </optgroup>
+                  ) : (
+                    restHere.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))
+                  ))}
+              </select>
+              <PinButton modelKey={model === '' ? '' : `${selectedId}::${model}`} />
+            </div>
           ) : (
             <input
               id="chat-model"

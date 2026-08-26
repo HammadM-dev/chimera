@@ -553,6 +553,24 @@ export function setTiers(tiers: ModelTiers): { tiers: ModelTiers } {
   return getTiers();
 }
 
+/**
+ * The models kept at the top of every picker.
+ *
+ * A workspace fact rather than a device one, and deliberately not filtered
+ * against the current connections here: a pin whose provider is temporarily
+ * unreachable should come back when the provider does, not be quietly dropped
+ * the first time a catalogue fails to load. The pickers ignore a pin they
+ * cannot resolve; nothing deletes it.
+ */
+export function getPinnedModels(): { pinned: string[] } {
+  return { pinned: settingsRepository.read(getStore()).pinnedModels };
+}
+
+export function setPinnedModels(pinned: readonly string[]): { pinned: string[] } {
+  settingsRepository.setPinnedModels(getStore(), pinned);
+  return getPinnedModels();
+}
+
 export function getCachePolicy(): { policy: CachePolicySettings } {
   return { policy: settingsRepository.read(getStore()).cache };
 }
