@@ -209,9 +209,6 @@ registerHandler(channels.pinnedSet, (payload) => setPinnedModels(payload.pinned)
 // with no named exports — so a static import of it fails to instantiate under
 // Node's ESM loader, which is what runs the unit tests. It took the whole IPC
 // registry suite down once already, through `openExternal`.
-registerHandler(channels.tourGet, async () =>
-  (await import('../settings/localSettings.ts')).getTourState(),
-);
 registerHandler(channels.tourSet, async (payload) =>
   (await import('../settings/localSettings.ts')).setTourSeen(payload.seen),
 );

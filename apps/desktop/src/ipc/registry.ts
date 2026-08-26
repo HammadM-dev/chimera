@@ -578,20 +578,18 @@ export const pinnedSet = defineInvokeChannel({
 });
 
 /**
- * Whether this machine has been offered the guided tour.
+ * Marks the guided tour as offered on this machine.
  *
  * Device-local rather than workspace state, like the splash flag: it is about
  * what this person has seen on this screen. Opening the same workspace on a new
  * machine has not taught anybody anything.
+ *
+ * Write only. Whether to *show* the tour is decided in main before the page
+ * loads and travels on the window's own URL — see `windows.ts`. It was a read
+ * over IPC once, and the answer arrived a round trip after the shell had
+ * rendered, so the tour appeared over an app somebody had already started
+ * using.
  */
-export const tourGet = defineInvokeChannel({
-  channel: 'tour:get',
-  v: 1,
-  sensitive: false,
-  requestSchema: z.object({}),
-  responseSchema: z.object({ seen: z.boolean() }),
-});
-
 export const tourSet = defineInvokeChannel({
   channel: 'tour:set',
   v: 1,
@@ -2007,7 +2005,6 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   tiersSet,
   pinnedGet,
   pinnedSet,
-  tourGet,
   tourSet,
   noteList,
   noteSave,

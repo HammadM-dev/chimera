@@ -7,7 +7,7 @@ import { applyPermissionHandler } from './security/permissionHandler.ts';
 import { applyNavigationGuard } from './security/navigationGuard.ts';
 import { hideMenuBar } from './menu.ts';
 import { connectionCount } from './providers/service.ts';
-import { consumeSplashDecision } from './settings/localSettings.ts';
+import { consumeSplashDecision, readLocalSettings } from './settings/localSettings.ts';
 
 // Resolved against this module's own location, not app.getAppPath() —
 // getAppPath() returns the launched script's directory (dist/) rather than
@@ -61,7 +61,7 @@ export function openRunWindow(runId: string, name: string): BrowserWindow | null
   applyNavigationGuard(win);
   hideMenuBar(win);
   void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
-    query: { view: 'run', runId, name, splash: '0', onboarding: '0' },
+    query: { view: 'run', runId, name, splash: '0', onboarding: '0', tour: '0' },
   });
 
   win.once('ready-to-show', () => {
@@ -158,8 +158,23 @@ export function createWindow(): BrowserWindow {
     // docs/DESIGN.md §5.2 applies to the splash flag.
     const needsSetup = connectionCount() === 0;
 
+    // Whether to offer the tour, decided here for the same reason the splash
+    // decision is here: the renderer has to know before its first paint.
+    //
+    // It was read over IPC, and that was a mistake with a symptom. The answer
+    // arrived a round trip after the shell had rendered, so the tour appeared
+    // *over* an app somebody had already started using — and in the suite, over
+    // a click a test had already made, which turned up as a different test
+    // failing in each full run depending on which one met the slow round trip.
+    // A query parameter cannot lose that race.
+    const offerTour = !readLocalSettings().hasSeenTour;
+
     void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
-      query: { splash: playSplash ? '1' : '0', onboarding: needsSetup ? '1' : '0' },
+      query: {
+        splash: playSplash ? '1' : '0',
+        onboarding: needsSetup ? '1' : '0',
+        tour: offerTour ? '1' : '0',
+      },
     });
   }
 

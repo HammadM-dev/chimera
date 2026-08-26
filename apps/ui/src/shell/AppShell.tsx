@@ -202,18 +202,17 @@ export function AppShell({ setupDone = true }: { setupDone?: boolean } = {}): JS
    */
   const [touring, setTouring] = useState<boolean | null>(null);
 
+  // Read from this window's own URL, not over IPC.
+  //
+  // Main decides before the page loads — the same arrangement the splash and
+  // first-run guide use, and for the same reason: an answer that arrives a
+  // round trip later arrives *after* the shell has rendered, so the tour
+  // appeared over an app somebody had already started using. Under load in the
+  // suite it landed over a click a test had already made, which showed up as a
+  // different test failing in each full run.
   useEffect(() => {
     if (!setupDone) return;
-    void (async () => {
-      try {
-        const seen = await bridge().invoke<{ seen: boolean }>('tour:get', {});
-        setTouring(!seen.seen);
-      } catch {
-        // Unreadable means do not interrupt. A tour is an offer, and an offer
-        // nobody can decline is an imposition.
-        setTouring(false);
-      }
-    })();
+    setTouring(new URLSearchParams(window.location.search).get('tour') === '1');
   }, [setupDone]);
   const [goal, setGoal] = useState('');
   const [template, setTemplate] = useState<AutomationTemplate | null>(null);
