@@ -308,6 +308,44 @@ export async function dragHandle(page: Page, source: Locator, target: Locator): 
  * a person does when a drag does not take, and it makes these helpers mean "the
  * join exists afterwards" rather than "a drag was attempted".
  */
+/**
+ * Makes sure both ends of a join are actually on screen before dragging.
+ *
+ * A node the canvas has panned out of view is not reachable — for a person
+ * either, which is the point: what they do is press fit-view and try again, and
+ * so does this. Without it the drag aims at a handle whose coordinates are
+ * behind the section header, and Playwright reports the header intercepting the
+ * pointer, which reads like a styling bug and is not one.
+ *
+ * The canvas re-arranges itself on a timer after nodes are added, so whether a
+ * handle is in view at the moment of measurement depends on how busy the app
+ * was a second earlier. It got measurably worse when the shell grew three more
+ * reads on mount, which is a timing change rather than a layout one.
+ */
+async function bringIntoView(page: Page, source: Locator, target: Locator): Promise<void> {
+  const flow = page.locator('.react-flow');
+  const visible = async (): Promise<boolean> => {
+    const area = await flow.boundingBox();
+    const boxes = await Promise.all([source.boundingBox(), target.boundingBox()]);
+    if (area === null) return false;
+    return boxes.every(
+      (box) =>
+        box !== null &&
+        box.y >= area.y &&
+        box.y + box.height <= area.y + area.height &&
+        box.x >= area.x &&
+        box.x + box.width <= area.x + area.width,
+    );
+  };
+
+  if (await visible()) return;
+
+  const fit = page.locator('.react-flow__controls-fitview');
+  if ((await fit.count()) === 0) return;
+  await fit.click();
+  await waitForCanvasStill(page);
+}
+
 export async function joinHandles(
   page: Page,
   source: () => Locator,
@@ -318,6 +356,7 @@ export async function joinHandles(
   const before = await edges.count();
 
   for (let attempt = 0; attempt < 3; attempt += 1) {
+    await bringIntoView(page, source(), target());
     await dragHandle(page, source(), target());
     try {
       await expect(edges).toHaveCount(before + 1, { timeout: 2_000 });
