@@ -203,6 +203,76 @@ known number of rounds, that what it says is read by the people who listen to
 it, and that the disagreement is the finding rather than something to average
 away.
 
+### M11-9: A step hands on what it found
+
+STATUS: **done.** An agent that used a tool now answers with the results rather
+than with the sentence it said before the call, and one that runs out of turns
+writes up the work already paid for.
+
+BUG, reported from a real run and fixed twice: an App operator fetched
+somebody's GitHub email through Composio and the next step was handed "I'll
+fetch your GitHub emails now". The loop took the last non-empty assistant text
+as the step's answer and only noticed when that text was *empty* — which a real
+model almost never gives, because they narrate.
+
+DECISION: **the test is whether tool results arrived since the answer was
+written**, not which turn the model chose to talk in. The first fix flagged text
+that came alongside a tool call, and the unit test scripted exactly that and
+passed; against OpenRouter the narration was in the *planning* turn with a
+silent tool call after it. The second attempt flagged every plan and broke the
+opposite case, which is also real and already tested — a data extractor that
+produces the whole correct answer while planning and calls nothing has answered.
+Counting observations distinguishes them without guessing.
+
+DECISION: **one extra call on exhaustion, outside the budget.** The cap still
+means what it said and the run still ends there; the difference is whether ten
+pages of reading come out or a sentence about the eleventh.
+
+DECISION: **an agent is told how many turns are *left*.** A static cap is not
+actionable — the model does not know which turn it is on, so it explores at the
+same rate at turn eleven as at turn one and is then cut off. That is the "top
+ten cars, got one" report.
+
+The mock provider could not have caught any of this: its tool-call response
+carried no text, a shape no real provider sends. It can now say something
+alongside a call.
+
+### M11-10: Pinned models, notes, the mark, and the tour
+
+STATUS: **done.** Four things the founder asked for after using the M11 build.
+
+**Pinned models.** One store for the window rather than state per hook — there
+are five pickers and each calls the hook, so a `useState` apiece would have left
+the swarm showing the old order until it remounted. Order is the user's, newest
+first, not a sort.
+
+**Notes and reminders.** A board with two kinds of author. DECISION: **the
+assistant may write to it**, which narrows a property it deliberately had. It
+was read-only by construction because an assistant quietly recording memories is
+a thing nobody asked for; this is the opposite case — something written where
+the person will see it, with an edit and a delete beside it. `memory.remember`
+is still not granted to it. Deliberately not `memories`: those are read by
+prompts, this is read by people.
+
+**The mark.** One asset, not two. The planned dark-mode copy was white on white.
+It is stored as an alpha mask and filled with `currentColor`, so it is correct in
+both themes with no second file to forget.
+
+**The tour.** Twelve steps, every section, and it moves the app as it goes.
+Skipping asks first and says what is being given up. DECISION: **not in the
+sidebar footer**, which was cleared of a "Replay intro" button once already on
+the grounds that a rail somebody looks at all day is prime space.
+
+BUG: `--type-title` and `--type-heading` were used in runs.css and in Apps and
+never defined, so those headings inherited their parent's size. An undefined
+custom property falls back to inherit rather than failing.
+
+BUG: swarm full screen filled the card it was already in. `position: fixed` is
+viewport-relative only when no ancestor carries a transform, and `.swarm-turn`
+has an animation whose keyframe animates one — a containing block for good. It
+reparents to the body now, and the test measures the box against the window
+rather than trusting a class name.
+
 ## How this plan is followed
 
 Each ticket keeps its original acceptance criteria unless it says otherwise. `DECISION:` blocks record choices made while building, including the ones that turned out wrong; they are not edited after the fact. A ticket is done when a stranger can verify it from the outside — for anything with a screen, that means an end-to-end test that drives the app the way a person would, because that is the standard three shipped defects failed to meet.
