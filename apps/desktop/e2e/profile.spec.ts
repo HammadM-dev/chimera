@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { dismissTour, freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { dismissOnboarding, freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 import { startStub } from './support/stub.ts';
 
 // The name on the home screen, and the light switch in the rail.
@@ -70,15 +70,18 @@ test('the theme switches, and stays switched', async () => {
   try {
     const page = await app.firstWindow();
 
-    // A fresh profile opens on the setup guide, which covers the rail. Out of
-    // the way first — this test is about the switch, not about reaching it.
-    const guide = page.getByTestId('onboarding');
-    if (await guide.isVisible().catch(() => false)) {
-      await page.getByTestId('intro-skip').click();
-      await expect(guide).toHaveCount(0);
-    }
-    // And the tour behind it, which dims the rail and takes the click.
-    await dismissTour(page);
+    // A fresh profile opens on the splash, then the setup guide, then the
+    // tour, each of which covers the rail. Out of the way first — this test is
+    // about the switch, not about reaching it.
+    //
+    // The wait for the splash is the load-bearing part and it was missing. The
+    // guide mounts in the same commit that unmounts the splash, so a one-shot
+    // `isVisible()` asked before that commit answers "no" about something that
+    // is about to appear — and then it appears, over the click. It held while
+    // the machine was quick and stopped holding when startup got busier.
+    await page.waitForSelector('[data-testid="app-shell"]');
+    await page.waitForSelector('.splash', { state: 'detached', timeout: 20_000 });
+    await dismissOnboarding(page);
 
     // Dark is the default and is not merely the absence of a choice: the
     // attribute is set, so every token block has something to match on.
