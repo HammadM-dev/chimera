@@ -183,10 +183,14 @@ test.describe('M0-8 splash sequence', () => {
       // launch", which the setup guide's own gate does not — and it is still
       // device-local and outside SQLite, per docs/DESIGN.md section 5.2. It no
       // longer decides whether the splash plays.
-      const settings: unknown = JSON.parse(
+      // The one field this test is about, rather than the whole object. A
+      // deep-equality assertion here is a second copy of the settings shape,
+      // and it broke the moment the file grew a `hasSeenTour` flag that has
+      // nothing to do with the splash.
+      const settings = JSON.parse(
         fs.readFileSync(path.join(profile, 'local-settings.json'), 'utf8'),
-      );
-      expect(settings).toEqual({ hasSeenSplash: true });
+      ) as Record<string, unknown>;
+      expect(settings['hasSeenSplash']).toBe(true);
 
       const second = await launch(profile);
       try {

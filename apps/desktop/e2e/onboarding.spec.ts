@@ -24,7 +24,7 @@ async function nameYourself(page: Page, firstName = 'Hammad'): Promise<void> {
 // what it was for.
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { freshProfile, launchApp, removeProfile } from './support/app.ts';
+import { dismissTour, freshProfile, launchApp, removeProfile } from './support/app.ts';
 
 // First-launch setup. It is the only screen a person sees before deciding
 // whether this app is worth their time, so the tests are about whether it
@@ -193,6 +193,9 @@ test('setup can be skipped, and does not block the app', async () => {
 
     await page.getByTestId('intro-skip').click();
     await expect(page.getByTestId('onboarding')).toHaveCount(0);
+    // The tour comes up behind the guide on a fresh profile, and it takes
+    // clicks. This test is about the guide, not about the tour.
+    await dismissTour(page);
 
     // Straight into the app, with the canvas reachable — an unconfigured
     // workspace is allowed to be explored, it just cannot run anything.

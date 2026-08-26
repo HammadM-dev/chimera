@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
+import { dismissTour, freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 import { startStub } from './support/stub.ts';
 
 // The name on the home screen, and the light switch in the rail.
@@ -77,6 +77,8 @@ test('the theme switches, and stays switched', async () => {
       await page.getByTestId('intro-skip').click();
       await expect(guide).toHaveCount(0);
     }
+    // And the tour behind it, which dims the rail and takes the click.
+    await dismissTour(page);
 
     // Dark is the default and is not merely the absence of a choice: the
     // attribute is set, so every token block has something to match on.
