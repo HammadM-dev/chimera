@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { JSX, MutableRefObject } from 'react';
 import { layoutOf, type Layout } from './swarmForce.ts';
 
@@ -164,10 +165,20 @@ export function SwarmGraph({
       setSize({ width: Math.max(240, box.width), height: Math.max(220, box.height) });
     });
     observer.observe(parent);
+    // Measure once on attach as well. Entering full screen replaces these DOM
+    // nodes, and a ResizeObserver only fires on a *change* after it starts
+    // watching — so without this the canvas kept the size of the card it used
+    // to live in.
+    const box = parent.getBoundingClientRect();
+    if (box.width >= 1 && box.height >= 1) {
+      setSize({ width: Math.max(240, box.width), height: Math.max(220, box.height) });
+    }
     return () => {
       observer.disconnect();
     };
-  }, []);
+    // `full` is a dependency because the canvas is re-created when it moves
+    // into the portal, and the old parent this was watching is detached.
+  }, [full]);
 
   // Escape leaves fullscreen. The button is the obvious way out and this is
   // the one everybody tries first.
@@ -288,8 +299,7 @@ export function SwarmGraph({
         const doing = feed.current.get(node.id);
         const age = doing === undefined ? Number.POSITIVE_INFINITY : now - doing.since;
         const waiting = doing?.state === 'asking';
-        const flare =
-          doing?.state === 'answered' && age < FLARE_MS ? 1 - age / FLARE_MS : 0;
+        const flare = doing?.state === 'answered' && age < FLARE_MS ? 1 - age / FLARE_MS : 0;
         if (waiting || flare > 0) flaring = true;
 
         // A thinking agent breathes while the round is in flight, and one with
@@ -475,7 +485,7 @@ export function SwarmGraph({
           ? 'for'
           : 'undecided';
 
-  return (
+  const body = (
     <div
       className={`swarm-graph${full ? ' swarm-graph--full' : ''}`}
       data-testid="swarm-graph"
@@ -564,5 +574,28 @@ export function SwarmGraph({
         </aside>
       )}
     </div>
+  );
+
+  // Full screen goes through a portal, and it has to.
+  //
+  // `position: fixed` is relative to the viewport only when no ancestor has a
+  // transform — and `.swarm-turn` carries `animation: … both` whose keyframe
+  // animates `transform`, which makes it a containing block for good. So "full
+  // screen" filled the card the graph was already sitting in: a slightly bigger
+  // box in the same place, which is exactly what it looked like. Reparenting to
+  // `body` puts it outside anything that could contain it, whatever styling the
+  // page around it grows later.
+  //
+  // The placeholder keeps the card's height while the graph is away, so the
+  // page behind does not collapse and jump when it comes back.
+  if (!full) return body;
+
+  return (
+    <>
+      {/* The gap the graph left behind, at the height it was, so the thread
+          does not collapse and jump when it comes back. */}
+      <div className="swarm-graph swarm-graph--away" aria-hidden="true" />
+      {createPortal(body, document.body)}
+    </>
   );
 }

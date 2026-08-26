@@ -305,6 +305,34 @@ test('an agent knows how many turns it has', () => {
   assert.match(system, /at most 7 turns/);
 });
 
+test('an agent is told how many turns are left, not just how many it started with', () => {
+  // A static cap is not something a model can act on: it does not know which
+  // turn it is on, so it explores at the same rate at turn eleven as at turn
+  // one and is then cut off mid-task. Reported live — a researcher asked for
+  // ten cars spent its whole budget looking and handed back one.
+  const at = (turnsLeft: number): string =>
+    assembleSystemMessage({
+      role: role({ maxIterations: 12, toolAllowlist: ['search.web'] }),
+      task: 'Find the ten fastest cars.',
+      availableTools: [{ id: 'search.web', description: 'Searches the web.' }],
+      turnsLeft,
+    });
+
+  assert.match(at(9), /9 turns left of 12/);
+  assert.doesNotMatch(at(9), /Stop gathering/);
+
+  // Running low is a different instruction, not a louder version of the same
+  // one: keep looking is wrong advice with three turns left.
+  assert.match(at(3), /3 turns left/);
+  assert.match(at(3), /Stop gathering and start writing/);
+
+  // And the last turn says the thing that actually matters — that this is the
+  // only chance to put the findings into words.
+  assert.match(at(1), /This is your last turn/);
+  assert.match(at(1), /Answer now/);
+  assert.doesNotMatch(at(1), /turns left of/);
+});
+
 test('an agent with no tools is told nothing about permissions', () => {
   // There is nothing to permit. A paragraph about approval gates in the prompt
   // of a summariser is noise that costs tokens on every call it ever makes.

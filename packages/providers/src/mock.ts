@@ -27,7 +27,23 @@ export type MockErrorKind = 'auth' | 'rateLimit' | 'timeout' | 'contentFilter';
 
 export type MockResponse =
   | { kind: 'text'; content: string }
-  | { kind: 'toolCall'; toolId: string; toolName: string; params: Record<string, unknown> }
+  | {
+      kind: 'toolCall';
+      toolId: string;
+      toolName: string;
+      params: Record<string, unknown>;
+      /**
+       * What the model says in the same turn as the call.
+       *
+       * Every real provider does this — "I'll fetch your GitHub emails now"
+       * arrives attached to the call, not instead of it — and this double could
+       * not express it, so no test could reproduce what a real model actually
+       * sends. That gap hid a real defect: the agent loop took the sentence a
+       * model said *before* its tools ran as the step's answer, and handed that
+       * downstream instead of the results.
+       */
+      say?: string;
+    }
   | { kind: 'structuredOutput'; json: unknown }
   | { kind: 'error'; error: MockErrorKind; retryAfterMs?: number };
 
@@ -372,13 +388,14 @@ export class MockProvider implements ProviderAdapter {
         const toolCalls: ToolCall[] = [
           { id: scripted.toolId, name: scripted.toolName, arguments: scripted.params },
         ];
+        const said = scripted.say ?? '';
         return {
           id,
           model: request.model,
-          content: [],
+          content: said === '' ? [] : [{ type: 'text', text: said }],
           toolCalls,
           finishReason: 'toolCalls',
-          usage: this.usageFor(request, JSON.stringify(scripted.params)),
+          usage: this.usageFor(request, `${said}${JSON.stringify(scripted.params)}`),
         };
       }
       case 'error':

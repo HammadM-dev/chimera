@@ -64,6 +64,19 @@ export interface InstructionSource {
    * produce after a denial if nothing told it otherwise.
    */
   gated?: boolean;
+  /**
+   * How many turns this step has left, counting this one.
+   *
+   * A static "you have at most twelve turns" is not something a model can act
+   * on: it does not know which turn it is on, so it explores at the same rate
+   * at turn eleven as at turn one and is then cut off mid-task. Reported live
+   * — the system message is rebuilt for every call, so this is the real number
+   * each time.
+   *
+   * Costs nothing in cache terms: the key already includes the message history,
+   * which grows every turn regardless.
+   */
+  turnsLeft?: number;
 }
 
 export interface ToolSummary {
@@ -259,9 +272,24 @@ function permissionLines(instructions: InstructionSource): string[] {
     );
   }
 
-  lines.push(
-    `You have at most ${String(instructions.role.maxIterations)} turns to finish this, including the ones you spend calling tools. Work towards the answer rather than exploring.`,
-  );
+  const left = instructions.turnsLeft;
+  if (left === undefined) {
+    lines.push(
+      `You have at most ${String(instructions.role.maxIterations)} turns to finish this, including the ones you spend calling tools. Work towards the answer rather than exploring.`,
+    );
+  } else if (left <= 1) {
+    lines.push(
+      'This is your last turn. Answer now, in full, with what you have — everything the next step gets is in this answer. Say plainly which part you did not finish rather than describing what you would do next.',
+    );
+  } else if (left <= 3) {
+    lines.push(
+      `${String(left)} turns left, including this one, and each tool call spends one. Stop gathering and start writing: an answer that covers most of the task beats a complete plan you run out of turns before carrying out.`,
+    );
+  } else {
+    lines.push(
+      `${String(left)} turns left of ${String(instructions.role.maxIterations)}, including this one, and each tool call spends one. Work towards the answer rather than exploring.`,
+    );
+  }
 
   return lines;
 }

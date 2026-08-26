@@ -394,6 +394,23 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   const completedToolCalls: Record<string, CompletedToolCall> = restored.completedToolCalls;
 
   let output = restored.output;
+  /**
+   * True when `output` is something the model said *before* its tools ran.
+   *
+   * A sentence attached to a tool call is an intention, not a result. Cleared
+   * by any turn that speaks without calling anything.
+   */
+  let outputIsIntention = false;
+  /**
+   * True while the step is going round only to put its findings into words.
+   *
+   * The work is done and the verifier has already said so; the extra turn
+   * exists because the answer was empty or was an intention. Asking the
+   * verifier again would be paying for a second opinion on a question already
+   * settled — and it can come back *no*, which spends the rest of the budget
+   * re-doing work that was finished.
+   */
+  let answering = false;
   let verification: Verification | null = restored.verification;
   let structuredOutput: unknown = restored.structuredOutput;
   let iteration = restored.iteration;
@@ -598,6 +615,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         // disagree. They were two separate facts and only one of them reached
         // the model.
         gated: task.gated === true,
+        // Live, not the role's maximum. A model told a static cap has no idea
+        // which turn it is on, so it explores at the same rate on its last turn
+        // as on its first — which is how a researcher asked for ten cars spent
+        // its whole budget looking and handed back one.
+        turnsLeft: Math.max(0, task.role.maxIterations - iteration),
         ...(task.placement ? { placement: task.placement } : {}),
       },
       history: [...history, ...extraMessages],
@@ -771,9 +793,26 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
 
     iteration += 1;
 
-    const acted = await callModel('act', [], true);
+    // Tools are off on the answering turn. The step is being asked to speak,
+    // not to start something new, and a model handed a tool list will reach for
+    // one — which is how "say what you found" became another round of calls.
+    const acted = await callModel('act', [], !answering);
     if ('denied' in acted) return denialResult(acted.denied);
     const actText = record('act', acted.response);
+
+    if (answering) {
+      answering = false;
+      if (actText.trim() !== '') {
+        output = actText;
+        outputIsIntention = false;
+        history.push({ role: 'assistant', content: actText });
+        const contracted = await applyOutputContract();
+        if (contracted !== null && 'denied' in contracted) return denialResult(contracted.denied);
+        return halt('succeeded', 'completed');
+      }
+      // It had nothing to add after all. Fall through and carry on as before
+      // rather than looping here, which would be an unbounded ask-again.
+    }
     const signatures = acted.response.toolCalls.map((call) =>
       toolSignature(fromWireName(call.name), call.arguments),
     );
@@ -781,7 +820,19 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     // going in circles is one way to make no progress, and having everything
     // you try refused is the other.
     let failedThisIteration = 0;
-    if (actText !== '') output = actText;
+    if (actText !== '') {
+      output = actText;
+      // What a model says in the same turn as a tool call is what it is *about
+      // to* do. The results do not exist yet, so this cannot be the step's
+      // answer — and taking it as one is how an App operator that fetched
+      // somebody's email handed the next step "I'll fetch your GitHub emails
+      // now" and nothing else. The emails went nowhere.
+      //
+      // The old guard only caught an *empty* answer, which a real model almost
+      // never gives: they narrate. This is the same idea with the real
+      // condition.
+      outputIsIntention = acted.response.toolCalls.length > 0;
+    }
     // Two assistant turns saying the same thing are one assistant turn saying
     // it twice, as far as the next model call is concerned. On a task simple
     // enough that the plan and the act are the same sentence, the verifier read
@@ -1037,11 +1088,16 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     // Going round again gives it the turn in which to speak. A step that
     // produced any prose keeps it and stops here, so this costs nothing in the
     // ordinary case.
-    if (verification.verified && output.trim() === '' && iteration < task.role.maxIterations) {
+    if (
+      verification.verified &&
+      (output.trim() === '' || outputIsIntention) &&
+      iteration < task.role.maxIterations
+    ) {
+      answering = true;
       history.push({
         role: 'user',
         content:
-          'You have what you needed. Now answer: say what you found, in your own words. Do not call another tool.',
+          'You have what you needed. Now answer: say what you found, in your own words, in full. Everything the next step gets is in this answer and nothing else — the tool results are not passed on, so anything you leave out is lost. Do not call another tool.',
       });
       continue;
     }
@@ -1061,6 +1117,35 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
   // Out of iterations without verifying. CLAUDE.md: "No unbounded loops" — the
   // cap is the role's, and reaching it is a reported outcome rather than an
   // error, because the work done so far may still be worth something.
+  //
+  // "May still be worth something" was doing no work at all: the step returned
+  // its last utterance and dropped every observation, so a researcher that had
+  // read ten pages handed the next step a sentence about the eleventh. The work
+  // was done and paid for and then thrown away.
+  //
+  // So: one last turn, to write it down. Exactly one, outside the loop, with
+  // tools switched off — not a raised cap. The cap still means what it said,
+  // the run still ends here, and the difference is whether what it found comes
+  // out. Skipped when the step has already spoken with results in hand, which
+  // is the case where there is nothing to add.
+  if (!cancelled() && (output.trim() === '' || outputIsIntention || observations.length > 0)) {
+    const lastWord = await callModel(
+      'decide',
+      [
+        {
+          role: 'user',
+          content:
+            'You are out of turns. Say now, in full, what you found and what you did — everything the next step gets is in this answer, and the tool results are not passed on. Say plainly which part of the task you did not finish, rather than describing what you would have done next.',
+        },
+      ],
+      false,
+    );
+    if (!('denied' in lastWord)) {
+      const text = record('decide', lastWord.response);
+      if (text.trim() !== '') output = text;
+    }
+  }
+
   return halt('exhausted', 'iterations');
 }
 

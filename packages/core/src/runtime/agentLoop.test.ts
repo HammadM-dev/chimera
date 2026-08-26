@@ -977,3 +977,101 @@ test('a step that already said something is not made to say it twice', async () 
     await h.cleanup();
   }
 });
+
+test('a step does not answer with what it said before its tools ran', async () => {
+  // Reported from a real run, and it is data loss rather than a wording
+  // problem. An App operator fetched somebody's GitHub email with Composio and
+  // the next step was handed "I'll fetch your GitHub emails now" — the sentence
+  // the model said in the same turn as the call, before any result existed.
+  // The emails themselves went nowhere. The next agent, correctly, refused to
+  // summarise what it had never been shown.
+  //
+  // The loop took the last non-empty assistant text as the step's answer, and
+  // only noticed when that text was *empty*. A model that says anything at all
+  // alongside its call defeats that check, which is every real model.
+  const h = await harness();
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'Plan: read the file.' },
+          {
+            kind: 'toolCall',
+            toolId: 'filesystem__writeFile',
+            toolName: 'filesystem__writeFile',
+            params: { path: 'hello.txt', content: 'hello' },
+            say: 'I will write the file now.',
+          },
+          VERIFIED,
+          // The turn it is now given, with the result in hand.
+          { kind: 'text', content: 'Written: hello.txt now contains "hello".' },
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop(taskFor(), {
+      governor: new Governor('permissive'),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.equal(result.status, 'succeeded');
+    assert.notEqual(
+      result.output.trim(),
+      'I will write the file now.',
+      'the step answered with its intention rather than its result',
+    );
+    assert.match(result.output, /contains "hello"/);
+  } finally {
+    await h.cleanup();
+  }
+});
+
+test('a step that runs out of turns still says what it found', async () => {
+  // The other half of the same fault. A step that exhausts its iterations
+  // returned its last utterance and threw away every observation — so a
+  // researcher that had read ten pages handed the next step a sentence about
+  // what it was going to read next.
+  //
+  // One extra call, outside the budget and clearly bounded, buys the write-up
+  // of work that has already been paid for.
+  const h = await harness();
+  const role: Role = { ...coder, maxIterations: 1 };
+  const provider = new CountingProvider(
+    new MockProvider({
+      script: {
+        queue: [
+          { kind: 'text', content: 'Plan: write the file.' },
+          {
+            kind: 'toolCall',
+            toolId: 'filesystem__writeFile',
+            toolName: 'filesystem__writeFile',
+            params: { path: 'hello.txt', content: 'hello' },
+            say: 'Next I will write the file.',
+          },
+          NOT_VERIFIED,
+          // The last word, after the budget is gone.
+          { kind: 'text', content: 'I got as far as writing hello.txt. It holds "hello".' },
+        ],
+      },
+    }),
+  );
+
+  try {
+    const result = await runAgentLoop({ ...taskFor(role), role }, {
+      governor: new Governor('permissive'),
+      provider,
+      tools: h.tools,
+      callOptions: CALL_OPTIONS,
+    });
+
+    assert.equal(result.status, 'exhausted');
+    assert.match(result.output, /I got as far as/);
+    assert.doesNotMatch(result.output, /Next I will write the file/);
+  } finally {
+    await h.cleanup();
+  }
+});

@@ -244,3 +244,74 @@ test('a swarm step in an automation makes a thread, and the node leads to it', a
     await gateway.close();
   }
 });
+
+test('full screen fills the window, and leaving it puts the graph back', async () => {
+  // The control that looked like it worked and did not. `position: fixed` is
+  // relative to the viewport only when no ancestor carries a transform, and
+  // `.swarm-turn` has an animation whose keyframe animates one — which makes it
+  // a containing block for good. So "full screen" filled the card the graph was
+  // already sitting in: a slightly bigger box in the same place.
+  //
+  // Asserted as measured geometry against the window, because every class name
+  // was already right while the thing was wrong.
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile, env: { CHIMERA_OMNIROUTE_BASE_URL: gateway.baseUrl } });
+
+  try {
+    const page = await app.firstWindow();
+
+    await goTo(page, 'providers');
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'detected', {
+      timeout: 20_000,
+    });
+    await page.getByTestId('omniroute-import').click();
+    await expect(page.getByTestId('omniroute-setup')).toHaveAttribute('data-phase', 'ready', {
+      timeout: 20_000,
+    });
+
+    await goTo(page, 'swarm');
+    await page.getByTestId('swarm-population').fill('40');
+    await page.getByTestId('swarm-rounds').fill('1');
+    await page.getByTestId('swarm-input').fill('Should we raise prices by ten per cent?');
+    await page.getByTestId('swarm-ask').click();
+    await expect(page.getByTestId('swarm-turn')).toBeVisible({ timeout: 180_000 });
+
+    const graph = page.getByTestId('swarm-graph').first();
+    await expect(graph).toBeVisible({ timeout: 30_000 });
+    await expect(graph).toHaveAttribute('data-full', 'no');
+
+    // `page.viewportSize()` is null for an Electron window — there is no
+    // emulated viewport to report. The window's own dimensions are the thing
+    // "full screen" is being measured against anyway.
+    const size = await page.evaluate(() => ({
+      width: window.innerWidth,
+      height: window.innerHeight,
+    }));
+    const before = await graph.boundingBox();
+    expect(before?.width ?? 0).toBeLessThan(size.width * 0.9);
+
+    await page.getByTestId('swarm-graph-full').first().click();
+    await expect(graph).toHaveAttribute('data-full', 'yes');
+
+    const full = await graph.boundingBox();
+    expect(full?.width ?? 0).toBeGreaterThanOrEqual(size.width - 2);
+    expect(full?.height ?? 0).toBeGreaterThanOrEqual(size.height - 2);
+    expect(full?.x ?? -1).toBeLessThanOrEqual(1);
+    expect(full?.y ?? -1).toBeLessThanOrEqual(1);
+
+    // And the canvas grew with it rather than keeping the size of the card it
+    // used to live in — a ResizeObserver only fires on a change *after* it
+    // starts watching, and moving into the portal re-creates these nodes.
+    const canvas = await page.getByTestId('swarm-graph-canvas').first().boundingBox();
+    expect(canvas?.width ?? 0).toBeGreaterThan(size.width * 0.8);
+
+    await page.getByTestId('swarm-graph-full').first().click();
+    await expect(graph).toHaveAttribute('data-full', 'no');
+    expect((await graph.boundingBox())?.width ?? 0).toBeLessThan(size.width * 0.9);
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
+  }
+});
