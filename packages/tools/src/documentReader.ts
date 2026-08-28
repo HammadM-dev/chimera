@@ -1,4 +1,5 @@
 import { execFile } from 'node:child_process';
+import fsSync from 'node:fs';
 import path from 'node:path';
 import { kindOf, readableExtensions, type DocumentText } from './documents.ts';
 
@@ -20,8 +21,20 @@ export interface DocumentReadOptions {
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 
-/** Where the child's entry point lives, relative to this file. */
-const WORKER = path.join(import.meta.dirname, 'documentWorker.ts');
+/**
+ * Where the child's entry point lives, relative to this file.
+ *
+ * Two forms, because this module runs from two places. Under `node --test` it
+ * is TypeScript source and its sibling is `documentWorker.ts`; inside the app
+ * it is a line in `dist/main.js` and its sibling is `documentWorker.js`, built
+ * beside it. Hard-coding the `.ts` name meant the built app spawned a path
+ * that does not exist there, so every document read failed — and no test saw
+ * it, because they all inject `spawn` and never reach this line.
+ */
+const WORKER = ((): string => {
+  const built = path.join(import.meta.dirname, 'documentWorker.js');
+  return fsSync.existsSync(built) ? built : path.join(import.meta.dirname, 'documentWorker.ts');
+})();
 
 export class DocumentReadError extends Error {
   constructor(message: string) {
@@ -34,14 +47,29 @@ function runWorker(target: string, maxChars: number, timeoutMs: number): Promise
   return new Promise((resolve, reject) => {
     execFile(
       process.execPath,
-      ['--experimental-strip-types', '--no-warnings', WORKER, target, String(maxChars)],
+      [
+        // Only source needs the stripper. Asking for it on built JavaScript is
+        // harmless but says the wrong thing about what is being run.
+        ...(WORKER.endsWith('.ts') ? ['--experimental-strip-types'] : []),
+        '--no-warnings',
+        WORKER,
+        target,
+        String(maxChars),
+      ],
       {
         timeout: timeoutMs,
         // Room for the answer plus the slack a parser's own chatter needs.
         maxBuffer: Math.max(maxChars * 4, 4 * 1024 * 1024),
         // Nothing from the app's environment. A parser has no business reading
         // it, and a compromised one has no business finding an API key in it.
-        env: { PATH: process.env['PATH'] ?? '' },
+        //
+        // ELECTRON_RUN_AS_NODE is the exception, and it is not app state: in
+        // the packaged app `process.execPath` is the Electron binary, which
+        // given a script path tries to *open it as an application* — "Unable
+        // to find Electron app at …/documentWorker.ts" was this, not a missing
+        // file. The flag makes that same binary behave as the Node it embeds.
+        // Harmless under plain Node, which ignores it.
+        env: { PATH: process.env['PATH'] ?? '', ELECTRON_RUN_AS_NODE: '1' },
       },
       (err, stdout) => {
         if (err && stdout.trim() === '') {

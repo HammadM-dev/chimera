@@ -10,7 +10,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.e2e.json",
     "test": "node --test",
-    "build": "npm run build --workspace @chimera/ui && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts",
+    "build": "npm run build --workspace @chimera/ui && vite build --config vite.main.config.ts && vite build --config vite.preload.config.ts && vite build --config vite.worker.config.ts",
     "postbuild": "node scripts/copy-app-assets.mjs",
     "start": "npm run build && electron .",
     "test:e2e": "npm run build && playwright test",

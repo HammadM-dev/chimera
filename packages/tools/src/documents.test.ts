@@ -223,3 +223,18 @@ test('a real read goes through a child process and comes back', async () => {
   assert.equal(result.kind, 'spreadsheet');
   assert.match(result.text, /INV-901/);
 });
+
+test('the reader really spawns its worker and gets the file back', async () => {
+  // No injected `spawn`. Every other test here supplies one, which is why a
+  // build that shipped no worker at all stayed green: the child was never
+  // started, so the path to it was never wrong in a way a test could see.
+  // This one runs the real child, so it fails if the worker is missing, if
+  // its path is wrong, or if the process cannot be started.
+  const target = path.join(dir, 'real-spawn.txt');
+  writeFileSync(target, 'Invoice total: 41 pounds\n');
+
+  const result = await readAnyDocument(target, { maxChars: 500 });
+
+  assert.equal(result.kind, 'text');
+  assert.match(result.text, /Invoice total: 41 pounds/);
+});
