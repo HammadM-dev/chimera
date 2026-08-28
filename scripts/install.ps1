@@ -75,25 +75,47 @@ try {
 
 # Unblock regardless: harmless when the attribute is absent, and it is present
 # if this script was itself saved by a browser before being run.
-Unblock-File -Path $target -ErrorAction SilentlyContinue
+#
+# In a try/catch rather than behind -ErrorAction or a Get-Command test, and
+# both of those were tried: -ErrorAction does not catch it because the failure
+# happens at binding time, and Get-Command finds the cmdlet on platforms where
+# calling it still throws "does not support Linux". Under
+# `$ErrorActionPreference = 'Stop'` that terminated the script after the
+# executable was written but before it reached PATH — an install that looked
+# like it failed and had actually half succeeded.
+try {
+    Unblock-File -Path $target -ErrorAction SilentlyContinue
+} catch {
+    # Nothing to do: the attribute is Windows-only and so is the problem it
+    # describes.
+}
 
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-if ($userPath -notlike "*$Root*") {
-    $updated = if ([string]::IsNullOrEmpty($userPath)) { $Root } else { "$userPath;$Root" }
-    [Environment]::SetEnvironmentVariable('Path', $updated, 'User')
-    $pathAdded = $true
+# Failing to edit PATH must not fail the install: the app is already on disk
+# and runnable by full path, so the worst case is one manual step rather than a
+# broken installation that half happened.
+try {
+    $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+    if ($userPath -notlike "*$Root*") {
+        $updated = if ([string]::IsNullOrEmpty($userPath)) { $Root } else { "$userPath;$Root" }
+        [Environment]::SetEnvironmentVariable('Path', $updated, 'User')
+        $pathAdded = $true
+    }
+} catch {
+    $pathFailed = $true
 }
 
 Write-Host ''
 Write-Host "CHIMERA $version is installed."
 Write-Host "  app:     $target"
 
-if ($pathAdded) {
+Write-Host ''
+if ($pathFailed) {
+    Write-Host 'PATH could not be updated. Start it with:'
+    Write-Host "  $target"
+} elseif ($pathAdded) {
     # The PATH change reaches new shells only; saying "type chimera" here would
     # be wrong in the very window the person is looking at.
-    Write-Host ''
     Write-Host 'Open a new terminal, then type `chimera` to start.'
 } else {
-    Write-Host ''
     Write-Host 'Type `chimera` to start.'
 }

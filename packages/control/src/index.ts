@@ -2,6 +2,7 @@
 // Browser control populated starting M6; sidecar bridge client scaffolded M0,
 // wired to a real binary starting M8. See docs/ARCHITECTURE.md.
 export { createBrowserProfileManager } from './browser/profileManager.ts';
+export { ensureBrowser, browsersRoot, browserPresent } from './browser/ensureBrowser.ts';
 export { createSidecarBridge } from './sidecar/bridge.ts';
 export type { SidecarBridge, SidecarOptions } from './sidecar/bridge.ts';
 export { parseLine, splitLines, encodeRequest, isEvent } from './sidecar/protocol.ts';

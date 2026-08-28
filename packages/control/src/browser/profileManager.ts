@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import type { BrowserContext, Page } from 'playwright';
 import { ChimeraError } from '@chimera/errors';
+import { ensureBrowser } from './ensureBrowser.ts';
 
 // M6-1. One browser profile per workspace, kept apart from every other profile
 // on the machine — including, emphatically, the user's own.
@@ -26,6 +27,13 @@ export interface ProfileManagerOptions {
   root: string;
   /** Off for real use; on for a developer watching what an agent does. */
   headless?: boolean;
+  /**
+   * Told what the one-time browser download is doing.
+   *
+   * A first browser run on a fresh install fetches ~150MB. Without this the
+   * app sits there saying nothing for several minutes, which reads as a hang.
+   */
+  onProgress?: (line: string) => void;
 }
 
 export interface BrowserProfileManager {
@@ -61,6 +69,8 @@ export function createBrowserProfileManager(options: ProfileManagerOptions): Bro
   const profileDirFor = (workspaceId: string): string =>
     path.join(options.root, 'browser-profiles', safeSegment(workspaceId));
 
+  const onProgress = options.onProgress;
+
   const launch = async (workspaceId: string): Promise<BrowserSession> => {
     const profileDir = profileDirFor(workspaceId);
     fs.mkdirSync(profileDir, { recursive: true });
@@ -78,6 +88,14 @@ export function createBrowserProfileManager(options: ProfileManagerOptions): Bro
     //
     // Loaded at the point of use, a packaging mistake costs the browser tool
     // and nothing else, and says so in a sentence a person can act on.
+
+    // Before the import, because Playwright reads this variable as it loads.
+    const browsers = await ensureBrowser({
+      root: options.root,
+      ...(onProgress ? { onProgress } : {}),
+    });
+    process.env['PLAYWRIGHT_BROWSERS_PATH'] = browsers;
+
     let chromium: typeof import('playwright').chromium;
     try {
       ({ chromium } = await import('playwright'));

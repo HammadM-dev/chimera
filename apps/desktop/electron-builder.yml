@@ -55,6 +55,13 @@ files:
 asar: true
 asarUnpack:
   - '**/*.node'
+  # Playwright is unpacked whole, not for the .node rule but for two others.
+  # Its browser-download CLI is *spawned*, and a script inside an asar is not a
+  # file the operating system can execute — the archive is one file to it. And
+  # playwright-core locates a browser by walking out from its own package
+  # directory, which inside an archive is not a real path either.
+  - '**/node_modules/playwright/**'
+  - '**/node_modules/playwright-core/**'
 
 linux:
   target:
