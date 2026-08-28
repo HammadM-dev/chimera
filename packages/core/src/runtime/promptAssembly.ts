@@ -414,32 +414,38 @@ export function assemblePrompt(options: AssembleOptions): AssembledPrompt {
   // it here rather than in an adapter is the point: this is the one place that
   // decides message order, and a rule enforced in each adapter is a rule three
   // of them will eventually disagree about.
-  const pending = new Map(
-    observations
-      .filter((observation) => observation.unrequested !== true)
-      .map((observation) => [observation.callId, observation] as const),
-  );
+  // Matched by position, not through a map keyed on the call id. Ids are not
+  // reliably unique — the mock provider scripts a fixed one, and a real model
+  // is free to repeat itself — and a map would silently collapse two results
+  // that share an id into one, dropping a tool result. Losing an observation
+  // is a far worse bug than the ordering this is here to fix.
+  const taken = new Set<number>();
+  const claim = (callId: string): ToolObservation | undefined => {
+    const found = observations.findIndex(
+      (observation, index) =>
+        !taken.has(index) && observation.unrequested !== true && observation.callId === callId,
+    );
+    if (found === -1) return undefined;
+    taken.add(found);
+    return observations[found];
+  };
 
   const conversation: Message[] = [];
   for (const message of options.history ?? []) {
     conversation.push(message);
     for (const call of message.role === 'assistant' ? (message.toolCalls ?? []) : []) {
-      const answer = pending.get(call.id);
-      if (answer === undefined) continue;
-      pending.delete(call.id);
-      conversation.push(asMessage(answer));
+      const answer = claim(call.id);
+      if (answer !== undefined) conversation.push(asMessage(answer));
     }
   }
 
   const messages: Message[] = [
     { role: 'user', content: instructions.task },
     ...conversation,
-    // What is left over: results whose call this history does not carry, and
-    // the unrequested material, which answers no call by definition.
-    ...observations
-      .filter((observation) => observation.unrequested !== true && pending.has(observation.callId))
-      .map(asMessage),
-    ...observations.filter((observation) => observation.unrequested === true).map(asMessage),
+    // What is left over, in the order it was produced: results whose call this
+    // history does not carry, and the unrequested material, which answers no
+    // call by definition. Nothing is dropped.
+    ...observations.filter((_observation, index) => !taken.has(index)).map(asMessage),
   ];
 
   return { system: assembleSystemMessage(instructions), messages, nonce };

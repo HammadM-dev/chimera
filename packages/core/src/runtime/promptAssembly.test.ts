@@ -421,3 +421,27 @@ test('a result whose call the history does not carry still reaches the model', (
   assert.equal(last?.role, 'tool');
   assert.equal(last?.toolCallId, 'call-9');
 });
+
+test('two results sharing a call id both survive', () => {
+  // Call ids are not reliably unique: the mock provider scripts a fixed one
+  // and a real model is free to repeat itself. Matching results to calls
+  // through a map keyed on the id silently collapsed the pair into one and
+  // dropped a tool result — a worse bug than the ordering it came from.
+  const call = { id: 'call-1', name: 'http.request', arguments: {} };
+  const assembled = assemblePrompt({
+    instructions,
+    history: [
+      { role: 'assistant', content: 'First.', toolCalls: [call] },
+      { role: 'assistant', content: 'Again.', toolCalls: [call] },
+    ],
+    observations: [
+      { callId: 'call-1', toolId: 'http.request', output: 'FIRST-RESULT', isError: false },
+      { callId: 'call-1', toolId: 'http.request', output: 'SECOND-RESULT', isError: false },
+    ],
+  });
+
+  const text = assembled.messages.map((message) => String(message.content)).join('\n');
+  assert.match(text, /FIRST-RESULT/);
+  assert.match(text, /SECOND-RESULT/);
+  assert.equal(assembled.messages.filter((message) => message.role === 'tool').length, 2);
+});
