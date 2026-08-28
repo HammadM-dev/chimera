@@ -378,3 +378,46 @@ test('the permission lines are still not a place tool output can reach', () => {
     'the tool result should still be handed back, inside the envelope',
   );
 });
+
+test('a tool result follows the assistant turn that called for it', () => {
+  // The chat format requires it, and the loop breaks it every iteration: the
+  // "has the task been achieved?" question is a user turn injected after the
+  // assistant's tool call, which used to leave the result stranded at the end
+  // of the list behind it. Ollama answered anyway; OpenRouter returned a bare
+  // `400 Provider returned error` and the run failed with the wrong name on it.
+  const assembled = assemblePrompt({
+    instructions,
+    history: [
+      { role: 'assistant', content: 'Fetching it now.', toolCalls: [
+        { id: 'call-1', name: 'http.request', arguments: { url: 'https://example.com' } },
+      ] },
+      { role: 'user', content: 'Has the task been achieved?' },
+    ],
+    observations: [
+      { callId: 'call-1', toolId: 'http.request', output: 'Order 42, paid.', isError: false },
+    ],
+  });
+
+  const roles = assembled.messages.map((message) => message.role);
+  assert.deepEqual(roles, ['user', 'assistant', 'tool', 'user']);
+  // Not merely present — immediately behind its own call.
+  const at = roles.indexOf('tool');
+  assert.equal(assembled.messages[at - 1]?.role, 'assistant');
+  assert.equal(assembled.messages[at]?.toolCallId, 'call-1');
+});
+
+test('a result whose call the history does not carry still reaches the model', () => {
+  // The loop hands back observations before it has recorded the assistant turn
+  // that produced them. Dropping those would be a far worse bug than ordering.
+  const assembled = assemblePrompt({
+    instructions,
+    history: [{ role: 'assistant', content: 'Thinking.' }],
+    observations: [
+      { callId: 'call-9', toolId: 'http.request', output: 'Order 42, paid.', isError: false },
+    ],
+  });
+
+  const last = assembled.messages[assembled.messages.length - 1];
+  assert.equal(last?.role, 'tool');
+  assert.equal(last?.toolCallId, 'call-9');
+});

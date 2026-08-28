@@ -368,28 +368,69 @@ export function assemblePrompt(options: AssembleOptions): AssembledPrompt {
   const nonce = options.nonce ?? randomUUID();
   const { instructions } = options;
 
+  const observations = options.observations ?? [];
+
+  const asMessage = (observation: ToolObservation): Message => {
+    const content = renderObservation(observation, nonce);
+
+    // Material nobody asked for — the brief's attachments — goes back as a
+    // user turn, because a `tool` turn answering no call is thrown away
+    // before the model ever sees it. See `ToolObservation.unrequested`.
+    //
+    // The envelope and the system message's standing instruction about it are
+    // what make this safe, and both are identical either way: the role was
+    // the belt to the envelope's braces, and a belt that deletes the trousers
+    // is not an improvement.
+    if (observation.unrequested === true) return { role: 'user', content };
+
+    // A real tool result goes back as `tool`: the model's own chat template
+    // renders it as a result rather than as something a person said. A tool
+    // result arriving as a user turn is the single most common way injected
+    // text ends up being read as an instruction.
+    return { role: 'tool', content, toolCallId: observation.callId };
+  };
+
+  // Each result sits directly behind the assistant turn that asked for it.
+  //
+  // Every observation used to be appended after the whole history, which reads
+  // fine and is wrong: the chat format requires a `tool` turn to follow the
+  // assistant turn carrying its `tool_call`, immediately. The loop breaks that
+  // the moment it injects anything of its own between the two — and it does,
+  // every iteration, with the "has the task been achieved?" question. That put
+  // a user turn between an assistant's tool call and the result answering it.
+  //
+  // Ollama accepts the malformed order and answers anyway. OpenRouter returns
+  // `400 Provider returned error` with nothing to say about why, so the run
+  // failed with a provider's name on it and the cause two layers away. Fixing
+  // it here rather than in an adapter is the point: this is the one place that
+  // decides message order, and a rule enforced in each adapter is a rule three
+  // of them will eventually disagree about.
+  const pending = new Map(
+    observations
+      .filter((observation) => observation.unrequested !== true)
+      .map((observation) => [observation.callId, observation] as const),
+  );
+
+  const conversation: Message[] = [];
+  for (const message of options.history ?? []) {
+    conversation.push(message);
+    for (const call of message.role === 'assistant' ? (message.toolCalls ?? []) : []) {
+      const answer = pending.get(call.id);
+      if (answer === undefined) continue;
+      pending.delete(call.id);
+      conversation.push(asMessage(answer));
+    }
+  }
+
   const messages: Message[] = [
     { role: 'user', content: instructions.task },
-    ...(options.history ?? []),
-    ...(options.observations ?? []).map<Message>((observation) => {
-      const content = renderObservation(observation, nonce);
-
-      // Material nobody asked for — the brief's attachments — goes back as a
-      // user turn, because a `tool` turn answering no call is thrown away
-      // before the model ever sees it. See `ToolObservation.unrequested`.
-      //
-      // The envelope and the system message's standing instruction about it are
-      // what make this safe, and both are identical either way: the role was
-      // the belt to the envelope's braces, and a belt that deletes the trousers
-      // is not an improvement.
-      if (observation.unrequested === true) return { role: 'user', content };
-
-      // A real tool result goes back as `tool`: the model's own chat template
-      // renders it as a result rather than as something a person said. A tool
-      // result arriving as a user turn is the single most common way injected
-      // text ends up being read as an instruction.
-      return { role: 'tool', content, toolCallId: observation.callId };
-    }),
+    ...conversation,
+    // What is left over: results whose call this history does not carry, and
+    // the unrequested material, which answers no call by definition.
+    ...observations
+      .filter((observation) => observation.unrequested !== true && pending.has(observation.callId))
+      .map(asMessage),
+    ...observations.filter((observation) => observation.unrequested === true).map(asMessage),
   ];
 
   return { system: assembleSystemMessage(instructions), messages, nonce };

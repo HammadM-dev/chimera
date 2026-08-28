@@ -30,6 +30,13 @@ const OLLAMA = process.env['OLLAMA_CLOUD_KEY'] ?? '';
 // written. Overridable, because "free" is a moving target on both services.
 const OR_MODEL = process.env['CHIMERA_LIVE_OPENROUTER_MODEL'] ?? 'minimax/minimax-m3:free';
 const OLLAMA_MODEL = process.env['CHIMERA_LIVE_OLLAMA_MODEL'] ?? 'gemma4:31b';
+// The two models on this Ollama Cloud plan are not interchangeable. `gemma4:31b`
+// answers and argues perfectly well — chat and the swarm run on it — but on a
+// multi-step tool job it stalls: it called the tool, then repeated itself until
+// the no-progress guard stopped it. `nemotron-3-super` carries a chain of tool
+// calls to the end. Not a fallback for a broken app; a model that fits the job,
+// which is the choice a user makes too.
+const OLLAMA_AGENT_MODEL = process.env['CHIMERA_LIVE_OLLAMA_AGENT_MODEL'] ?? 'nemotron-3-super';
 
 /** A marker no model could produce by guessing, so a pass cannot be luck. */
 const MARKER = 'TURBINE-9F4X-QUARTZ';
@@ -193,13 +200,17 @@ test.describe('CHIMERA, end to end, against real models', () => {
 
     try {
       const page = await app.firstWindow();
-      await connectOllama(page);
+      // OpenRouter for the longest chain in the suite: fetch a page, hand the
+      // facts to a second agent, write a file, read it back. Ollama gets the
+      // shorter tool job in the granted-folder test; between them both
+      // providers do real work rather than only answering questions.
+      await connectOpenRouter(page);
       await goTo(page, 'build');
 
       const place = async (id: string, instruction: string): Promise<void> => {
         await page.getByTestId(`palette-${id}`).click();
         await page.getByTestId('node-model').selectOption({
-          label: `Ollama Cloud · ${OLLAMA_MODEL}`,
+          label: `OpenRouter · ${OR_MODEL}`,
         });
         await page.getByTestId('node-instruction').fill(instruction);
       };
@@ -279,7 +290,7 @@ test.describe('CHIMERA, end to end, against real models', () => {
       await goTo(page, 'build');
       await page.getByTestId('palette-researcher').click();
       await page.getByTestId('node-model').selectOption({
-        label: `Ollama Cloud · ${OLLAMA_MODEL}`,
+        label: `Ollama Cloud · ${OLLAMA_AGENT_MODEL}`,
       });
       await page
         .getByTestId('node-instruction')
@@ -370,6 +381,13 @@ test.describe('CHIMERA, end to end, against real models', () => {
       await connectOllama(page);
 
       await goTo(page, 'home');
+      // Pick the model rather than taking the head of the catalogue. A real
+      // user pins one and the picker defaults to it; this run has no pins, and
+      // Ollama Cloud lists plenty of models it will not run without a paid
+      // plan. Leaving it to `choices[0]` tests the plan, not the assistant.
+      await page.getByTestId('home-model').selectOption({
+        label: `Ollama Cloud · ${OLLAMA_MODEL}`,
+      });
       await page
         .getByTestId('home-input')
         .fill(
@@ -456,6 +474,14 @@ test.describe('CHIMERA, end to end, against real models', () => {
       });
 
       console.log(`[update] ${JSON.stringify(state)}`);
+      // "0.0" here is expected and is not the packaged version. Playwright
+      // starts Electron with `dist/main.js`, so the app path is `dist/`, which
+      // holds no package.json and `app.getVersion()` falls back. A packaged
+      // build roots at the asar, reads the real manifest, and reports 0.1.0.
+      // Hence "knows something" rather than an exact match: asserting the real
+      // number here would fail for a reason that has nothing to do with the
+      // updater. The number only ever reaches a person when `supported` is
+      // true, and that is only ever a packaged build.
       expect(state.current, 'the updater does not know its own version').not.toBe('');
       // Unpackaged: no install path, so no offer and no error either.
       expect(state.supported).toBe(false);
