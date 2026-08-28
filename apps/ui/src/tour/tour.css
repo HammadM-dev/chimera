@@ -26,6 +26,20 @@
   background: var(--surface-scrim);
 }
 
+
+/* A step that asks for something done needs the app underneath to work.
+ *
+ * The veil takes clicks so that the rest of the app feels held still while the
+ * tour talks. On the last step that is exactly wrong: it says "open a
+ * connection below and press Pin", and the veil was swallowing the click on
+ * the connection — leaving "Finish" disabled, the instruction correct, and no
+ * way to carry it out. The dim stays; only the blocking goes.
+ */
+.tour--hands-on .tour__veil,
+.tour--hands-on .tour__hole {
+  pointer-events: none;
+}
+
 /* The hole is cut with one enormous shadow rather than four rectangles around
  * the target. Four rectangles have seams, and the seams show on every layout
  * whose numbers are not whole. */

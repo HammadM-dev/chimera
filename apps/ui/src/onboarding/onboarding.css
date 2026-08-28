@@ -7,7 +7,15 @@
   inset: 0;
   z-index: 40;
   display: grid;
-  place-items: center;
+  /* `safe`, and the scroll, are what make a step taller than the window
+   * usable. Plain `center` overflows a grid item equally in both directions,
+   * so the moment the content is taller than the viewport the top and bottom
+   * are both cut off and neither can be scrolled to — the provider step grew
+   * past 736px when it gained cards and tags, and "Skip for now" landed at
+   * y=808 with nothing able to reach it. `safe` falls back to start alignment
+   * exactly when centring would push content out of view. */
+  place-items: safe center;
+  overflow-y: auto;
   padding: var(--space-6);
   background: var(--surface-canvas);
 }

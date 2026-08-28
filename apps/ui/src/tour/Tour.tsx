@@ -3,7 +3,7 @@ import type { JSX } from 'react';
 import { bridge } from '../chat/useChimera.ts';
 import { Mark } from '../assets/brand/Mark.tsx';
 import { TOUR, type TourView } from './steps.ts';
-import { usePinnedModels } from '../views/useConnections.ts';
+import { useConnections, usePinnedModels } from '../views/useConnections.ts';
 import './tour.css';
 
 // The guided tour.
@@ -64,11 +64,19 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
   // The last step asks for something to be done rather than read. Read live so
   // the button unlocks the moment they pin, without a refresh.
   const { pinned } = usePinnedModels();
+  // What there is to pin. A requirement nobody can satisfy is a trap, not a
+  // requirement: somebody who skipped setup reaches the last step with no
+  // connection, so no catalogue, so no Pin button anywhere on the screen the
+  // step is pointing at — and "Finish" stays disabled for as long as they care
+  // to look at it. The ask stands whenever it can be met, which is the normal
+  // path, and steps aside when it cannot.
+  const { choices, loaded } = useConnections();
 
   const step = TOUR[at] ?? TOUR[0];
   const last = at === TOUR.length - 1;
   /** True when this step is waiting on something the person has not done yet. */
-  const blocked = step?.requires === 'pinnedModel' && pinned.length === 0;
+  const blocked =
+    step?.requires === 'pinnedModel' && pinned.length === 0 && (!loaded || choices.length > 0);
 
   // The section this step is about, opened before it is explained.
   useEffect(() => {
@@ -195,7 +203,11 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
   }
 
   return (
-    <div className="tour" data-testid="tour" data-step={String(at)}>
+    <div
+      className={`tour${step?.requires === undefined ? '' : ' tour--hands-on'}`}
+      data-testid="tour"
+      data-step={String(at)}
+    >
       {/* The dim, with a hole in it. One element and a very large shadow rather
           than four rectangles around the target: four rectangles have seams,
           and the seams show on every non-integer layout. */}

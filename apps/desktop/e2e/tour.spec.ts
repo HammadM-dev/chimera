@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
-import { freshProfile, launchApp, removeProfile } from './support/app.ts';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 
 // The guided tour.
 //
@@ -22,6 +24,26 @@ async function openTour(page: import('@playwright/test').Page): Promise<void> {
   await page.waitForSelector('.splash', { state: 'detached', timeout: 20_000 });
   const skip = page.getByTestId('intro-skip').first();
   if ((await skip.count()) > 0) await skip.click();
+}
+
+/** A catalogue to pin from. Only the models endpoint matters here. */
+const MODELS = ['alpha-one', 'beta-two', 'gamma-three'];
+
+async function startGateway(): Promise<{ baseUrl: string; close: () => Promise<void> }> {
+  const server: Server = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json', connection: 'close' });
+    res.end(JSON.stringify({ data: MODELS.map((id) => ({ id })) }));
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+  return {
+    baseUrl: `http://127.0.0.1:${String(port)}/v1`,
+    close: () =>
+      new Promise<void>((resolve) => {
+        server.closeAllConnections();
+        server.close(() => resolve());
+      }),
+  };
 }
 
 test('the tour walks every section, and each step opens the one it is about', async () => {
@@ -107,5 +129,74 @@ test('skipping asks first, and the warning says what is being skipped', async ()
   } finally {
     await app.close();
     removeProfile(profile);
+  }
+});
+
+test('the last step waits for a pin when there is one to give, and never traps', async () => {
+  // Two halves of one rule. The tour is meant to end with a model pinned —
+  // that is the single setting that most improves the next hour — so when
+  // there is a catalogue to pin from, Finish stays disabled until they do it.
+  //
+  // And when there is not, it must not. Somebody who skipped setup reaches
+  // this step with no connection, so no catalogue, so no Pin button anywhere
+  // on the screen the step points at: a requirement nobody can satisfy is a
+  // trap rather than a requirement. That case is the first test above, which
+  // walks the tour on an unconnected workspace and finishes it.
+  const gateway = await startGateway();
+  const profile = freshProfile();
+  const app = await launchApp({ profile });
+
+  try {
+    const page = await app.firstWindow();
+    // Past the intro and past the tour it offers: this test starts the tour
+    // itself, from Home, once there is a catalogue for the last step to ask
+    // about. Which is also the path somebody takes when they connect a
+    // provider first and read the manual afterwards.
+    await openTour(page);
+    const offered = page.getByTestId('tour-skip');
+    if ((await offered.count()) > 0) {
+      await offered.click();
+      await page.getByTestId('tour-skip-confirmed').click();
+    }
+
+    // A connection, so the last step has something to ask for.
+    await goTo(page, 'providers');
+    await page.getByTestId('connection-label').fill('Router');
+    await page.getByTestId('connection-kind').selectOption('openai-compatible');
+    await page.getByTestId('connection-base-url').fill(gateway.baseUrl);
+    await page.getByTestId('connection-key').fill('test-key');
+    await page.getByTestId('connection-create').click();
+    await expect(page.getByTestId('connection-row')).toBeVisible({ timeout: 60_000 });
+
+    await goTo(page, 'home');
+    await page.getByTestId('home-tour').click();
+    const tour = page.getByTestId('tour');
+    await expect(tour).toBeVisible({ timeout: 30_000 });
+
+    // Walk to the last step.
+    for (let step = 0; step < 40; step += 1) {
+      const next = page.getByTestId('tour-next');
+      if (((await next.textContent()) ?? '').trim() === 'Finish') break;
+      await next.click();
+    }
+
+    // It is asking, not merely suggesting.
+    await expect(page.getByTestId('tour-next')).toBeDisabled();
+    await expect(page.getByTestId('tour-waiting')).toBeVisible();
+
+    // Pin one, and it unlocks without a refresh.
+    // The catalogue is behind the connection's own toggle, which is where the
+    // step's text sends them: "Open a connection below and press Pin".
+    await page.getByTestId('connection-models').first().click();
+    await expect(page.getByTestId('model-catalogue')).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('model-pin').first().click();
+    await expect(page.getByTestId('tour-next')).toBeEnabled({ timeout: 20_000 });
+
+    await page.getByTestId('tour-next').click();
+    await expect(tour).toHaveCount(0);
+  } finally {
+    await app.close();
+    removeProfile(profile);
+    await gateway.close();
   }
 });
