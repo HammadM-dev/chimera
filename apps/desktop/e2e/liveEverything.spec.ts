@@ -113,9 +113,18 @@ test.describe('CHIMERA, end to end, against real models', () => {
       // Pin it, and check it reaches a picker in a different section.
       await page.getByTestId('model-pin').first().click();
       await goTo(page, 'swarm');
-      const first = ((await page.getByTestId('swarm-model').locator('option').allTextContents())[0] ??
-        '').trim();
-      expect(first.toLowerCase(), 'the pin did not reach the swarm picker').toContain('minimax');
+
+      // Connections load asynchronously, so the select exists before its
+      // options do. Polling the first option rather than reading it once.
+      await expect
+        .poll(
+          async () =>
+            (
+              (await page.getByTestId('swarm-model').locator('option').allTextContents())[0] ?? ''
+            ).toLowerCase(),
+          { timeout: 60_000, message: 'the pin did not reach the swarm picker' },
+        )
+        .toContain('minimax');
     } finally {
       await app.close();
       removeProfile(profile);
@@ -139,7 +148,22 @@ test.describe('CHIMERA, end to end, against real models', () => {
         ['OpenRouter', OR_MODEL],
         ['Ollama Cloud', OLLAMA_MODEL],
       ] as const) {
-        await page.getByTestId('connection-select').selectOption({ label });
+        // The option reads "OpenRouter (healthy)" — label plus health — so it
+        // is found by its value rather than by an exact label match.
+        const value = await page
+          .getByTestId('connection-select')
+          .locator('option')
+          .filter({ hasText: label })
+          .first()
+          .getAttribute('value');
+        expect(value, `no connection option for ${label}`).toBeTruthy();
+        await page.getByTestId('connection-select').selectOption(value ?? '');
+        await expect
+          .poll(
+            async () => await page.getByTestId('model-input').locator('option').count(),
+            { timeout: 60_000 },
+          )
+          .toBeGreaterThan(0);
         await page.getByTestId('model-input').selectOption(model);
         await page
           .getByTestId('prompt-input')
@@ -194,6 +218,13 @@ test.describe('CHIMERA, end to end, against real models', () => {
       await page.getByTestId('brief-sites').fill(site.host);
       await page.getByTestId('brief-name').fill('Order to file');
       await page.getByTestId('brief-input').fill('Record the order record as a file.');
+
+      // The coder holds `shell.exec`, which is irreversible whatever its
+      // arguments, so the canvas refuses to run it until somebody says so —
+      // correctly. A person pre-authorises the step; so does this.
+      await page.getByTestId('node-coder').click();
+      const preauth = page.getByTestId('node-preauthorise');
+      if ((await preauth.count()) > 0) await preauth.check();
 
       await expect(page.getByTestId('brief-run')).toBeEnabled({ timeout: 30_000 });
       await page.getByTestId('brief-run').click();
@@ -264,6 +295,11 @@ test.describe('CHIMERA, end to end, against real models', () => {
       await expect(
         page.getByTestId('run-note').or(page.getByTestId('run-result')).first(),
       ).toBeVisible({ timeout: 600_000 });
+
+      // What the run said, before anything is asserted: when a live run goes
+      // wrong the useful information is why, not that it did.
+      console.log(`[files:note] ${(await page.getByTestId('run-note').textContent().catch(() => '')) ?? ''}`);
+      console.log(`[files:result] ${((await page.getByTestId('run-result').textContent().catch(() => '')) ?? '').slice(0, 600)}`);
 
       const steps = page.getByTestId('result-steps');
       await expect(steps).toBeVisible({ timeout: 60_000 });
@@ -341,7 +377,14 @@ test.describe('CHIMERA, end to end, against real models', () => {
         );
       await page.getByTestId('home-ask').click();
 
-      await expect(page.getByTestId('talk-assistant').last()).toBeVisible({ timeout: 600_000 });
+      // Either an answer or an error — waiting only for the answer turns any
+      // failure into a ten-minute timeout that says nothing.
+      await expect(
+        page.getByTestId('talk-assistant').last().or(page.getByTestId('home-error').first()),
+      ).toBeVisible({ timeout: 600_000 });
+      console.log(
+        `[assistant:error] ${(await page.getByTestId('home-error').textContent().catch(() => '')) ?? ''}`,
+      );
       const said = (await page.getByTestId('talk-assistant').last().textContent()) ?? '';
       console.log(`[assistant] ${said.slice(0, 600)}`);
 

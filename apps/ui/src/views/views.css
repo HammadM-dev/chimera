@@ -1339,3 +1339,69 @@
 .app__more:hover {
   color: var(--text-primary);
 }
+
+/* ---- lists that arrive ---------------------------------------------------
+ *
+ * Cards and rows fade up as they land, staggered by a few tens of milliseconds
+ * so a grid reads as filling in rather than appearing whole. Capped at six:
+ * past that the last card waits noticeably for its turn, which is a delay
+ * pretending to be a flourish.
+ *
+ * `both` fill so nothing flashes at full opacity before its delay starts.
+ *
+ * `@keyframes list-in` is defined here and reused by the sections that own
+ * their own row classes — composio.css and notes.css — because a class may
+ * only be *defined* in one stylesheet (scripts/check-css-collisions.mjs), and
+ * two files styling `.note` is exactly the ambiguity that guard exists to
+ * catch. */
+
+.agent-card,
+.template-card,
+.app {
+  animation: list-in 220ms var(--ease-standard) both;
+}
+
+.agent-card:nth-child(2),
+.template-card:nth-child(2),
+.app:nth-child(2) {
+  animation-delay: 30ms;
+}
+
+.agent-card:nth-child(3),
+.template-card:nth-child(3),
+.app:nth-child(3) {
+  animation-delay: 60ms;
+}
+
+.agent-card:nth-child(4),
+.template-card:nth-child(4),
+.app:nth-child(4) {
+  animation-delay: 90ms;
+}
+
+.agent-card:nth-child(5),
+.template-card:nth-child(5),
+.app:nth-child(5) {
+  animation-delay: 120ms;
+}
+
+.agent-card:nth-child(n + 6),
+.template-card:nth-child(n + 6),
+.app:nth-child(n + 6) {
+  animation-delay: 150ms;
+}
+
+@keyframes list-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-card,
+  .template-card,
+  .app {
+    animation: none;
+  }
+}
