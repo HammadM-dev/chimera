@@ -273,6 +273,88 @@ has an animation whose keyframe animates one — a containing block for good. It
 reparents to the body now, and the test measures the box against the window
 rather than trusting a class name.
 
+### M11-11: CHIMERA updates itself
+
+STATUS: **done.** `electron-updater` against GitHub Releases. It checks eight
+seconds after launch and every six hours, downloads when told, and "Restart and
+update" quits and installs.
+
+DECISION: **a dependency, asked for first.** CLAUDE.md says to ask before adding
+one and this is the case that rule exists for — the alternative was
+reimplementing feed parsing, resumable downloads, and swapping a running
+AppImage, badly.
+
+DECISION: **download is triggered, not automatic.** Somebody on a metered
+connection should not discover a hundred megabytes has moved. `autoInstallOnAppQuit`
+is off for the same reason: a quit that silently becomes an install is a quit
+that lied.
+
+DECISION: **an unpackaged build says so rather than offering a dead button.** A
+checkout has no artefact to replace and `electron-updater` throws rather than
+no-ops, so `app.isPackaged` gates the whole surface.
+
+**What shipping an update actually requires**, because the code alone does not
+do it: the version in `apps/desktop/package.json` must be bumped (it was
+`0.0.0`, which no updater can compare against — now `0.1.0`), and the build must
+be published to GitHub Releases with a `GH_TOKEN` set. Until a release exists
+there is nothing to update *to*, and the banner will correctly never appear.
+
+### M11-12: The things the founder saw and said
+
+STATUS: **done.** A batch of reported faults and asks, each recorded here
+because several were mine.
+
+BUG, mine: **swarm personas said they had no web access.** The persona prompt
+contained "You have no tools and nothing to look up" — a line added in M11-8's
+awareness work — so they dutifully disclaimed, which is an assistant's sentence
+in the mouth of somebody meant to be a person with a view. Compounded by the
+reading stage being off by default, so nothing had looked anything up. Reading
+is on by default now and personas are told never to describe what they cannot
+do.
+
+BUG: **the app icon never appeared**, through two attempted fixes. The file was
+never the problem — it loads at 1024px. On Linux a taskbar matches a window to
+an installed `.desktop` entry by WM_CLASS and only falls back to the
+`_NET_WM_ICON` the constructor sets, so an unpackaged run showed the panel's
+generic icon. Set explicitly after the window exists, at 256px.
+
+BUG: **the destructive colour arrived one click too late.** The confirm dialog's
+button was red and every Delete and Remove that *opened* it looked like Save.
+Outline red on the controls that lead there; solid stays for the one that does
+it.
+
+DECISION: **provider marks are drawn, not lettered, and deliberately not
+approximations.** A wonky near-copy of a logo people see daily reads as a
+knock-off; an abstract mark that says something true about the provider does
+not. OpenRouter has a real logo file and its own card.
+
+DECISION: **the tour ends with something done rather than read** — it will not
+finish until a model is pinned. A tour somebody completes having done nothing is
+one they have forgotten by the next screen.
+
+BUG: adding tags to the provider cards broke their layout, because the card was
+a two-row grid relying on auto placement and a third child pushed the
+description into a cell one word wide. Auto placement does not fail loudly. Every
+cell is placed explicitly now.
+
+### M11-13: The whole product, against real models
+
+STATUS: **in progress.** A live suite covering connect, catalogue, pinning,
+chat on two providers, an automation that fetches and writes a file, granted and
+ungranted folder reads, a swarm, the assistant writing to the notes board, an
+irreversible step stopping, and the updater refusing an install it cannot do.
+
+DECISION: **two providers, not one.** OpenRouter and Ollama Cloud have different
+response shapes, rate limits and failure modes, and a product that works against
+one is not yet one that works against "any model provider".
+
+NOTE: `stealth/ox-alpha` was retired. Free models verified live before use:
+`minimax/minimax-m3:free` on OpenRouter, `gemma4:31b` on Ollama Cloud. Several
+other free OpenRouter models already return "Rate limit exceeded:
+free-models-per-day" on this account, and most Ollama Cloud models require a
+paid subscription — so a long live run can exhaust the free tier and fail for
+reasons that are not the product's.
+
 ## How this plan is followed
 
 Each ticket keeps its original acceptance criteria unless it says otherwise. `DECISION:` blocks record choices made while building, including the ones that turned out wrong; they are not edited after the fact. A ticket is done when a stranger can verify it from the outside — for anything with a screen, that means an end-to-end test that drives the app the way a person would, because that is the standard three shipped defects failed to meet.
