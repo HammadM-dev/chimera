@@ -2468,7 +2468,7 @@ function CanvasInner({
             <span className="canvas__stepKind">{KIND_LABEL[selected.data.kind]}</span>
             <button
               type="button"
-              className="button button--quiet"
+              className="button button--quiet button--destructive"
               data-testid="node-remove"
               onClick={() => {
                 removeStep(selected.id);

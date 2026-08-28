@@ -212,6 +212,21 @@ registerHandler(channels.pinnedSet, (payload) => setPinnedModels(payload.pinned)
 registerHandler(channels.tourSet, async (payload) =>
   (await import('../settings/localSettings.ts')).setTourSeen(payload.seen),
 );
+// Imported inside the handlers: `electron-updater` reaches `electron`, which
+// is CommonJS with no named exports and breaks the ESM loader the unit tests
+// run under.
+registerHandler(channels.updateGet, async () =>
+  (await import('../updates/service.ts')).getUpdateState(),
+);
+registerHandler(channels.updateCheck, async () =>
+  (await import('../updates/service.ts')).checkForUpdate(),
+);
+registerHandler(channels.updateDownload, async () =>
+  (await import('../updates/service.ts')).downloadUpdate(),
+);
+registerHandler(channels.updateInstall, async () =>
+  (await import('../updates/service.ts')).installUpdate(),
+);
 registerHandler(channels.noteList, (payload) => listNotes(payload));
 registerHandler(channels.noteSave, (payload) => saveNote(payload));
 registerHandler(channels.noteDone, (payload) => setNoteDone(payload));

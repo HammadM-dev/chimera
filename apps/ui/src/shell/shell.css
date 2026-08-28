@@ -495,3 +495,45 @@
     transform: none;
   }
 }
+
+/* The Composio badge on the Apps nav item.
+ *
+ * "Apps" alone does not say that a Gmail or a Slack is one sign-in away, and
+ * Composio is the word somebody would be searching the sidebar for. It breathes
+ * rather than blinks: a slow drift in opacity that reads as alive at the edge
+ * of vision and does not pull the eye off whatever the person is actually
+ * doing. Blinking in a navigation rail is an alarm. */
+.sidebar__badge {
+  margin-left: auto;
+  padding: 0 6px;
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  animation: badge-breathe 3.6s var(--ease-standard) infinite;
+}
+
+.sidebar__item[aria-current='page'] .sidebar__badge {
+  color: var(--text-secondary);
+  border-color: var(--border-strong);
+  animation: none;
+}
+
+@keyframes badge-breathe {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar__badge {
+    animation: none;
+    opacity: 1;
+  }
+}

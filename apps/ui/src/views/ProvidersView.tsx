@@ -117,7 +117,7 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
 
                 <button
                   type="button"
-                  className="button button--quiet"
+                  className="button button--quiet button--destructive"
                   data-testid="connection-remove"
                   onClick={() => {
                     setConfirming(connection);

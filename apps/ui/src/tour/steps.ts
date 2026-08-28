@@ -41,6 +41,16 @@ export interface TourStep {
   body: string;
   /** The one thing to try here, when there is one. */
   tip?: string;
+  /**
+   * Something the person has to actually do before the tour will move on.
+   *
+   * Only the last step uses it. A tour somebody finishes having done nothing is
+   * a tour they have forgotten by the next screen, and pinning is the single
+   * setting that most improves the next hour: a router connection puts several
+   * hundred models in every dropdown and the two anybody uses are in the middle
+   * of it.
+   */
+  requires?: 'pinnedModel';
 }
 
 export const TOUR: TourStep[] = [
@@ -90,42 +100,57 @@ export const TOUR: TourStep[] = [
     view: 'apps',
     target: '',
     title: 'Connect the apps you already use',
-    body: 'Gmail, Slack, Notion, Jira, HubSpot and several hundred others, through one Composio account. Sign in once here and an App operator step can act in them — and you can point each operator at particular apps, so the one reading your mail is not also the one that can post in Slack.',
-    tip: 'Each app’s How button spells out exactly what signing in will ask you for.',
+    body: 'One Composio account puts Gmail, Slack, Notion, Jira, HubSpot and several hundred others behind a single sign-in. The sign-in happens on that app’s own site — CHIMERA never sees the password, and the token stays with Composio rather than reaching this machine.',
+    tip: 'Point each App operator at particular apps and it is given only those. The one reading your mail then has no Slack tool to misuse — that is a limit in the engine, not a line in a prompt.',
   },
   {
     view: 'swarm',
     target: '',
     title: 'Put something to a simulated crowd',
-    body: 'A swarm writes a population of people with different starting views, tells them your question, and lets them influence each other for a few rounds. What comes back is where they landed and why. Useful for a price change, an announcement, a policy — anything where the disagreement is the finding.',
-    tip: 'It always says whether every agent was asked directly or most of them followed the loud ones.',
+    body: 'A swarm writes a cast of people with genuinely different starting views, reads up on your question first, and lets them argue for a few rounds. Watch the graph while it runs: each dot is a person, the ring means they think for themselves, and the colour is their opinion changing as answers land.',
+    tip: 'Two dials decide the bill. “People” is how many exist; “Ask everyone up to” is how many get a real model call — above it the rest follow by arithmetic, and the report always says which happened.',
   },
   {
     view: 'notes',
     target: '',
     title: 'A board you and your agents both write on',
-    body: 'Notes and reminders. You write on it, and so can the assistant and your automations — something noticed during a run gets left where you will find it rather than buried in a trace. Anything on the board can be edited by you, whoever wrote it.',
-    tip: 'Set a date and it becomes a reminder. Leave it blank and it stays a note.',
+    body: 'The only surface here with two kinds of author. You write on it, and so can the assistant and your automations — a licence expiring, something to chase, anything noticed mid-run gets left where you will find it instead of buried in a trace nobody opens.',
+    tip: 'A line an agent left says so underneath it; yours are unmarked. You can edit or delete any of it whoever wrote it.',
   },
   {
     view: 'memory',
     target: '',
     title: 'What the agents have learned, in the open',
-    body: 'Separate from notes: this is what agents recorded so later runs work better, and every entry says who wrote it and how sure they were. You can read it and forget anything that is wrong.',
-    tip: 'A wrong memory is a row to delete, not a mystery to debug.',
-  },
-  {
-    view: 'providers',
-    target: '',
-    title: 'Where models come from, and what they cost',
-    body: 'Connect Anthropic, OpenAI, Google, OpenRouter, or a local Ollama or LM Studio. Keys go into your operating system’s keychain and never into the database, the logs, or an agent’s prompt. Each connection lists its models with prices, so you can see what a run will cost before it does.',
-    tip: 'Pin the models you actually use and they stay at the top of every picker.',
+    body: 'Different from Notes, and the difference matters: Notes is written for you, Memory is written for prompts. This is what agents recorded so a later run starts better informed, and every entry carries who wrote it and how sure they were.',
+    tip: 'When an agent keeps getting something wrong, look here first. A bad memory is a row you delete, not a mystery you debug.',
   },
   {
     view: 'chat',
     target: '',
     title: 'Test a model before you build on it',
-    body: 'A direct conversation with one provider. Worth doing when a model is new to you, or when an automation behaves oddly and you want to know whether the model or the automation is at fault.',
-    tip: 'That is the tour. Everything in it is reachable from the sidebar whenever you need it.',
+    body: 'A direct conversation with one provider, with the token count and cost of every exchange underneath it. Worth doing when a model is new to you, and worth doing first when an automation behaves oddly — it is the fastest way to tell whether the model or the automation is at fault.',
+    tip: 'The cost line here is the same arithmetic the Governor uses to enforce a spend cap, so what you see is what a run would be charged.',
+  },
+  {
+    view: 'providers',
+    target: '',
+    title: 'Where models come from, and what they cost',
+    body: 'Connect Anthropic, OpenAI, Google, OpenRouter, or a local Ollama or LM Studio. Keys go to your operating system’s keychain — never the database, the logs, a run trace, or an agent’s prompt. Each connection lists its models with real prices and context windows, so a choice is informed rather than a guess at a name.',
+    tip: 'A model with no published price shows as “Unpriced”, and the Governor will not enforce a spend cap on a price nobody verified. Prefer a priced model for anything that runs unattended.',
+  },
+  {
+    // The one step that asks for something rather than explaining something.
+    //
+    // Last, and interactive, because a tour people finish having done nothing
+    // is a tour they forget by the next screen. Pinning is also the single
+    // setting that most improves the next hour of use: a router connection
+    // puts four hundred models in every dropdown, and the two anybody uses are
+    // somewhere in the middle of it.
+    view: 'providers',
+    target: 'catalogue-models',
+    title: 'Pin the models you will actually use',
+    body: 'Open a connection below and press Pin next to a model. Pinned models sit at the top of every picker — the canvas, the swarm, the chat — under their own heading, in the order you pinned them.',
+    tip: 'Pin at least one to finish. You can unpin from the same button, and pin more whenever you like.',
+    requires: 'pinnedModel',
   },
 ];

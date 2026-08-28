@@ -16,6 +16,7 @@ import { SwarmView } from '../views/SwarmView.tsx';
 import { ComposioView } from '../views/ComposioView.tsx';
 import { NotesView } from '../views/NotesView.tsx';
 import { Tour } from '../tour/Tour.tsx';
+import { UpdateBanner } from './UpdateBanner.tsx';
 
 // CHIMERA is a place you build automations, so the frame is a sidebar of places
 // and one surface that changes — not a chat window with settings around it.
@@ -33,7 +34,7 @@ type View =
   | 'providers'
   | 'chat';
 
-const NAV: { view: View; label: string; icon: JSX.Element }[] = [
+const NAV: { view: View; label: string; icon: JSX.Element; badge?: string }[] = [
   {
     view: 'home',
     label: 'Home',
@@ -89,6 +90,10 @@ const NAV: { view: View; label: string; icon: JSX.Element }[] = [
   {
     view: 'apps',
     label: 'Apps',
+    // The one nav item that names what is behind it. "Apps" alone does not say
+    // that a Gmail or a Slack is one sign-in away, and Composio is the word
+    // somebody would be looking for.
+    badge: 'Composio',
     // A plug going into a socket. The apps section is about somebody's own
     // working life being joined to this one, and a plug is what that looks
     // like everywhere else.
@@ -292,6 +297,11 @@ export function AppShell({ setupDone = true }: { setupDone?: boolean } = {}): JS
                 {item.icon}
               </svg>
               {item.label}
+              {item.badge !== undefined && (
+                <span className="sidebar__badge" data-testid={`nav-badge-${item.view}`}>
+                  {item.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -357,6 +367,8 @@ export function AppShell({ setupDone = true }: { setupDone?: boolean } = {}): JS
       </nav>
 
       <main className="main">
+        {/* Above the section header: this is about the app, not the section. */}
+        <UpdateBanner />
         {view === 'home' ? (
           <HomeView
             onDescribe={(description, planned) => {

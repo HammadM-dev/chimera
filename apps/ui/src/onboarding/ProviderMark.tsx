@@ -2,15 +2,14 @@ import type { JSX } from 'react';
 
 // A mark per provider, drawn rather than fetched.
 //
-// These are geometric monograms in each provider's own accent, not their
-// trademarks. I do not have their SVGs and cannot reproduce them accurately
-// from memory, and a wonky approximation of a logo people see every day looks
-// worse than a clean letter — it reads as a knock-off rather than as a brand.
-// Dropping real assets in later is a one-line change per provider: replace the
-// `glyph` with the path, keep the badge.
+// These are geometric marks in each provider's own accent, not their
+// trademarks — deliberately abstract rather than near-copies, because a wonky
+// approximation of a logo people see every day reads as a knock-off. Each says
+// something true about the provider instead: a router fanning out to many
+// endpoints, a gateway converging on one, a window you drive yourself.
 //
-// Anthropic's is the exception: its mark is a radial burst, which is geometry
-// rather than draughtsmanship, so it is drawn as one.
+// Real assets win over all of it: drop `<id>.png` into assets/providers and it
+// is used instead, untinted.
 
 export type MarkId =
   | 'anthropic'
@@ -22,16 +21,20 @@ export type MarkId =
   | 'omniroute'
   | 'lmstudio';
 
-const LETTER = {
-  x: 12,
-  y: 12,
-  textAnchor: 'middle' as const,
-  dominantBaseline: 'central' as const,
-  fontSize: 12,
-  fontWeight: 500,
-  stroke: 'none',
-  fill: 'currentColor',
-};
+/**
+ * A drawn mark per provider, for the ones with no logo file.
+ *
+ * These were single letters — G, M, R — which is what a placeholder looks like
+ * rather than what a product looks like. They are geometric marks now:
+ * deliberately abstract rather than approximations of the real trademarks,
+ * because a wonky near-copy of a logo people see every day reads as a knock-off
+ * and a clean abstract shape does not. Each one says something true about the
+ * provider instead.
+ *
+ * Dropping a real asset into assets/providers/<id>.png still wins over all of
+ * this — see `logoFor`.
+ */
+const STROKE = { strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
 
 const MARKS: Record<MarkId, { tint: string; glyph: JSX.Element }> = {
   anthropic: {
@@ -42,13 +45,85 @@ const MARKS: Record<MarkId, { tint: string; glyph: JSX.Element }> = {
       </g>
     ),
   },
-  openai: { tint: 'var(--mark-openai)', glyph: <text {...LETTER}>O</text> },
-  google: { tint: 'var(--mark-google)', glyph: <text {...LETTER}>G</text> },
-  openrouter: { tint: 'var(--mark-openrouter)', glyph: <text {...LETTER}>R</text> },
-  ollama: { tint: 'var(--mark-ollama)', glyph: <text {...LETTER}>L</text> },
-  'ollama-cloud': { tint: 'var(--mark-ollama)', glyph: <text {...LETTER}>L</text> },
-  omniroute: { tint: 'var(--mark-omniroute)', glyph: <text {...LETTER}>Ω</text> },
-  lmstudio: { tint: 'var(--mark-lmstudio)', glyph: <text {...LETTER}>M</text> },
+  // Four quadrants around a gap: a search index, not the letter G.
+  google: {
+    tint: 'var(--mark-google)',
+    glyph: (
+      <g {...STROKE}>
+        <path d="M12 4a8 8 0 0 1 8 8" />
+        <path d="M20 12a8 8 0 0 1-8 8" />
+        <path d="M12 20a8 8 0 0 1-8-8" />
+        <circle cx="12" cy="12" r="3" />
+      </g>
+    ),
+  },
+  // One inlet fanning out to many outlets: what a router does.
+  openrouter: {
+    tint: 'var(--mark-openrouter)',
+    glyph: (
+      <g {...STROKE}>
+        <circle cx="5" cy="12" r="2" />
+        <circle cx="19" cy="6" r="2" />
+        <circle cx="19" cy="12" r="2" />
+        <circle cx="19" cy="18" r="2" />
+        <path d="M7 12h3l5-6M10 12h7M10 12h3l4 6" />
+      </g>
+    ),
+  },
+  // A llama's head in three strokes, which is the joke the name is already making.
+  ollama: {
+    tint: 'var(--mark-ollama)',
+    glyph: (
+      <g {...STROKE}>
+        <path d="M9 5v5M15 5v5" />
+        <path d="M7 10h10v5a5 5 0 0 1-10 0z" />
+        <path d="M11 19v2M13 19v2" />
+      </g>
+    ),
+  },
+  'ollama-cloud': {
+    tint: 'var(--mark-ollama)',
+    glyph: (
+      <g {...STROKE}>
+        <path d="M9 6v4M15 6v4" />
+        <path d="M7 10h10v4a5 5 0 0 1-10 0z" />
+        <path d="M5 19h14" />
+      </g>
+    ),
+  },
+  // Many lines converging into one: a gateway in front of every provider.
+  omniroute: {
+    tint: 'var(--mark-omniroute)',
+    glyph: (
+      <g {...STROKE}>
+        <path d="M4 6h6M4 12h6M4 18h6" />
+        <path d="M10 6q5 0 5 6t5 6" />
+        <path d="M10 12h10" />
+        <path d="M10 18q5 0 5-6t5-6" />
+      </g>
+    ),
+  },
+  // A window with a slider: a desktop app you drive yourself.
+  lmstudio: {
+    tint: 'var(--mark-lmstudio)',
+    glyph: (
+      <g {...STROKE}>
+        <rect x="3.5" y="5" width="17" height="13" rx="2" />
+        <path d="M3.5 9h17" />
+        <path d="M7 13.5h10" />
+        <circle cx="13" cy="13.5" r="1.6" />
+      </g>
+    ),
+  },
+  openai: {
+    tint: 'var(--mark-openai)',
+    glyph: (
+      <g {...STROKE}>
+        <path d="M12 4.5 19 8.5v7L12 19.5 5 15.5v-7z" />
+        <path d="M12 12v7.5M12 12 5 8.5M12 12l7-3.5" />
+      </g>
+    ),
+  },
 };
 
 /**

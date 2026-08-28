@@ -152,7 +152,7 @@ export function PluginsPanel({ refreshToken }: { refreshToken: number }): JSX.El
             </button>
             <button
               type="button"
-              className="button"
+              className="button button--destructive"
               data-testid={`plugin-remove-${plugin.id}`}
               onClick={() => void remove(plugin.id)}
             >

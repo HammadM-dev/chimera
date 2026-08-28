@@ -15,6 +15,17 @@ copyright: Copyright (c) 2026 Hammad
 # "@chimera/desktop" is not a legal filename on any of the three targets.
 executableName: chimera
 
+# Where updates come from.
+#
+# GitHub Releases, matching the repo this is developed in. `electron-updater`
+# reads the same feed at runtime — see `src/updates/service.ts` — so publishing
+# a release is the whole of shipping an update, and there is no second place to
+# remember to update.
+publish:
+  provider: github
+  owner: HammadM-dev
+  repo: chimera
+
 directories:
   output: release
   # `icon.png` lives here. electron-builder picks it up by name and renders the

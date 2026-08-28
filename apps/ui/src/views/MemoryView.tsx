@@ -251,7 +251,7 @@ export function MemoryView(): JSX.Element {
                         <h4 className="memory-card__subject">{memory.subject}</h4>
                         <button
                           type="button"
-                          className="memory-card__forget"
+                          className="memory-card__forget act--destructive"
                           aria-label={`Forget ${memory.subject}`}
                           onClick={() => void forget(memory.id)}
                         >

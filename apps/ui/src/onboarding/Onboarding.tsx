@@ -2,6 +2,31 @@ import { useCallback, useEffect, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, describeError } from '../chat/useChimera.ts';
 import { ProviderMark } from './ProviderMark.tsx';
+
+/**
+ * A tag on a provider card.
+ *
+ * The one fact somebody actually chooses on, in three words, where the eye
+ * lands before the paragraph does. "~1.3B free tokens" and "experimental" are
+ * decisions; a paragraph explaining them is reading somebody has to do first.
+ *
+ * `free` shimmers, slowly and once the card is in view, because it is the tag
+ * people are looking for. Everything else is flat — a page where every tag
+ * moves is a page with no emphasis in it.
+ */
+function Tag({
+  tone,
+  children,
+}: {
+  tone: 'free' | 'experimental' | 'neutral';
+  children: React.ReactNode;
+}): JSX.Element {
+  return (
+    <span className={`tag-pill tag-pill--${tone}`} data-testid={`tag-${tone}`}>
+      {children}
+    </span>
+  );
+}
 import './onboarding.css';
 import { useProfile } from '../useProfile.ts';
 
@@ -293,6 +318,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
               >
                 <ProviderMark id="anthropic" />
                 <span className="intro__choice-title">Anthropic</span>
+                <Tag tone="neutral">verified prices</Tag>
                 <span className="intro__choice-detail">
                   Claude models, with an API key from console.anthropic.com. The only prices this
                   build has verified, so cost figures are real rather than blank.
@@ -311,6 +337,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
               >
                 <ProviderMark id="openai" />
                 <span className="intro__choice-title">OpenAI</span>
+                <Tag tone="neutral">GPT models</Tag>
                 <span className="intro__choice-detail">
                   GPT models, with an API key from platform.openai.com.
                 </span>
@@ -328,6 +355,7 @@ export function Onboarding({ onDone }: Props): JSX.Element {
               >
                 <ProviderMark id="ollama-cloud" />
                 <span className="intro__choice-title">Ollama Cloud</span>
+                <Tag tone="free">free tier</Tag>
                 <span className="intro__choice-detail">
                   Ollama's hosted models, with a key from ollama.com. Nothing to install.
                 </span>
@@ -344,8 +372,32 @@ export function Onboarding({ onDone }: Props): JSX.Element {
               >
                 <ProviderMark id="omniroute" />
                 <span className="intro__choice-title">OmniRoute</span>
+                <Tag tone="free">~1.3 billion free tokens</Tag>
                 <span className="intro__choice-detail">
                   A gateway you run and sign in to yourself. One connection, every model it serves.
+                </span>
+              </button>
+
+              {/* OpenRouter on its own card rather than folded into a
+                  catch-all: it is one key for four hundred models with a real
+                  free tier, which is a different proposition from "another
+                  provider" and the one most people should start on. */}
+              <button
+                type="button"
+                className="intro__choice"
+                data-testid="choose-openrouter"
+                onClick={() => {
+                  setKind('openrouter');
+                  setLabel('OpenRouter');
+                  setStep('cloud');
+                }}
+              >
+                <ProviderMark id="openrouter" />
+                <span className="intro__choice-title">OpenRouter</span>
+                <Tag tone="free">400+ models, free tier</Tag>
+                <span className="intro__choice-detail">
+                  One key for almost every model there is, with prices published per model. Several
+                  are free to use.
                 </span>
               </button>
 
@@ -360,13 +412,11 @@ export function Onboarding({ onDone }: Props): JSX.Element {
                 }}
               >
                 <ProviderMark id="google" />
-                <span className="intro__choice-title">Another provider</span>
+                <span className="intro__choice-title">Google</span>
+                <Tag tone="neutral">Gemini models</Tag>
                 <span className="intro__choice-detail">
-                  Google or OpenRouter, with an API key. Same handling — it goes to your OS
-                  keychain, never the database.
-                </span>
-                <span className="intro__stack">
-                  <ProviderMark id="openrouter" />
+                  An API key from Google AI Studio. Same handling — it goes to your OS keychain,
+                  never the database.
                 </span>
               </button>
 
@@ -382,8 +432,10 @@ export function Onboarding({ onDone }: Props): JSX.Element {
               >
                 <ProviderMark id="ollama" />
                 <span className="intro__choice-title">A model on this machine</span>
+                <Tag tone="experimental">experimental</Tag>
                 <span className="intro__choice-detail">
-                  Ollama or LM Studio. Nothing leaves the machine, and nothing costs anything.
+                  Ollama or LM Studio. Nothing leaves the machine and nothing costs anything —
+                  quality and speed depend entirely on your hardware.
                 </span>
               </button>
             </div>

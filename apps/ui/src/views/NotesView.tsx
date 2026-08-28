@@ -102,7 +102,12 @@ function Card({
         <button type="button" className="note__act" data-testid="note-edit" onClick={onEdit}>
           Edit
         </button>
-        <button type="button" className="note__act" data-testid="note-remove" onClick={onRemove}>
+        <button
+          type="button"
+          className="note__act act--destructive"
+          data-testid="note-remove"
+          onClick={onRemove}
+        >
           Delete
         </button>
       </div>

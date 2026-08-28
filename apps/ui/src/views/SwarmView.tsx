@@ -156,7 +156,15 @@ export function SwarmView({ openId, onOpened }: SwarmViewProps = {}): JSX.Elemen
   const [population, setPopulation] = useState(300);
   const [maxRounds, setMaxRounds] = useState(4);
   const [everyoneUpTo, setEveryoneUpTo] = useState(24);
-  const [research, setResearch] = useState(false);
+  // On by default.
+  //
+  // It was off, and the two things together — off by default, and personas told
+  // they had no tools — is why a crowd asked about anything factual answered
+  // that it could not check. A swarm reacting to a sentence about a thing
+  // rather than to the thing is the failure this exists to prevent, and one
+  // extra model call against a few hundred is not a cost worth defaulting away
+  // from. The switch is still there for a question that has nothing to look up.
+  const [research, setResearch] = useState(true);
   const [renaming, setRenaming] = useState('');
   const tail = useRef<HTMLDivElement>(null);
 

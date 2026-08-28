@@ -1,6 +1,8 @@
 import { app, BrowserWindow } from 'electron';
 import { createWindow } from './windows.ts';
 import { applyApplicationMenu } from './menu.ts';
+import { startUpdateBroadcast } from './updates/broadcast.ts';
+import { startUpdateChecks, stopUpdateChecks } from './updates/service.ts';
 import { startUsageReporting, setAppVersion } from './telemetry/usageCount.ts';
 import { setProfileDirectory } from './settings/profile.ts';
 import { setTemplateDirectory } from './templates/service.ts';
@@ -67,6 +69,12 @@ void app.whenReady().then(() => {
   // about it is worth delaying what the person actually clicked for.
   startUsageReporting();
 
+  // Update checks, after the window too, and on their own clock. The first one
+  // is eight seconds in — the opening seconds belong to the person, not to the
+  // app asking about itself.
+  startUpdateBroadcast();
+  startUpdateChecks();
+
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -90,5 +98,6 @@ app.on('will-quit', () => {
   // process list, and the user has no idea it is ours.
   void closeBrowsers();
   stopTriggers();
+  stopUpdateChecks();
   unregisterPanicKey();
 });

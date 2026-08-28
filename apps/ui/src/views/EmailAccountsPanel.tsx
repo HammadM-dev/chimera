@@ -121,7 +121,7 @@ export function EmailAccountsPanel(): JSX.Element {
             </button>
             <button
               type="button"
-              className="button button--quiet"
+              className="button button--quiet button--destructive"
               data-testid="email-remove"
               onClick={() => {
                 void (async () => {

@@ -45,8 +45,15 @@
   gap: var(--space-2);
 }
 
-/* The one button in the app that is the danger colour. Nothing else destroys
- * anything without passing through here. */
+/* Solid red: the button that actually does the destroying, at the end of a
+ * confirm. There is one of these on screen at a time and it is always the last
+ * step before something is gone.
+ *
+ * It used to be the only red in the app, on the reasoning that nothing destroys
+ * anything without passing through here. True, and it left every Delete and
+ * Remove that *opens* this dialog looking exactly like Save — so the colour
+ * arrived one click after the point where somebody decides. `--destructive`
+ * below is the outline form those carry now. */
 .button--danger {
   color: var(--surface-canvas);
   background: var(--semantic-danger);
@@ -56,4 +63,32 @@
 .button--danger:hover:not(:disabled) {
   background: var(--semantic-danger);
   border-color: var(--text-primary);
+}
+
+/* Outline red: a control that leads somewhere destructive.
+ *
+ * Deliberately not the solid fill above. A page with four solid red buttons on
+ * it reads as an alarm rather than as a list with four things you could delete,
+ * and when everything is loud the one that matters is not. Outline until
+ * hovered, solid at the moment of the click. */
+.button--destructive {
+  color: var(--semantic-danger);
+  border-color: var(--semantic-danger);
+  background: transparent;
+}
+
+.button--destructive:hover:not(:disabled) {
+  color: var(--surface-canvas);
+  background: var(--semantic-danger);
+  border-color: var(--semantic-danger);
+}
+
+/* The same idea for the borderless, text-only destructive controls — a note's
+ * Delete, a memory's Forget — which have no border to colour. */
+.act--destructive {
+  color: var(--text-muted);
+}
+
+.act--destructive:hover {
+  color: var(--semantic-danger);
 }

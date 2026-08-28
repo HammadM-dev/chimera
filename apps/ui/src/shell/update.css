@@ -1,0 +1,123 @@
+/* The update strip.
+ *
+ * Across the top of the app, above the section header, because it is about the
+ * app rather than about the section. Quiet enough to ignore while working and
+ * present enough to come back to — it is never modal, and "Later" always
+ * works. */
+
+.update {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: var(--border-width) solid var(--border-hairline);
+  background: var(--surface-raised);
+  color: var(--text-secondary);
+  font-size: var(--type-meta);
+  animation: update-in var(--motion-slow) var(--ease-standard) both;
+}
+
+@keyframes update-in {
+  from {
+    opacity: 0;
+    /* Height rather than transform: this pushes the app down rather than
+     * sliding over it, and a transform would create a containing block that
+     * traps any `position: fixed` descendant — the trap the swarm's full
+     * screen already fell into once. */
+    max-height: 0;
+    padding-block: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 60px;
+  }
+}
+
+.update__dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+}
+
+/* Ready to install is the one state worth a colour: it is the only one with an
+ * action that ends in a restart. */
+.update--ready .update__dot {
+  background: var(--semantic-success);
+}
+
+.update--error .update__dot {
+  background: var(--semantic-danger);
+}
+
+.update--downloading .update__dot {
+  animation: update-pulse 1.4s var(--ease-standard) infinite;
+}
+
+@keyframes update-pulse {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.update__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.update__text strong {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-medium);
+}
+
+.update__track {
+  flex: 1;
+  max-width: 180px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--border-hairline);
+  overflow: hidden;
+}
+
+.update__fill {
+  display: block;
+  height: 100%;
+  background: var(--accent-primary);
+  transition: width var(--motion-base) linear;
+}
+
+.update__actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+}
+
+.update__later {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--type-floor);
+  cursor: pointer;
+}
+
+.update__later:hover {
+  color: var(--text-primary);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .update,
+  .update--downloading .update__dot {
+    animation: none;
+  }
+}

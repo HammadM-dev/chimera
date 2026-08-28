@@ -374,3 +374,72 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ---- provider tags -------------------------------------------------------
+ *
+ * The one fact somebody chooses on, where the eye lands before the paragraph.
+ * Three tones and no more: what is free, what is rough, and everything else. */
+
+.tag-pill {
+  align-self: start;
+  padding: 1px var(--space-2);
+  border: var(--border-width) solid var(--border-hairline);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  line-height: 1.6;
+  white-space: nowrap;
+}
+
+.tag-pill--neutral {
+  color: var(--text-secondary);
+}
+
+.tag-pill--experimental {
+  color: var(--semantic-warning);
+  border-color: var(--semantic-warning);
+}
+
+/* Free tiers shimmer — once, slowly, and only these.
+ *
+ * It is the tag people are hunting for on this screen, and a page where every
+ * tag moves has no emphasis in it. A very slow sweep rather than a pulse: a
+ * blinking badge in a setup flow reads as an error. */
+.tag-pill--free {
+  position: relative;
+  overflow: hidden;
+  color: var(--semantic-success);
+  border-color: var(--semantic-success);
+}
+
+.tag-pill--free::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in srgb, var(--semantic-success) 22%, transparent) 50%,
+    transparent 70%
+  );
+  transform: translateX(-100%);
+  animation: tag-sweep 4.5s var(--ease-standard) infinite;
+}
+
+@keyframes tag-sweep {
+  0%,
+  55% {
+    transform: translateX(-100%);
+  }
+  85%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tag-pill--free::after {
+    animation: none;
+    opacity: 0;
+  }
+}

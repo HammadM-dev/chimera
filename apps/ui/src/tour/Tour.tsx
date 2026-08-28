@@ -3,6 +3,7 @@ import type { JSX } from 'react';
 import { bridge } from '../chat/useChimera.ts';
 import { Mark } from '../assets/brand/Mark.tsx';
 import { TOUR, type TourView } from './steps.ts';
+import { usePinnedModels } from '../views/useConnections.ts';
 import './tour.css';
 
 // The guided tour.
@@ -60,9 +61,14 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
   const [at, setAt] = useState(0);
   const [spot, setSpot] = useState<Spot | null>(null);
   const [confirming, setConfirming] = useState(false);
+  // The last step asks for something to be done rather than read. Read live so
+  // the button unlocks the moment they pin, without a refresh.
+  const { pinned } = usePinnedModels();
 
   const step = TOUR[at] ?? TOUR[0];
   const last = at === TOUR.length - 1;
+  /** True when this step is waiting on something the person has not done yet. */
+  const blocked = step?.requires === 'pinnedModel' && pinned.length === 0;
 
   // The section this step is about, opened before it is explained.
   useEffect(() => {
@@ -103,6 +109,24 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
     void bridge()
       .invoke('tour:set', { seen: true })
       .catch(() => undefined);
+
+    // Take the offer off the URL as well as out of the settings file.
+    //
+    // Whether to show the tour is decided by main and travels on this window's
+    // own URL, which reloading does not change — so a reload re-offered a tour
+    // somebody had already dismissed, settings flag or not. `replaceState`
+    // rewrites the URL the document will reload from, which is the only place
+    // that answer lives for the life of this window.
+    try {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('tour') === '1') {
+        url.searchParams.set('tour', '0');
+        window.history.replaceState({}, '', url.toString());
+      }
+    } catch {
+      // A URL that will not parse is one this never had to fix.
+    }
+
     onDone();
   }, [onDone]);
 
@@ -113,6 +137,9 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
       if (confirming) return;
       if (event.key === 'Escape') setConfirming(true);
       if (event.key === 'ArrowRight' || event.key === 'Enter') {
+        // Blocked means blocked: a keyboard shortcut past a step that is
+        // waiting on something would make the requirement decorative.
+        if (blocked) return;
         if (last) finish();
         else setAt((current) => Math.min(TOUR.length - 1, current + 1));
       }
@@ -122,7 +149,7 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
     return () => {
       window.removeEventListener('keydown', onKey);
     };
-  }, [confirming, finish, last]);
+  }, [blocked, confirming, finish, last]);
 
   const card = placeCard(spot);
 
@@ -226,6 +253,8 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
             type="button"
             className="button button--primary"
             data-testid="tour-next"
+            disabled={blocked}
+            title={blocked ? 'Pin a model below to finish' : undefined}
             onClick={() => {
               if (last) finish();
               else setAt(Math.min(TOUR.length - 1, at + 1));
@@ -233,6 +262,11 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
           >
             {last ? 'Finish' : 'Next'}
           </button>
+          {blocked && (
+            <span className="tour__waiting" data-testid="tour-waiting">
+              waiting for a pin
+            </span>
+          )}
           {!last && (
             <button
               type="button"

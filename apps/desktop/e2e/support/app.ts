@@ -205,12 +205,32 @@ export async function dismissOnboarding(page: Page): Promise<void> {
  * Dismissed the way a person would rather than by writing the "seen" flag
  * behind the app's back, so it exercises the same path they take.
  */
+
 export async function dismissTour(page: Page): Promise<void> {
-  const tourSkip = page.getByTestId('tour-skip').first();
-  if ((await tourSkip.count()) === 0) return;
-  await tourSkip.click();
+  // Two facts, and both are needed.
+  //
+  // The URL says whether main offered a tour when this page loaded — that is
+  // what makes waiting for it safe rather than racy. The tour mounts one render
+  // *after* the setup guide is dismissed, so a one-shot "is it there?" asked
+  // straight after the skip click answers no about something that is about to
+  // appear, which raced four different tests in one sweep.
+  //
+  // The set says whether this page has already been through it. The URL never
+  // changes, so on the second `goTo` of a test it still reads `tour=1` and the
+  // wait would hang on something dismissed a minute earlier. A reload cannot
+  // resurrect it: skipping writes the flag, so main offers `tour=0` next time.
+  // The URL is the whole answer, and it stays accurate: dismissing the tour
+  // rewrites `tour=1` to `tour=0` on this window's own URL, so a second `goTo`
+  // in the same test — or a `page.reload()` — reads the truth rather than a
+  // stale offer. That is also what stops the wait below hanging on a tour that
+  // was dismissed a minute earlier.
+  if (!page.url().includes('tour=1')) return;
+
+  const tour = page.getByTestId('tour');
+  await tour.waitFor({ state: 'attached', timeout: 20_000 });
+  await page.getByTestId('tour-skip').first().click();
   await page.getByTestId('tour-skip-confirmed').click();
-  await page.getByTestId('tour').waitFor({ state: 'detached', timeout: 10_000 });
+  await tour.waitFor({ state: 'detached', timeout: 10_000 });
 }
 
 /**

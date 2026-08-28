@@ -1,4 +1,4 @@
-import { BrowserWindow, session } from 'electron';
+import { BrowserWindow, nativeImage, session } from 'electron';
 import path from 'node:path';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -60,6 +60,7 @@ export function openRunWindow(runId: string, name: string): BrowserWindow | null
 
   applyNavigationGuard(win);
   hideMenuBar(win);
+  applyWindowIcon(win);
   void win.loadFile(path.join(moduleDir, 'renderer', 'index.html'), {
     query: { view: 'run', runId, name, splash: '0', onboarding: '0', tour: '0' },
   });
@@ -85,11 +86,42 @@ export function openRunWindow(runId: string, name: string): BrowserWindow | null
  * to open one over it would not be.
  */
 function appIconPath(): string {
+  // 256px first. `_NET_WM_ICON` carries the bitmap itself rather than a path,
+  // and a 1024px source is four megabytes of pixels handed to the window
+  // manager for something drawn at 24. The full-size file stays for packaging,
+  // where the installer renders its own set.
   const candidates = [
+    path.join(moduleDir, 'icon-256.png'),
     path.join(moduleDir, 'icon.png'),
+    path.join(moduleDir, '..', 'build', 'icon-256.png'),
     path.join(moduleDir, '..', 'build', 'icon.png'),
   ];
   return candidates.find((candidate) => existsSync(candidate)) ?? '';
+}
+
+/**
+ * Puts the mark on the window, for the taskbar.
+ *
+ * Passing `icon` to the constructor was not enough and the reason is worth
+ * writing down: on Linux a taskbar prefers to match a window to an installed
+ * `.desktop` entry by WM_CLASS and take the icon from there, and only falls
+ * back to the `_NET_WM_ICON` property the constructor sets. An unpackaged run
+ * has no `.desktop` entry to find, so the panel showed its generic icon —
+ * which is exactly what a gear in the taskbar means.
+ *
+ * `setIcon` writes `_NET_WM_ICON` again after the window exists, which is the
+ * point at which panels that cache their first read will pick it up. Cheap,
+ * and it is the difference between a branded window and an anonymous one.
+ */
+function applyWindowIcon(win: BrowserWindow): void {
+  if (process.platform === 'darwin') return;
+  const file = appIconPath();
+  if (file === '') return;
+  const image = nativeImage.createFromPath(file);
+  // An unreadable PNG yields an empty image, and handing that to `setIcon`
+  // replaces a default icon with no icon.
+  if (image.isEmpty()) return;
+  win.setIcon(image);
 }
 
 export function createWindow(): BrowserWindow {
@@ -119,6 +151,7 @@ export function createWindow(): BrowserWindow {
 
   applyNavigationGuard(win);
   hideMenuBar(win);
+  applyWindowIcon(win);
 
   // E2E tests pass a full absolute path to a fixture file; production code
   // carries no knowledge of where e2e/fixtures lives (it isn't shipped).

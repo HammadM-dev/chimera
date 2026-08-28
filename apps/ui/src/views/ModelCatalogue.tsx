@@ -131,7 +131,7 @@ export function ModelCatalogue({
         <p className="agent-card__prompt">No model matches that.</p>
       )}
 
-      <div className="catalogue__scroll scroll">
+      <div className="catalogue__scroll scroll" data-testid="catalogue-models">
         {groups.map(([vendor, entries]) => (
           <section key={vendor} className="catalogue__group">
             <header className="catalogue__vendor">

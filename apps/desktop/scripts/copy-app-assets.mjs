@@ -41,6 +41,13 @@ const copies = [
     hint: 'apps/desktop/build/icon.png is missing from the working tree.',
   },
   {
+    // The size the window manager actually wants. See `appIconPath`.
+    label: 'icon-256',
+    from: path.join(desktopRoot, 'build', 'icon-256.png'),
+    to: path.join(desktopRoot, 'dist', 'icon-256.png'),
+    hint: 'apps/desktop/build/icon-256.png is missing — regenerate it from icon.png.',
+  },
+  {
     label: 'templates',
     from: path.resolve(repoRoot, 'templates'),
     to: path.join(desktopRoot, 'dist', 'templates'),

@@ -160,3 +160,11 @@
     animation: none;
   }
 }
+
+/* Shown while the last step waits for the person to pin a model. Text, not a
+ * warning colour: nothing is wrong, something is simply not done yet. */
+.tour__waiting {
+  color: var(--text-muted);
+  font-size: var(--type-floor);
+  font-style: italic;
+}

@@ -598,6 +598,57 @@ export const tourSet = defineInvokeChannel({
   responseSchema: z.object({ seen: z.boolean() }),
 });
 
+// Updates: check, download, install. See `updates/service.ts` for why the
+// download is triggered rather than automatic.
+const updateStateSchema = z.object({
+  stage: z.enum(['idle', 'checking', 'available', 'downloading', 'ready', 'current', 'error']),
+  version: z.string(),
+  current: z.string(),
+  percent: z.number(),
+  reason: z.string(),
+  supported: z.boolean(),
+});
+
+export const updateGet = defineInvokeChannel({
+  channel: 'update:get',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: updateStateSchema,
+});
+
+export const updateCheck = defineInvokeChannel({
+  channel: 'update:check',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: updateStateSchema,
+});
+
+export const updateDownload = defineInvokeChannel({
+  channel: 'update:download',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: updateStateSchema,
+});
+
+export const updateInstall = defineInvokeChannel({
+  channel: 'update:install',
+  v: 1,
+  sensitive: false,
+  requestSchema: z.object({}),
+  responseSchema: updateStateSchema,
+});
+
+/** Progress and stage changes, so the banner follows a download live. */
+export const updateChanged = defineEventChannel({
+  channel: 'update:changed',
+  v: 1,
+  sensitive: false,
+  payloadSchema: updateStateSchema,
+});
+
 // Notes and reminders — shared ground between the person and the agents.
 const noteSchema = z.object({
   id: z.string(),
@@ -2006,6 +2057,11 @@ const ALL_CHANNELS: ChannelDefinition[] = [
   pinnedGet,
   pinnedSet,
   tourSet,
+  updateGet,
+  updateCheck,
+  updateDownload,
+  updateInstall,
+  updateChanged,
   noteList,
   noteSave,
   noteDone,

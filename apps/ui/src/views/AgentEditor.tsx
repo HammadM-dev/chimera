@@ -320,7 +320,7 @@ export function AgentEditor({ draft, onSaved, onCancel }: Props): JSX.Element {
         {agent.id !== '' && !agent.isBuiltin && (
           <button
             type="button"
-            className="button"
+            className="button button--destructive"
             data-testid="agent-delete"
             onClick={() => {
               setConfirming(true);
