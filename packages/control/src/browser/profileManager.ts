@@ -1,6 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import { chromium, type BrowserContext, type Page } from 'playwright';
+import type { BrowserContext, Page } from 'playwright';
 import { ChimeraError } from '@chimera/errors';
 
 // M6-1. One browser profile per workspace, kept apart from every other profile
@@ -64,6 +64,31 @@ export function createBrowserProfileManager(options: ProfileManagerOptions): Bro
   const launch = async (workspaceId: string): Promise<BrowserSession> => {
     const profileDir = profileDirFor(workspaceId);
     fs.mkdirSync(profileDir, { recursive: true });
+
+    // Imported here rather than at the top of the file, and the reason is not
+    // startup time.
+    //
+    // Playwright is external to the main bundle — it reaches for a browser it
+    // locates relative to its own package and cannot be inlined — so the
+    // packaged app resolves it from node_modules at runtime. A static import
+    // makes that resolution happen while the main process is still starting,
+    // which turned one missing dependency into "A JavaScript error occurred in
+    // the main process" before a window ever opened. The whole app was
+    // unusable because of a feature most runs never touch.
+    //
+    // Loaded at the point of use, a packaging mistake costs the browser tool
+    // and nothing else, and says so in a sentence a person can act on.
+    let chromium: typeof import('playwright').chromium;
+    try {
+      ({ chromium } = await import('playwright'));
+    } catch (err) {
+      throw new ChimeraError(
+        'BROWSER_LAUNCH_FAILED',
+        'This build cannot drive a browser: its browser engine is missing. Reinstall CHIMERA, ' +
+          'or run the automation without the browser tool.',
+        { workspaceId, cause: err instanceof Error ? err.message : String(err) },
+      );
+    }
 
     let context: BrowserContext;
     try {

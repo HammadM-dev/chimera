@@ -23,6 +23,7 @@
     "check:no-raw-sql": "node scripts/check-no-raw-sql.mjs",
     "check:design-tokens": "node scripts/check-design-tokens.mjs",
     "check:css-collisions": "node scripts/check-css-collisions.mjs",
+    "check:installers": "node scripts/check-installers.mjs",
     "check:no-signing": "node scripts/check-no-signing.mjs",
     "check:boundaries": "node scripts/check-package-boundaries.mjs",
     "smoke:packaged": "node scripts/smoke-packaged-app.mjs",

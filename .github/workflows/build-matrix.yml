@@ -14,9 +14,36 @@ name: Build matrix (unsigned)
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
+  workflow_dispatch:
 
+# What the matrix costs, and why it is not always three.
+#
+# Private-repo minutes are billed with a multiplier per runner: Linux 1x,
+# Windows 2x, macOS 10x. A three-platform run is about 95 billable minutes and
+# macOS is three quarters of it, which made every routine push cost roughly
+# what a release costs. So the full matrix now runs where it earns that —
+# tags, and on demand — and an ordinary push builds Linux only, at about a
+# tenth of the price.
+#
+# This is a cost decision, not a coverage one: nothing reaches a user without
+# passing all three, because releases are tags.
 jobs:
+  plan:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+    steps:
+      - id: pick
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || \
+             [ "${{ startsWith(github.ref, 'refs/tags/v') }}" = "true" ]; then
+            echo 'matrix=["ubuntu-latest","windows-latest","macos-latest"]' >> "$GITHUB_OUTPUT"
+          else
+            echo 'matrix=["ubuntu-latest"]' >> "$GITHUB_OUTPUT"
+          fi
+
   no-signing-guard:
     runs-on: ubuntu-latest
     steps:
@@ -32,13 +59,14 @@ jobs:
       - run: npm run check:no-signing
 
   build:
+    needs: plan
     strategy:
       # Each platform reports independently. A Windows packaging failure must
       # not hide whether macOS and Linux are healthy — that is most of the
       # value of having the matrix at all.
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: ${{ fromJSON(needs.plan.outputs.matrix) }}
 
     runs-on: ${{ matrix.os }}
 
@@ -53,10 +81,29 @@ jobs:
       - run: npm ci
 
       # Builds the renderer, main, and preload bundles, then runs
-      # electron-builder for the host platform. --publish=never is explicit:
-      # this workflow produces workflow artifacts, never a release.
+      # electron-builder for the host platform. On an ordinary push this
+      # produces a workflow artifact and nothing else.
       - name: Package (unsigned)
+        if: ${{ !startsWith(github.ref, 'refs/tags/v') }}
         run: npm run package --workspace @chimera/desktop
+
+      # On a tag, the same package is published instead of merely built.
+      #
+      # electron-builder does the upload rather than a separate release action
+      # because it also writes `latest.yml`, `latest-mac.yml` and
+      # `latest-linux.yml` — the metadata `electron-updater` reads to decide a
+      # newer version exists. Attaching the binaries by hand produces a release
+      # people can download and an updater that never fires, which is the half
+      # of shipping that fails quietly.
+      #
+      # The token is a PAT, not the workflow's own GITHUB_TOKEN: releases go to
+      # a different repository (see electron-builder.yml) and the built-in
+      # token is scoped to this one.
+      - name: Publish release (unsigned)
+        if: ${{ startsWith(github.ref, 'refs/tags/v') }}
+        env:
+          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+        run: npm run release --workspace @chimera/desktop
 
       # Electron needs a display server on Linux even to open a window it never
       # shows, the same reason the e2e job uses xvfb.

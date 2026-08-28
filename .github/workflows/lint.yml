@@ -22,6 +22,11 @@ jobs:
 
       - run: npm run check:no-raw-sql
 
+      # The install scripts are the first thing a user runs and are exercised
+      # by nothing else here. PowerShell Core is preinstalled on this runner,
+      # so both get parsed for the price of the Linux leg.
+      - run: npm run check:installers
+
       - run: npm run check:design-tokens
       - run: npm run check:css-collisions
       - run: npm run check:contrast
