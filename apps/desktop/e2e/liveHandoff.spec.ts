@@ -20,7 +20,10 @@ import { freshProfile, goTo, joinSteps, launchApp, removeProfile } from './suppo
 // Skipped unless OPENROUTER_API_KEY is set, so CI stays offline per CLAUDE.md.
 
 const KEY = process.env['OPENROUTER_API_KEY'] ?? '';
-const MODEL = process.env['CHIMERA_LIVE_OPENROUTER_MODEL'] ?? 'stealth/ox-alpha';
+// A free model that exists today. `stealth/ox-alpha` was retired, and a live
+// test pinned to a model that no longer exists fails for a reason that has
+// nothing to do with the product.
+const MODEL = process.env['CHIMERA_LIVE_OPENROUTER_MODEL'] ?? 'minimax/minimax-m3:free';
 
 /** A marker no model could produce by guessing, so a pass cannot be luck. */
 const MARKER = 'TURBINE-9F4X-QUARTZ';

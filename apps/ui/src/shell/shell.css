@@ -537,3 +537,78 @@
     opacity: 1;
   }
 }
+
+/* ---- motion --------------------------------------------------------------
+ *
+ * Enough that the app feels answerable and not so much that it performs. The
+ * rule applied throughout: something that ARRIVES may animate in; something
+ * already on screen does not move unless the person moved it. */
+
+/* A section arriving. Short, and a rise of a few pixels rather than a slide —
+ * a long horizontal transition makes every navigation feel like a decision the
+ * app is thinking about. */
+.view {
+  animation: view-in 180ms var(--ease-standard) both;
+}
+
+@keyframes view-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+/* The current place, as a rail that grows rather than appears. */
+.sidebar__item {
+  position: relative;
+}
+
+.sidebar__item::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  width: 2px;
+  height: 0;
+  border-radius: 1px;
+  background: var(--accent-primary);
+  transform: translateY(-50%);
+  transition: height var(--motion-base) var(--ease-standard);
+}
+
+.sidebar__item[aria-current='page']::before {
+  height: 60%;
+}
+
+/* Press feedback on every button in the app.
+ *
+ * A control that does not acknowledge the click leaves people pressing it
+ * twice — which on anything that spends money is a real problem rather than a
+ * cosmetic one. */
+.button:active:not(:disabled),
+.sidebar__item:active {
+  transform: translateY(0.5px);
+}
+
+.button {
+  transition:
+    background var(--motion-fast) var(--ease-standard),
+    border-color var(--motion-fast) var(--ease-standard),
+    color var(--motion-fast) var(--ease-standard),
+    transform 60ms var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .view {
+    animation: none;
+  }
+
+  .sidebar__item::before {
+    transition: none;
+  }
+
+  .button:active:not(:disabled),
+  .sidebar__item:active {
+    transform: none;
+  }
+}

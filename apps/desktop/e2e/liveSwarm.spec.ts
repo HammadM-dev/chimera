@@ -17,7 +17,10 @@ import { freshProfile, goTo, launchApp, removeProfile } from './support/app.ts';
 // The key is read from the environment and never written to the repo.
 
 const KEY = process.env['OPENROUTER_API_KEY'] ?? '';
-const MODEL = process.env['CHIMERA_LIVE_OPENROUTER_MODEL'] ?? 'stealth/ox-alpha';
+// A free model that exists today. `stealth/ox-alpha` was retired, and a live
+// test pinned to a model that no longer exists fails for a reason that has
+// nothing to do with the product.
+const MODEL = process.env['CHIMERA_LIVE_OPENROUTER_MODEL'] ?? 'minimax/minimax-m3:free';
 
 test.describe.configure({ timeout: 900_000 });
 

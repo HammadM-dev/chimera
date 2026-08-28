@@ -18,6 +18,23 @@ test.describe('look', () => {
       const page = await app.firstWindow();
       await page.setViewportSize({ width: 1440, height: 900 });
 
+      // First-run setup, where the provider cards and their tags live.
+      await page.waitForSelector('[data-testid="app-shell"]');
+      await page.waitForSelector('.splash', { state: 'detached', timeout: 20_000 });
+      await page.waitForTimeout(600);
+      await page.screenshot({ path: `${SHOTS}/onboarding-welcome.png` });
+      const start = page.getByTestId('intro-start').first();
+      if ((await start.count()) > 0) {
+        await start.click();
+        await page.waitForTimeout(500);
+        // Past the name step to the provider choice, which is what carries the
+        // marks and the tags. A name is required to move on.
+        await page.getByTestId('intro-first-name').fill('Hammad');
+        await page.getByTestId('intro-you-next').click();
+        await page.waitForTimeout(800);
+        await page.screenshot({ path: `${SHOTS}/onboarding-providers.png` });
+      }
+
       // The tour comes up on a fresh profile, so photograph it before it is
       // dismissed — including a step that points at something.
       await page.waitForSelector('[data-testid="app-shell"]');

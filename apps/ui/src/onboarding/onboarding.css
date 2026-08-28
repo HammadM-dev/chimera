@@ -255,32 +255,40 @@
 
 /* The choice cards become rows: mark, then title and detail. Reading a logo is
  * faster than reading a name, which is the whole point of putting one there. */
+/* Three rows now: title, tag, detail — with the mark spanning all of them.
+ *
+ * Every cell is placed explicitly. This was a two-row grid relying on auto
+ * placement, and adding the tag as a third child pushed the description into
+ * a cell one word wide: auto placement does not fail loudly, it just puts
+ * things somewhere. */
 .intro__choice {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   column-gap: var(--space-3);
-  row-gap: 2px;
+  row-gap: 3px;
   align-items: center;
 }
 
 .intro__choice .mark {
-  grid-row: 1 / span 2;
+  grid-column: 1;
+  grid-row: 1 / span 3;
 }
 
-/* A corner overlay on the cloud card: the four providers it covers, stacked so
- * the card says which without spelling them out. */
-.intro__stack {
+.intro__choice-title {
   grid-column: 2;
-  display: flex;
-  gap: var(--space-1);
-  margin-top: var(--space-1);
+  grid-row: 1;
 }
 
-.intro__stack .mark {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
+.intro__choice .tag-pill {
+  grid-column: 2;
+  grid-row: 2;
+  justify-self: start;
+}
+
+.intro__choice-detail {
+  grid-column: 2;
+  grid-row: 3;
 }
 
 .intro__stack .mark svg {

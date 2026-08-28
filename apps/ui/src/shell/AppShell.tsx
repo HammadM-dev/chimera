@@ -385,7 +385,11 @@ export function AppShell({ setupDone = true }: { setupDone?: boolean } = {}): JS
             }}
           />
         ) : (
-          <section className="view">
+          // `key` is the view: React replaces the node when the section
+          // changes, which is what replays the entry animation in shell.css.
+          // The children were already conditional on `view`, so nothing that
+          // used to survive a switch stops surviving one.
+          <section className="view" key={view}>
             <header className="view__header">
               <div>
                 <h2 className="view__title">{TITLES[view].title}</h2>
