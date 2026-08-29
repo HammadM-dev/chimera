@@ -20,13 +20,20 @@ const repoRoot = path.resolve(fileURLToPath(import.meta.url), '../..');
 const sh = path.join(repoRoot, 'scripts', 'install.sh');
 const ps1 = path.join(repoRoot, 'scripts', 'install.ps1');
 
-try {
-  execFileSync('sh', ['-n', sh], { stdio: 'pipe' });
-  console.log('install.sh — syntax valid');
-} catch (error) {
-  console.error('install.sh failed to parse:\n');
-  console.error(String(error.stderr ?? error.message));
-  process.exit(1);
+// Windows has no `sh`, and this check runs on the Linux lint job where it
+// does. A contributor running the checks on Windows should not be stopped by
+// the absence of a shell they were never going to use.
+if (process.platform === 'win32') {
+  console.log('install.sh — skipped, no POSIX shell on this platform (CI checks it)');
+} else {
+  try {
+    execFileSync('sh', ['-n', sh], { stdio: 'pipe' });
+    console.log('install.sh — syntax valid');
+  } catch (error) {
+    console.error('install.sh failed to parse:\n');
+    console.error(String(error.stderr ?? error.message));
+    process.exit(1);
+  }
 }
 
 const pwsh = spawnSync('pwsh', ['-NoProfile', '-Command', '$PSVersionTable.PSVersion.Major'], {

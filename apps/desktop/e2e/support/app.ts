@@ -85,6 +85,16 @@ export interface LaunchOptions {
    * real behaviour rather than a test-only path.
    */
   splash?: boolean;
+  /**
+   * Records the window to a video file, for the README's demonstrations.
+   *
+   * Used only by `assets.spec.ts`. Recording is done by the browser rather
+   * than by taking screenshots in a loop, because the loop shares one
+   * connection with the actions it is trying to film: each screenshot queues
+   * behind whatever the test is doing, and a seventy-second run produced five
+   * frames of a demonstration that needed forty.
+   */
+  recordVideo?: { dir: string; size?: { width: number; height: number } };
 }
 
 export function launchApp({
@@ -92,10 +102,12 @@ export function launchApp({
   fixture,
   env,
   splash = false,
+  recordVideo,
 }: LaunchOptions): Promise<ElectronApplication> {
   return electron.launch({
     args: [mainEntry, `--user-data-dir=${profile}`],
     cwd: desktopRoot,
+    ...(recordVideo ? { recordVideo } : {}),
     env: {
       ...process.env,
       CHIMERA_E2E_FIXTURE: fixture ?? '',

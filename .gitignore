@@ -21,3 +21,9 @@ test-results/
 
 # Throwaway workspace used by `npm run dev:fresh` — a brand-new-user launch.
 .dev-profile/
+
+# The raw recordings the README's animations are built from. The finished
+# .gif and .svg files in docs/assets are committed; the multi-hundred-megabyte
+# source video they were rendered from is not, and can be remade with
+# `CHIMERA_RECORD=1 npx playwright test e2e/assets.spec.ts`.
+docs/assets/frames/

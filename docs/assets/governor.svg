@@ -1,0 +1,68 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" role="img" aria-label="Every model call and every tool call passes through the Governor. There is no path around it.">
+  <title>Every call goes through the Governor</title>
+  <style>
+    .bg { fill: #0d0d0c; }
+    .panel { fill: #161614; stroke: #2a2825; stroke-width: 1; }
+    .gov { fill: #14202e; stroke: #4a8fd4; stroke-width: 1.5; }
+    .lbl { font: 500 13px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; fill: #f5f3ee; }
+    .sub { font: 400 11px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif; fill: #a3a09a; }
+    .tiny { font: 400 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #6f6c66; }
+    .wire { stroke: #3a3733; stroke-width: 1.5; fill: none; }
+    .flow { stroke: #4a8fd4; stroke-width: 2; fill: none; stroke-linecap: round;
+            stroke-dasharray: 7 11; animation: run 1.6s linear infinite; }
+    @keyframes run { to { stroke-dashoffset: -18; } }
+    .blocked { stroke: #d4614a; stroke-width: 2; fill: none; stroke-dasharray: 5 5; opacity: .85; }
+    @media (prefers-reduced-motion: reduce) { .flow { animation: none; } }
+  </style>
+
+  <rect class="bg" width="880" height="300" rx="10"/>
+
+  <!-- agents -->
+  <g>
+    <rect class="panel" x="28" y="62" width="150" height="46" rx="8"/>
+    <text class="lbl" x="44" y="83">Researcher</text>
+    <text class="tiny" x="44" y="98">search · http · files</text>
+
+    <rect class="panel" x="28" y="126" width="150" height="46" rx="8"/>
+    <text class="lbl" x="44" y="147">Coder</text>
+    <text class="tiny" x="44" y="162">files · shell</text>
+
+    <rect class="panel" x="28" y="190" width="150" height="46" rx="8"/>
+    <text class="lbl" x="44" y="211">App operator</text>
+    <text class="tiny" x="44" y="226">gmail · slack · sheets</text>
+  </g>
+
+  <path class="flow" d="M178 85 H300"/>
+  <path class="flow" d="M178 149 H300"/>
+  <path class="flow" d="M178 213 H300"/>
+
+  <!-- the governor -->
+  <rect class="gov" x="300" y="46" width="212" height="208" rx="12"/>
+  <text class="lbl" x="406" y="86" text-anchor="middle" font-size="15">Governor</text>
+  <text class="sub" x="406" y="106" text-anchor="middle">every call, without exception</text>
+  <g class="tiny" text-anchor="middle">
+    <text x="406" y="140">capability allowlist</text>
+    <text x="406" y="160">spend and step caps</text>
+    <text x="406" y="180">egress allowlist</text>
+    <text x="406" y="200">approval for the irreversible</text>
+    <text x="406" y="220">every decision traced</text>
+  </g>
+
+  <path class="flow" d="M512 110 H648"/>
+  <path class="flow" d="M512 190 H648"/>
+
+  <!-- outside -->
+  <g>
+    <rect class="panel" x="648" y="88" width="204" height="46" rx="8"/>
+    <text class="lbl" x="664" y="109">Model providers</text>
+    <text class="tiny" x="664" y="124">any vendor, one interface</text>
+
+    <rect class="panel" x="648" y="168" width="204" height="46" rx="8"/>
+    <text class="lbl" x="664" y="189">Tools and the machine</text>
+    <text class="tiny" x="664" y="204">files · web · apps · shell</text>
+  </g>
+
+  <!-- the path that does not exist -->
+  <path class="blocked" d="M178 258 C 380 292, 520 292, 700 236"/>
+  <text class="tiny" x="430" y="288" text-anchor="middle" fill="#d4614a">no direct path — there is no bypass</text>
+</svg>
