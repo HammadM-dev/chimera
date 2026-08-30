@@ -52,10 +52,27 @@ function assertAuthRef(value: string): asserts value is AuthRef {
   }
 }
 
+/**
+ * What an empty secret is stored as.
+ *
+ * Some keychain backends refuse to store an empty string — libsecret on a CI
+ * runner answers `Value of 'secret' is invalid: cannot be empty`, while the
+ * one on the machine this was written on takes it without complaint. So a
+ * gateway that needs no key wrote a connection whose vault handle could not be
+ * created, and every run that touched it failed on a machine nobody was
+ * looking at.
+ *
+ * The vault's contract is "store a string, get that string back". An empty
+ * string is a string, and which backends happen to accept one is an
+ * implementation detail this module owes its callers the job of absorbing.
+ * Stored as a sentinel, returned as the empty string it was.
+ */
+const EMPTY_SENTINEL = '\u0000chimera:empty\u0000';
+
 export function setSecret(scope: VaultScope, value: string): AuthRef {
   const handle = `vault:${scope}:${randomUUID()}`;
   try {
-    new Entry(SERVICE_NAME, handle).setPassword(value);
+    new Entry(SERVICE_NAME, handle).setPassword(value === '' ? EMPTY_SENTINEL : value);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     throw new VaultError('VAULT_WRITE_FAILED', `Failed to write to OS keychain: ${message}`);
@@ -74,7 +91,8 @@ export function getSecret(handle: AuthRef): string | undefined {
       handle,
     });
   }
-  return value ?? undefined;
+  if (value === null) return undefined;
+  return value === EMPTY_SENTINEL ? '' : value;
 }
 
 export function deleteSecret(handle: AuthRef): void {

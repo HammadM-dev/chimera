@@ -113,3 +113,27 @@ test('a malformed-handle rejection never includes the offending value in details
     assert.ok(!serialized.includes(suspiciousLookingSecret));
   }
 });
+
+test('an empty secret round-trips as an empty secret', () => {
+  // A gateway that needs no key still needs a vault handle, because the
+  // connection row holds one by contract. Some keychain backends refuse an
+  // empty string outright — libsecret on a CI runner answers "Value of
+  // 'secret' is invalid: cannot be empty", while the one on the machine this
+  // was written on accepts it — so this passed locally and failed for
+  // fifty-four tests on a runner, all of them reporting something else.
+  const handle = setSecret('connection', '');
+  try {
+    assert.equal(getSecret(handle), '');
+  } finally {
+    deleteSecret(handle);
+  }
+});
+
+test('a value that is not empty is untouched by the empty-secret handling', () => {
+  const handle = setSecret('connection', 'sk-a-real-looking-value');
+  try {
+    assert.equal(getSecret(handle), 'sk-a-real-looking-value');
+  } finally {
+    deleteSecret(handle);
+  }
+});
