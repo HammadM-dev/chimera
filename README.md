@@ -834,6 +834,68 @@ Bring the key, or bring none at all.
 <img src="https://img.shields.io/badge/any%20OpenAI--compatible-by%20URL-6F6C66?style=flat-square" height="26">
 </p>
 
+### Two integrations worth setting up
+
+<div align="center">
+  <img src="docs/assets/integrations.svg" alt="OmniRoute detected on localhost and imported as one connection carrying its whole catalogue; Composio giving an agent real connected accounts, scoped so a mailbox agent cannot reach the calendar" width="880">
+</div>
+
+<br>
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+<p align="center">
+<img src="https://img.shields.io/badge/OmniRoute-one%20connection,%20every%20model-5AC8C8?style=for-the-badge&logoColor=white" height="30">
+</p>
+
+**A gateway that runs on your own machine.** CHIMERA looks for it on
+`localhost:20128` and offers to import it in one step — not installed is a
+perfectly normal answer, and gets install guidance rather than an error.
+
+Import once and its **entire catalogue arrives as a single connection**, with
+prices, context windows and health, no restart. Health comes from OmniRoute's
+own reporting rather than a second opinion of ours, so one gateway is not being
+judged by two systems that can disagree.
+
+<sub>OmniRoute publishes: **351 providers**, **1,200+ models**, **90+ free
+tiers**, and around **1.51 billion free tokens a month**, MIT-licensed and
+self-hostable. Those are its figures, not measurements of ours.</sub>
+
+<p align="center"><a href="https://github.com/diegosouzapw/OmniRoute"><b>OmniRoute →</b></a></p>
+
+</td>
+<td width="50%" valign="top">
+
+<p align="center">
+<img src="https://img.shields.io/badge/Composio-the%20apps%20you%20already%20use-6C47FF?style=for-the-badge&logoColor=white" height="30">
+</p>
+
+**Real accounts, not pasted keys.** OAuth, token refresh and lifecycle are
+handled upstream, so an **App operator** agent gets a live connection to Gmail,
+Slack, Sheets, Notion, Linear and the rest. Search the directory in-app, press
+connect, approve in the browser.
+
+**Scoped per agent, and enforced here.** Each App operator is granted specific
+apps and reaches nothing else — several can run in one automation with different
+grants. That boundary is enforced on CHIMERA's side deliberately: the upstream
+toolkit filter is a *ranking hint* rather than a filter, which we measured, and
+a hint is not a boundary.
+
+<sub>Composio publishes: **1,000+ integrations**, **100k free tool calls a
+month**, **SOC 2 and ISO 27001:2022**. Its figures, not ours.</sub>
+
+<p align="center"><a href="https://composio.dev"><b>Composio →</b></a></p>
+
+</td>
+</tr>
+</table>
+
+> **Both are optional, and neither replaces the other.** CHIMERA works with
+> neither installed. One brings models; the other brings the applications you
+> already work in.
+
 ### How it is kept honest
 
 <p align="center">
