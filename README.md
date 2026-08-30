@@ -15,7 +15,7 @@
 [![Local first](https://img.shields.io/badge/data-never%20leaves%20your%20machine-5aa76f?style=flat-square)](#your-data)
 [![Status](https://img.shields.io/badge/status-early%20access%20·%20v0.1.0-d9a441?style=flat-square)](#project-status)
 
-**[Install](#install)** · **[What it does](#what-it-does)** · **[How it works](#how-it-works)** · **[Safety](#what-stops-an-agent)** · **[Agents](#the-agents-you-start-with)** · **[FAQ](#frequently-asked)**
+**[Install](#install)** · **[Requirements](#requirements)** · **[Updating](#updating)** · **[Uninstalling](#uninstalling)** · **[How it works](#how-it-works)** · **[Safety](#what-stops-an-agent)** · **[Built with](#built-with)** · **[FAQ](#frequently-asked)**
 
 </div>
 
@@ -42,67 +42,328 @@ Ollama and nothing leaves at all.
 
 ---
 
+## Requirements
+
+CHIMERA ships as a self-contained application. It bundles its own runtime, its
+own database engine and its own browser engine — **there is no Node, Python or
+Docker to install first.**
+
+<table>
+<tr><th align="left">System</th><th align="left">Minimum</th><th align="left">Needs installing first</th></tr>
+<tr>
+<td><img src="https://img.shields.io/badge/Linux-4a8fd4?style=flat-square&logo=linux&logoColor=white"></td>
+<td>glibc 2.31+ &nbsp;·&nbsp; x86-64 or arm64<br><sub>Ubuntu 20.04+, Fedora 34+, Debian 11+</sub></td>
+<td><b>Two libraries.</b> <a href="#linux-dependencies">See below</a> — most distributions are missing one of them by default.</td>
+</tr>
+<tr>
+<td><img src="https://img.shields.io/badge/macOS-4a8fd4?style=flat-square&logo=apple&logoColor=white"></td>
+<td>macOS 11 Big Sur or newer<br><sub>Apple silicon and Intel</sub></td>
+<td>Nothing.</td>
+</tr>
+<tr>
+<td><img src="https://img.shields.io/badge/Windows-4a8fd4?style=flat-square&logo=windows&logoColor=white"></td>
+<td>Windows 10 (1809) or newer<br><sub>x64</sub></td>
+<td>Nothing.</td>
+</tr>
+</table>
+
+**Disk:** about 400 MB for the app. Add roughly 200 MB the first time an agent
+drives a browser, when Chromium is downloaded into the app's own directory.
+
+**Memory:** 4 GB is comfortable. A local model through Ollama needs whatever
+that model needs, which is usually far more.
+
+**An API key, or none.** CHIMERA has no models of its own. Bring a key for a
+hosted provider, or run [Ollama](https://ollama.com) locally and pay nothing.
+
+### Linux dependencies
+
+Two system libraries, and **most distributions ship without one of them**:
+
+| Library | What needs it | Symptom when missing |
+| --- | --- | --- |
+| `libfuse2` | The AppImage mounts itself with FUSE 2 | `dlopen(): error loading libfuse.so.2` |
+| `libsecret-1-0` | Storing API keys in the system keyring | Keys will not save; the app says so |
+
+<details>
+<summary><b>Install them — commands for each distribution</b></summary>
+
+<br>
+
+**Ubuntu 22.04+ / Debian 12+** — `libfuse2` is not installed by default here, and
+this is the single most common reason an AppImage will not start.
+
+```sh
+sudo apt update
+sudo apt install libfuse2 libsecret-1-0
+```
+
+**Ubuntu 24.04+** — the package was renamed:
+
+```sh
+sudo apt install libfuse2t64 libsecret-1-0
+```
+
+**Fedora / RHEL / Rocky**
+
+```sh
+sudo dnf install fuse-libs libsecret
+```
+
+**Arch / Manjaro**
+
+```sh
+sudo pacman -S fuse2 libsecret
+```
+
+**openSUSE**
+
+```sh
+sudo zypper install libfuse2 libsecret-1-0
+```
+
+**Alpine**
+
+```sh
+sudo apk add fuse libsecret
+```
+
+<br>
+
+**Would rather not install FUSE?** The AppImage can unpack and run itself
+instead:
+
+```sh
+~/.local/share/chimera/chimera.AppImage --appimage-extract-and-run
+```
+
+Slower to start, and it needs no FUSE at all.
+
+**No system keyring?** On a headless or minimal desktop there may be no Secret
+Service running. Install `gnome-keyring` (GNOME, Xfce, i3) or `kwallet` (KDE)
+and log in again. CHIMERA tells you plainly when it cannot reach one rather
+than failing silently — a key that will not save is a message, not a mystery.
+
+</details>
+
+---
+
 ## Install
 
-One line. No admin rights, nothing outside your home directory, no package
-manager.
+One line. **No admin rights, no package manager, nothing outside your home
+directory.**
 
-**Linux and macOS**
+<table>
+<tr>
+<td width="33%" align="center"><img src="https://img.shields.io/badge/Linux-AppImage-4a8fd4?style=for-the-badge&logo=linux&logoColor=white"></td>
+<td width="33%" align="center"><img src="https://img.shields.io/badge/macOS-app%20bundle-4a8fd4?style=for-the-badge&logo=apple&logoColor=white"></td>
+<td width="33%" align="center"><img src="https://img.shields.io/badge/Windows-portable%20exe-4a8fd4?style=for-the-badge&logo=windows&logoColor=white"></td>
+</tr>
+</table>
+
+### <img src="https://img.shields.io/badge/-Linux-4a8fd4?style=flat-square&logo=linux&logoColor=white" height="20"> &nbsp;Linux
+
+```sh
+# 1. The two system libraries (Ubuntu/Debian — see above for other distributions)
+sudo apt install libfuse2 libsecret-1-0
+
+# 2. CHIMERA itself
+curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.sh | sh
+
+# 3. Run it
+chimera
+```
+
+Installs to `~/.local/share/chimera/` with a launcher at `~/.local/bin/chimera`.
+If that directory is not on your `PATH`, the installer tells you the one line to
+add.
+
+### <img src="https://img.shields.io/badge/-macOS-4a8fd4?style=flat-square&logo=apple&logoColor=white" height="20"> &nbsp;macOS
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.sh | sh
+chimera
 ```
 
-**Windows** — PowerShell
+Installs `CHIMERA.app` into `~/Applications` and a launcher at
+`~/.local/bin/chimera`. It appears in Spotlight and Launchpad like any other
+app; the `chimera` command is a convenience, not a requirement.
+
+> **Why the terminal rather than a `.dmg`?** macOS refuses to open an app that a
+> browser downloaded unless it is signed by a paid Developer ID — Gatekeeper
+> reads the `com.apple.quarantine` attribute the browser attaches, and there is
+> no "open anyway" a normal person will find. `curl` does not set that
+> attribute. Signing will come; nothing you type will change when it does.
+
+### <img src="https://img.shields.io/badge/-Windows-4a8fd4?style=flat-square&logo=windows&logoColor=white" height="20"> &nbsp;Windows
+
+In **PowerShell** (no admin needed):
 
 ```powershell
 irm https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.ps1 | iex
 ```
 
-Then:
+Then open a **new** terminal — PATH changes only reach new shells — and run:
 
-```sh
+```powershell
 chimera
 ```
 
+Installs to `%LOCALAPPDATA%\Programs\CHIMERA\chimera.exe`. Nothing goes into
+Program Files, the registry is untouched beyond your own user `PATH`, and no
+service is installed.
+
 <details>
-<summary><b>What the installer actually does</b></summary>
+<summary><b>If PowerShell refuses to run the script</b></summary>
 
 <br>
 
-It reads this repository's latest release, picks the asset matching your system
-and architecture, puts it under `~/.local/share/chimera` (or
-`%LOCALAPPDATA%\Programs\CHIMERA`), and leaves a `chimera` command on your PATH.
-Nothing else is touched.
+An execution policy can block piped scripts. This allows it for the current
+session only, and changes nothing permanently:
 
-It is a terminal installer for a reason beyond convenience. macOS refuses to
-open an app downloaded by a browser that is not signed by a paid Developer ID —
-Gatekeeper reads the `com.apple.quarantine` attribute the browser attaches, and
-there is no "open anyway" a normal person will find. Windows shows the same
-class of warning through SmartScreen. Neither attribute is set by `curl`. So
-this path works today, and signing can arrive later without changing anything
-you type.
-
-To remove it, delete that folder and the `chimera` shim. There is no uninstaller
-because there is nothing else to undo.
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+irm https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.ps1 | iex
+```
 
 </details>
 
 <details>
-<summary><b>Updates</b></summary>
+<summary><b>Installing by hand, on any system</b></summary>
 
 <br>
 
-CHIMERA checks for a new version shortly after launch and every six hours. When
-one exists it says so in a strip across the top — it does not download anything
-until you say so, and it never installs on quit behind your back. Pressing
-install downloads the new version and restarts into it.
+Every build is on the
+[releases page](https://github.com/HammadM-dev/chimera/releases). Download the
+asset for your system, and run it:
 
-Update metadata is published with each release, so the app reads the same feed
-this page links to. A build that cannot install an update — a checkout, or a
-development run — says so rather than offering a button that does nothing.
+| System | Asset | What to do |
+| --- | --- | --- |
+| Linux | `CHIMERA-*.AppImage` | `chmod +x` it, then run it |
+| macOS | `CHIMERA-*-mac-*.zip` | Unzip, move `CHIMERA.app` to `~/Applications` |
+| Windows | `CHIMERA-*.exe` | Run it — it is portable, not an installer |
+
+Each release also carries `latest-linux.yml`, `latest-mac.yml` and `latest.yml`.
+Those hold the **SHA-512 of every asset**, which is what the built-in updater
+checks before it installs anything. You can check the same thing by hand:
+
+```sh
+sha512sum CHIMERA-0.1.0.AppImage        # Linux
+shasum -a 512 CHIMERA-0.1.0-mac.zip     # macOS
+Get-FileHash .\CHIMERA-0.1.0.exe -Algorithm SHA512   # Windows
+```
 
 </details>
+
+<details>
+<summary><b>Where CHIMERA puts things</b></summary>
+
+<br>
+
+| | Application | Your workspace |
+| --- | --- | --- |
+| **Linux** | `~/.local/share/chimera/` | `~/.config/CHIMERA/` |
+| **macOS** | `~/Applications/CHIMERA.app` | `~/Library/Application Support/CHIMERA/` |
+| **Windows** | `%LOCALAPPDATA%\Programs\CHIMERA\` | `%APPDATA%\CHIMERA\` |
+
+Your workspace directory holds `chimera.sqlite` — automations, runs, traces,
+notes and memory, in one file you can copy, back up or delete. **API keys are
+not in it.** They are in your operating system's credential store, and the
+database holds only a handle.
+
+The browser Chromium downloads on first use lands in `browsers/` inside that
+same workspace directory, not in a shared cache belonging to something else.
+
+</details>
+
+---
+
+## Updating
+
+CHIMERA checks for a new version about eight seconds after launch and every six
+hours after that. When there is one, a strip appears across the top of the
+window. **Nothing downloads until you press Download**, and it never installs
+itself on quit.
+
+### Checking by hand
+
+Open **Providers**, or just relaunch the app — the check runs on every start.
+The strip appears within a few seconds if a release is waiting.
+
+To see what version you are on, and what the latest is:
+
+```sh
+chimera --version                                          # what you have
+curl -s https://api.github.com/repos/HammadM-dev/chimera/releases/latest \
+  | grep '"tag_name"'                                      # what exists
+```
+
+### Updating by hand
+
+Re-running the installer always fetches the current release and replaces what is
+there:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.sh | sh
+```
+
+```powershell
+irm https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.ps1 | iex
+```
+
+Your workspace is untouched by this — automations, runs, keys and notes all
+survive, because they live somewhere else entirely.
+
+> **A build that cannot update says so.** Running from a checkout, or from an
+> unpacked directory, there is no artefact to replace — so it reports that
+> rather than offering a button that quietly does nothing.
+
+---
+
+## Uninstalling
+
+No uninstaller, because there is nothing to undo but files.
+
+### <img src="https://img.shields.io/badge/-Linux-4a8fd4?style=flat-square&logo=linux&logoColor=white" height="20"> &nbsp;Linux
+
+```sh
+rm -rf ~/.local/share/chimera        # the application
+rm -f  ~/.local/bin/chimera          # the launcher
+rm -rf ~/.config/CHIMERA             # your workspace — deletes everything
+```
+
+### <img src="https://img.shields.io/badge/-macOS-4a8fd4?style=flat-square&logo=apple&logoColor=white" height="20"> &nbsp;macOS
+
+```sh
+rm -rf ~/Applications/CHIMERA.app
+rm -f  ~/.local/bin/chimera
+rm -rf "$HOME/Library/Application Support/CHIMERA"
+```
+
+### <img src="https://img.shields.io/badge/-Windows-4a8fd4?style=flat-square&logo=windows&logoColor=white" height="20"> &nbsp;Windows
+
+```powershell
+Remove-Item -Recurse -Force "$env:LOCALAPPDATA\Programs\CHIMERA"
+Remove-Item -Recurse -Force "$env:APPDATA\CHIMERA"
+
+# and take it off PATH
+$p = [Environment]::GetEnvironmentVariable('Path','User')
+[Environment]::SetEnvironmentVariable('Path', ($p -replace [regex]::Escape("$env:LOCALAPPDATA\Programs\CHIMERA;?"), ''), 'User')
+```
+
+### Keys in the keyring
+
+Deleting the workspace removes the database, but your API keys live in the OS
+credential store and are **not** removed with it. Clear them properly:
+
+| | Where to look |
+| --- | --- |
+| **Linux** | Seahorse / "Passwords and Keys" → search `CHIMERA` |
+| **macOS** | Keychain Access → search `CHIMERA` |
+| **Windows** | Credential Manager → Windows Credentials → `CHIMERA` |
+
+Removing a connection inside the app deletes its key at the same time, which is
+the tidier route if you still have CHIMERA installed.
 
 ---
 
@@ -443,22 +704,156 @@ payload.
 
 ---
 
-## Under the hood
+## Built with
 
-| Layer          | Choice                   | Why                                                          |
-| -------------- | ------------------------ | ------------------------------------------------------------ |
-| Shell          | Electron 43              | Context isolation on, node integration off, sandbox on       |
-| Core           | TypeScript, strict       | Engine, governor, agent runtime — no `any` without a reason  |
-| Interface      | React + React Flow       | The canvas is a real graph, not a list pretending            |
-| Storage        | SQLite (WAL) + sqlite-vec | One file you own, with vector search for memory              |
-| Tools          | Model Context Protocol   | Internal servers, plus anything else that speaks MCP         |
-| Secrets        | OS keychain only         | Never the database, never a log                              |
-| Native control | Rust sidecar             | Confined to one binary, spawned over stdio                   |
+CHIMERA is assembled from tools that are load-bearing, not decorative. Each one
+below does a specific job, and the reason it was chosen is a reason you can
+check.
 
-Renderer and main talk only through a typed, versioned preload bridge. All
-database access goes through one package. Provider differences exist only in
-adapters. Each of those is enforced by a check that fails the build, not by a
-paragraph in a style guide.
+<table>
+<tr>
+<td width="180" align="center">
+<a href="https://electronjs.org"><img src="https://img.shields.io/badge/Electron-43.3-2B2E3A?style=for-the-badge&logo=electron&logoColor=9FEAF9"></a>
+</td>
+<td>
+
+**The application shell.** Chromium and Node in one process tree — the same
+foundation as VS Code, Slack and Discord. Runs with `contextIsolation` on,
+`nodeIntegration` off and the sandbox enabled; the renderer reaches the system
+only through a typed, versioned bridge.
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://sqlite.org"><img src="https://img.shields.io/badge/SQLite-WAL-003B57?style=for-the-badge&logo=sqlite&logoColor=white"></a>
+</td>
+<td>
+
+**Your workspace, in one file.** The most widely deployed database engine in the
+world — it is in every Android and iOS device, every major browser, and most
+aeroplanes. Write-ahead logging so a run being written never blocks the window
+reading it. Add [`sqlite-vec`](https://github.com/asg017/sqlite-vec) and the same
+file does vector search for agent memory, with no second service to run.
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://modelcontextprotocol.io"><img src="https://img.shields.io/badge/MCP-tool%20protocol-D4A27F?style=for-the-badge&logo=anthropic&logoColor=white"></a>
+</td>
+<td>
+
+**How agents reach tools.** The Model Context Protocol is an open standard for
+describing tools to models. CHIMERA's own tool servers speak it — filesystem,
+shell, http, search, browser, memory, notebook, email — which means **anything
+else that speaks MCP plugs in without a line of adapter code.**
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://typescriptlang.org"><img src="https://img.shields.io/badge/TypeScript-strict-3178C6?style=for-the-badge&logo=typescript&logoColor=white"></a>
+</td>
+<td>
+
+**Every line, strict.** `noImplicitAny`, `strictNullChecks`, and no `any`
+without a written reason. Package boundaries are enforced by a check that fails
+the build — `packages/core` cannot import a provider adapter even by accident.
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://react.dev"><img src="https://img.shields.io/badge/React-19-20232A?style=for-the-badge&logo=react&logoColor=61DAFB"></a>
+<br><br>
+<a href="https://reactflow.dev"><img src="https://img.shields.io/badge/React%20Flow-canvas-FF0072?style=for-the-badge&logo=react&logoColor=white"></a>
+</td>
+<td>
+
+**The canvas is a real graph.** [React Flow](https://reactflow.dev) gives the
+editor genuine nodes, edges, ports and panning rather than a list pretending to
+be a diagram — which is what lets the editor refuse an invalid shape *as you
+draw it* instead of when you press run.
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://playwright.dev"><img src="https://img.shields.io/badge/Playwright-browser%20control-2EAD33?style=for-the-badge&logo=playwright&logoColor=white"></a>
+</td>
+<td>
+
+**Agents that use sites with no API.** Microsoft's browser automation, driving a
+Chromium profile that belongs to CHIMERA and **never your logged-in one**. The
+same library runs the end-to-end suite against a real packaged build, so the
+thing tested is the thing shipped.
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<a href="https://composio.dev"><img src="https://img.shields.io/badge/Composio-app%20connections-6C47FF?style=for-the-badge&logoColor=white"></a>
+</td>
+<td>
+
+**Gmail, Slack, Sheets, Notion, Linear and hundreds more.** OAuth, token refresh
+and API differences handled once, so an App operator agent gets a real
+connection rather than a key you pasted. Scoped per agent: a mailbox agent
+cannot reach your calendar because it was never given it.
+
+</td>
+</tr>
+<tr>
+<td align="center">
+<img src="https://img.shields.io/badge/Rust-sidecar-000000?style=for-the-badge&logo=rust&logoColor=white">
+</td>
+<td>
+
+**Native machine control**, when it lands. A small binary the main process
+spawns and talks to over stdio, with a panic key that kills it. Rust is confined
+to that binary and appears nowhere else in the codebase — deliberately, so the
+rest stays one language.
+
+</td>
+</tr>
+</table>
+
+### Model providers
+
+Bring the key, or bring none at all.
+
+<p align="center">
+<a href="https://anthropic.com"><img src="https://img.shields.io/badge/Anthropic-Claude-D97757?style=flat-square&logo=anthropic&logoColor=white" height="26"></a>
+<a href="https://openai.com"><img src="https://img.shields.io/badge/OpenAI-GPT-10A37F?style=flat-square&logo=openai&logoColor=white" height="26"></a>
+<a href="https://ai.google.dev"><img src="https://img.shields.io/badge/Google-Gemini-4285F4?style=flat-square&logo=googlegemini&logoColor=white" height="26"></a>
+<a href="https://openrouter.ai"><img src="https://img.shields.io/badge/OpenRouter-gateway-8B7FD4?style=flat-square&logoColor=white" height="26"></a>
+<a href="https://ollama.com"><img src="https://img.shields.io/badge/Ollama-local-DCDCDC?style=flat-square&logo=ollama&logoColor=black" height="26"></a>
+<a href="https://lmstudio.ai"><img src="https://img.shields.io/badge/LM%20Studio-local-A3A09A?style=flat-square&logoColor=black" height="26"></a>
+<img src="https://img.shields.io/badge/OmniRoute-gateway-5AC8C8?style=flat-square&logoColor=white" height="26">
+<img src="https://img.shields.io/badge/any%20OpenAI--compatible-by%20URL-6F6C66?style=flat-square" height="26">
+</p>
+
+### How it is kept honest
+
+<p align="center">
+<img src="https://img.shields.io/badge/GitHub%20Actions-Linux%20·%20macOS%20·%20Windows-2088FF?style=flat-square&logo=githubactions&logoColor=white" height="24">
+<img src="https://img.shields.io/badge/ESLint-boundaries%20enforced-4B32C3?style=flat-square&logo=eslint&logoColor=white" height="24">
+<img src="https://img.shields.io/badge/Prettier-required-F7B93E?style=flat-square&logo=prettier&logoColor=black" height="24">
+<img src="https://img.shields.io/badge/injection%20corpus-every%20commit-D4614A?style=flat-square" height="24">
+</p>
+
+Every push runs unit tests, a prompt-injection corpus against every tool-enabled
+role, a full end-to-end suite driving a real Electron build, and a
+**packaged-app smoke test on all three operating systems** — because an app that
+builds is not the same as an app that starts.
+
+The architectural rules are checks rather than conventions. The renderer talks
+to the system only through a typed, versioned preload bridge; every database
+query goes through one package; provider differences exist only in adapters; and
+no model or tool call may reach past the Governor. **Each of those fails the
+build when broken**, which is the difference between a rule and a paragraph in a
+style guide.
 
 ---
 
