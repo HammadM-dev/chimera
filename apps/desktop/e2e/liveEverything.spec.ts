@@ -109,7 +109,8 @@ test.describe('CHIMERA, end to end, against real models', () => {
 
       // The catalogue is the difference between choosing a model and guessing
       // a name: it carries prices and context windows read from the provider.
-      await page.getByTestId('connection-models').click();
+      // Open already — the first connection's models are shown without being
+      // asked for, so clicking the toggle here would close it.
       const catalogue = page.getByTestId('model-catalogue');
       await expect(catalogue).toBeVisible({ timeout: 30_000 });
       await page.getByTestId('catalogue-filter').fill('minimax');

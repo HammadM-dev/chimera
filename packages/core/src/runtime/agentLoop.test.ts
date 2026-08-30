@@ -17,7 +17,7 @@ import { Governor } from '../governor/Governor.ts';
 import { deny } from '../governor/Governor.ts';
 import type { ModelCallAuthorization, ToolCallAuthorization } from '../governor/types.ts';
 import { STARTER_ROLES, type Role } from './roleRegistry.ts';
-import { parseVerification, runAgentLoop, type Cancellation, failureCounts } from './agentLoop.ts';
+import { parseVerification, runAgentLoop, type Cancellation, failureCounts, groundedInObservations, identifiersIn } from './agentLoop.ts';
 
 const AUTH_REF = 'vault:connection:00000000-0000-0000-0000-000000000000' as never;
 const CALL_OPTIONS: AdapterCallOptions = { authRef: AUTH_REF };
@@ -1157,4 +1157,86 @@ test('failures are counted per tool, and successes are not', () => {
       { toolId: 'search.web', failures: 2 },
     ],
   );
+});
+
+test('an answer that cites none of what the tools returned is not grounded', () => {
+  // The live failure, exactly: asked to report the fields of a fetched record,
+  // the model invented an eleven-field order for a customer who does not
+  // exist, said the values were "copied exactly as they appeared in the
+  // response", and checked its own arithmetic to confirm the total.
+  const fetched = JSON.stringify({
+    partNumber: 'TURBINE-9F4X-QUARTZ',
+    status: 'shipped',
+    quantity: 47,
+    destination: 'Rotterdam',
+  });
+  const invented =
+    'Here are all the fields from the order record, with values copied exactly as they ' +
+    'appeared in the response. The order id is ORD-2024-78432 for customer Sarah Chen at ' +
+    '742 Evergreen Terrace, Springfield. The three line items total 270.98, which matches ' +
+    'the stated total_amount. The record is complete and well-formed.';
+
+  assert.equal(
+    groundedInObservations(invented, [
+      { callId: '1', toolId: 'http.request', output: fetched, isError: false },
+    ]),
+    false,
+  );
+});
+
+test('an answer that quotes what came back is grounded', () => {
+  const fetched = 'partNumber: TURBINE-9F4X-QUARTZ, destination: Rotterdam';
+  const honest =
+    'The order record contains a part number of TURBINE-9F4X-QUARTZ, shipping to Rotterdam. ' +
+    'I have copied both exactly as they were returned by the fetch, and there were no other ' +
+    'fields present in the response body that I have omitted from this summary.';
+
+  assert.equal(
+    groundedInObservations(honest, [
+      { callId: '1', toolId: 'http.request', output: fetched, isError: false },
+    ]),
+    true,
+  );
+});
+
+test('grounding stays quiet when there is nothing distinctive to cite', () => {
+  // Summarising prose is not reporting a record. Nothing here is an identifier,
+  // so there is no claim to check and the check must not invent one.
+  const prose = 'The weather has been unusually mild for the season across the region.';
+  const summary =
+    'The article reports that conditions have been milder than is typical for this time of ' +
+    'year, across the whole region it covers, and offers no explanation for why that might ' +
+    'be so beyond the general trend it mentions in passing.';
+
+  assert.equal(
+    groundedInObservations(summary, [
+      { callId: '1', toolId: 'http.request', output: prose, isError: false },
+    ]),
+    true,
+  );
+});
+
+test('grounding stays quiet on a short answer and when every tool failed', () => {
+  const fetched = 'partNumber: TURBINE-9F4X-QUARTZ';
+  assert.equal(
+    groundedInObservations('Could not read it.', [
+      { callId: '1', toolId: 'http.request', output: fetched, isError: false },
+    ]),
+    true,
+  );
+  assert.equal(
+    groundedInObservations('x'.repeat(400), [
+      { callId: '1', toolId: 'http.request', output: fetched, isError: true },
+    ]),
+    true,
+  );
+});
+
+test('identifiers are the kind a record carries, not ordinary words', () => {
+  const found = identifiersIn('order ORD-2024-78432 shipped to Rotterdam with tracking 1Z999AA10');
+  assert.ok(found.includes('ord-2024-78432'));
+  assert.ok(found.includes('1z999aa10'));
+  // Plain words are not identifiers, however long.
+  assert.equal(found.includes('rotterdam'), false);
+  assert.equal(found.includes('shipped'), false);
 });

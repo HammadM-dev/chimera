@@ -287,6 +287,70 @@ function causeOfDenial(code: string): HaltCause {
 }
 
 /**
+ * Identifiers a tool returned that an answer about them ought to contain.
+ *
+ * Deliberately narrow: tokens that mix letters and digits, or are hyphenated
+ * in the way part numbers, order ids, tracking numbers and SKUs are. Ordinary
+ * words are excluded because a summary is allowed to use different ones — the
+ * question here is not "did it paraphrase" but "did it invent".
+ */
+export function identifiersIn(text: string): string[] {
+  const found = new Set<string>();
+  for (const token of text.split(/[\s"'`,()[\]{}<>|]+/)) {
+    const trimmed = token.replace(/[.:;!?]+$/, '');
+    if (trimmed.length < 6 || trimmed.length > 64) continue;
+    const hasLetter = /[a-z]/i.test(trimmed);
+    const hasDigit = /\d/.test(trimmed);
+    const hyphenated = /^[a-z0-9]+(?:-[a-z0-9]+)+$/i.test(trimmed);
+    if (hasLetter && (hasDigit || hyphenated)) found.add(trimmed.toLowerCase());
+  }
+  return [...found];
+}
+
+/**
+ * Whether an answer is traceable to what the tools actually returned.
+ *
+ * A model that verifies its own work cannot catch its own fabrication, and
+ * that is not hypothetical: asked to report the fields of a fetched record, a
+ * live run invented an eleven-field order for a customer who does not exist,
+ * said "values copied exactly as they appeared in the response", and then
+ * checked its own arithmetic to confirm the total was consistent. Every part
+ * of that was internally coherent and none of it was in the response.
+ *
+ * So this asks a question the model cannot answer its way out of: the tools
+ * returned these identifiers, and the answer contains none of them.
+ *
+ * False positives are the risk, so the bar is high. It only speaks when the
+ * observations carry identifiers at all, when the answer is long enough to be
+ * making claims, and when *not one* identifier survived into it. A summary
+ * that legitimately mentions none of them — because it was summarising prose
+ * rather than reporting a record — is the case this deliberately misses.
+ */
+export function groundedInObservations(
+  output: string,
+  observations: readonly ToolObservation[],
+): boolean {
+  const succeeded = observations.filter((observation) => observation.isError !== true);
+  if (succeeded.length === 0) return true;
+
+  const available = new Set<string>();
+  for (const observation of succeeded) {
+    for (const identifier of identifiersIn(observation.output)) available.add(identifier);
+  }
+  // Nothing distinctive came back, so there is nothing to check against.
+  if (available.size === 0) return true;
+
+  // Short answers are not making detailed claims about a record.
+  if (output.trim().length < 200) return true;
+
+  const answer = output.toLowerCase();
+  for (const identifier of available) {
+    if (answer.includes(identifier)) return true;
+  }
+  return false;
+}
+
+/**
  * How many times each tool has failed in this step.
  *
  * Ids and counts only. The failure text stays in the observations, where it is
@@ -430,6 +494,8 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
    * turn the model chose to talk in.
    */
   let outputAtObservations = 0;
+  /** Whether the grounding challenge has already been put, once, this step. */
+  let challengedGrounding = false;
   /** True when tool results have landed since `output` was written. */
   const outputIsStale = (): boolean => observations.length > outputAtObservations;
   /**
@@ -1104,6 +1170,31 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     if ('denied' in verified) return denialResult(verified.denied);
     const verifyText = record('verify', verified.response);
     verification = parseVerification(verifyText);
+
+    // One challenge, when the answer cites nothing the tools returned.
+    //
+    // Given once per step, not every turn: the point is to make it look again,
+    // and a model that has looked and stands by its answer is either right or
+    // beyond the reach of asking. Letting it through after that is deliberate —
+    // failing the step would turn a heuristic into a wall, and this one is a
+    // heuristic. What follows is a turn in which it can quote the source or
+    // say it could not get one.
+    if (verification.verified && !challengedGrounding && !groundedInObservations(output, observations)) {
+      challengedGrounding = true;
+      verification = {
+        verified: false,
+        evidence:
+          'Your answer does not contain any of the identifiers the tools returned. Either quote ' +
+          'the values exactly as they came back, or say plainly which parts you could not ' +
+          'retrieve. Do not present anything as fetched that you did not fetch.',
+      };
+      trace.append({
+        nodeId: task.nodeId,
+        eventType: 'decision',
+        payload: { decision: 'ungrounded', iteration, evidence: verification.evidence },
+      });
+    }
+
     trace.append({
       nodeId: task.nodeId,
       eventType: 'decision',
