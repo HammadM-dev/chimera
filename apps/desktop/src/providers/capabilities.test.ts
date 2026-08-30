@@ -54,7 +54,9 @@ test('what the provider did not mention keeps whatever the matrix knew', () => {
 });
 
 test('a model nobody published is answered by the matrix, unchanged', () => {
-  const lookup = buildCapabilitiesLookup([catalogue({ 'something/else': { vision: 'supported' } })]);
+  const lookup = buildCapabilitiesLookup([
+    catalogue({ 'something/else': { vision: 'supported' } }),
+  ]);
 
   const untouched = lookup('claude-opus-5');
   assert.equal(untouched.displayName, 'Claude Opus 5');
@@ -64,7 +66,11 @@ test('a model nobody published is answered by the matrix, unchanged', () => {
 test('a catalogue that will not parse is skipped, not fatal', () => {
   // A run failing because one connection cached a broken blob would be a much
   // worse outcome than falling back to what this build already knew.
-  const lookup = buildCapabilitiesLookup(['{not json', null, catalogue({ 'a/b': { vision: 'supported' } })]);
+  const lookup = buildCapabilitiesLookup([
+    '{not json',
+    null,
+    catalogue({ 'a/b': { vision: 'supported' } }),
+  ]);
 
   assert.equal(lookup('a/b').vision, 'supported');
   assert.equal(lookup('claude-opus-5').displayName, 'Claude Opus 5');

@@ -61,7 +61,10 @@ test('a reminder without a date is refused, with the fix in the message', async 
   const store = backend();
   const connected = await client(store);
   try {
-    const result = await connected.callTool('add', { kind: 'reminder', title: 'Chase the invoice' });
+    const result = await connected.callTool('add', {
+      kind: 'reminder',
+      title: 'Chase the invoice',
+    });
     assert.equal(result.isError, true);
     assert.match(result.text, /needs a date/);
     assert.match(result.text, /add it as a note instead/);

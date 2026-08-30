@@ -4,7 +4,14 @@ import type { AddressInfo } from 'node:net';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dismissTour, freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
+import {
+  dismissTour,
+  freshProfile,
+  goTo,
+  joinSteps,
+  launchApp,
+  removeProfile,
+} from './support/app.ts';
 
 // The whole product, against real models, the way a person would use it.
 //
@@ -167,10 +174,9 @@ test.describe('CHIMERA, end to end, against real models', () => {
         expect(value, `no connection option for ${label}`).toBeTruthy();
         await page.getByTestId('connection-select').selectOption(value ?? '');
         await expect
-          .poll(
-            async () => await page.getByTestId('model-input').locator('option').count(),
-            { timeout: 60_000 },
-          )
+          .poll(async () => await page.getByTestId('model-input').locator('option').count(), {
+            timeout: 60_000,
+          })
           .toBeGreaterThan(0);
         await page.getByTestId('model-input').selectOption(model);
         await page
@@ -254,9 +260,10 @@ test.describe('CHIMERA, end to end, against real models', () => {
       // The fetched marker survived the handoff, and the second agent — which
       // has no web tool at all — repeated it.
       expect(all, 'nothing passed on what was fetched').toContain(MARKER);
-      expect(all.split(MARKER).length - 1, 'the second step never got the findings').toBeGreaterThan(
-        1,
-      );
+      expect(
+        all.split(MARKER).length - 1,
+        'the second step never got the findings',
+      ).toBeGreaterThan(1);
       expect(all).not.toMatch(/never (?:reached|passed)|source data never/i);
     } finally {
       await app.close();
@@ -310,8 +317,22 @@ test.describe('CHIMERA, end to end, against real models', () => {
 
       // What the run said, before anything is asserted: when a live run goes
       // wrong the useful information is why, not that it did.
-      console.log(`[files:note] ${(await page.getByTestId('run-note').textContent().catch(() => '')) ?? ''}`);
-      console.log(`[files:result] ${((await page.getByTestId('run-result').textContent().catch(() => '')) ?? '').slice(0, 600)}`);
+      console.log(
+        `[files:note] ${
+          (await page
+            .getByTestId('run-note')
+            .textContent()
+            .catch(() => '')) ?? ''
+        }`,
+      );
+      console.log(
+        `[files:result] ${(
+          (await page
+            .getByTestId('run-result')
+            .textContent()
+            .catch(() => '')) ?? ''
+        ).slice(0, 600)}`,
+      );
 
       const steps = page.getByTestId('result-steps');
       await expect(steps).toBeVisible({ timeout: 60_000 });
@@ -402,7 +423,12 @@ test.describe('CHIMERA, end to end, against real models', () => {
         page.getByTestId('talk-assistant').last().or(page.getByTestId('home-error').first()),
       ).toBeVisible({ timeout: 600_000 });
       console.log(
-        `[assistant:error] ${(await page.getByTestId('home-error').textContent().catch(() => '')) ?? ''}`,
+        `[assistant:error] ${
+          (await page
+            .getByTestId('home-error')
+            .textContent()
+            .catch(() => '')) ?? ''
+        }`,
       );
       const said = (await page.getByTestId('talk-assistant').last().textContent()) ?? '';
       console.log(`[assistant] ${said.slice(0, 600)}`);

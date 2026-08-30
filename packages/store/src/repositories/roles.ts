@@ -108,4 +108,3 @@ export function remove(db: Database.Database, id: string): { removed: boolean } 
   const info = db.prepare('DELETE FROM roles WHERE id = ? AND is_builtin = 0').run(id);
   return { removed: info.changes > 0 };
 }
-

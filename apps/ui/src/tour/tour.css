@@ -26,7 +26,6 @@
   background: var(--surface-scrim);
 }
 
-
 /* A step that asks for something done needs the app underneath to work.
  *
  * The veil takes clicks so that the rest of the app feels held still while the

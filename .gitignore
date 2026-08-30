@@ -1,6 +1,12 @@
 node_modules/
 dist/
 build/
+# ...except electron-builder's resources, which is a source directory that
+# happens to be called `build`. The rule above matched it, so the application's
+# own icons had never been committed — they existed on one machine, and a fresh
+# clone failed at `postbuild` with "icon.png is missing from the working tree".
+!apps/desktop/build/
+!apps/desktop/build/**
 out/
 release/
 .env

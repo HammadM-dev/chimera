@@ -37,7 +37,11 @@ export function readDue(dueAt: string | null, now: Date = new Date()): DueReadin
 
   if (days < 0) {
     const late = Math.abs(days);
-    return { label: late === 1 ? '1 day late' : `${String(late)} days late`, late: true, today: false };
+    return {
+      label: late === 1 ? '1 day late' : `${String(late)} days late`,
+      late: true,
+      today: false,
+    };
   }
   if (days === 0) return { label: 'due today', late: false, today: true };
   if (days === 1) return { label: 'due tomorrow', late: false, today: false };

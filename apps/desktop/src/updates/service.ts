@@ -18,13 +18,7 @@ import { EventEmitter } from 'node:events';
 // has misjudged whose time matters.
 
 export type UpdateStage =
-  | 'idle'
-  | 'checking'
-  | 'available'
-  | 'downloading'
-  | 'ready'
-  | 'current'
-  | 'error';
+  'idle' | 'checking' | 'available' | 'downloading' | 'ready' | 'current' | 'error';
 
 export interface UpdateState {
   stage: UpdateStage;

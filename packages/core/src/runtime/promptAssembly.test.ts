@@ -363,9 +363,7 @@ test('the permission lines are still not a place tool output can reach', () => {
 
   const assembled = assemblePrompt({
     instructions: source,
-    observations: [
-      { callId: 'c1', toolId: 'shell.exec', output: hostile, isError: false },
-    ],
+    observations: [{ callId: 'c1', toolId: 'shell.exec', output: hostile, isError: false }],
   });
 
   // The permission paragraph is there, and what a tool said is not — even
@@ -388,9 +386,13 @@ test('a tool result follows the assistant turn that called for it', () => {
   const assembled = assemblePrompt({
     instructions,
     history: [
-      { role: 'assistant', content: 'Fetching it now.', toolCalls: [
-        { id: 'call-1', name: 'http.request', arguments: { url: 'https://example.com' } },
-      ] },
+      {
+        role: 'assistant',
+        content: 'Fetching it now.',
+        toolCalls: [
+          { id: 'call-1', name: 'http.request', arguments: { url: 'https://example.com' } },
+        ],
+      },
       { role: 'user', content: 'Has the task been achieved?' },
     ],
     observations: [

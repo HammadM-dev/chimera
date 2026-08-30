@@ -274,9 +274,7 @@ export function ComposioDirectory({
             clearInterval(timer);
             setPending((current) => current.filter((slug) => slug !== toolkit.slug));
             setToolkits((current) =>
-              current.map((one) =>
-                one.slug === toolkit.slug ? { ...one, connected: true } : one,
-              ),
+              current.map((one) => (one.slug === toolkit.slug ? { ...one, connected: true } : one)),
             );
             onNote(`${toolkit.name} is connected.`);
             onConnected?.();

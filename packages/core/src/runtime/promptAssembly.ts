@@ -235,9 +235,7 @@ export function assembleSystemMessage(instructions: InstructionSource): string {
       : ['', ...placementLines(instructions.placement)]),
     '',
     ...toolLines,
-    ...(permissionLines(instructions).length === 0
-      ? []
-      : ['', ...permissionLines(instructions)]),
+    ...(permissionLines(instructions).length === 0 ? [] : ['', ...permissionLines(instructions)]),
     ...(recoveryLines(instructions).length === 0 ? [] : ['', ...recoveryLines(instructions)]),
     ...(outputContractLine(instructions.role) === ''
       ? []
@@ -265,8 +263,7 @@ function recoveryLines(instructions: InstructionSource): string[] {
   if (struggling.length === 0) return [];
 
   const lines = struggling.map(
-    (entry) =>
-      `- ${entry.toolId} has failed ${String(entry.failures)} times in this step.`,
+    (entry) => `- ${entry.toolId} has failed ${String(entry.failures)} times in this step.`,
   );
 
   return [

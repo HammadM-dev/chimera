@@ -30,7 +30,9 @@ async function startGateway(): Promise<{ baseUrl: string; close: () => Promise<v
       JSON.stringify({
         id: 'r-1',
         model: MODELS[0],
-        choices: [{ index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' }],
+        choices: [
+          { index: 0, message: { role: 'assistant', content: 'ok' }, finish_reason: 'stop' },
+        ],
         usage: { prompt_tokens: 1, completion_tokens: 1 },
       }),
     );
@@ -88,9 +90,7 @@ test('a pinned model goes to the top of every picker, and stays pinned across a 
     // It moves to the front, and it is labelled as pinned rather than merely
     // being first — otherwise it is indistinguishable from the provider
     // happening to return it first.
-    await expect
-      .poll(async () => (await modelsInOrder(page))[0], { timeout: 10_000 })
-      .toBe(last);
+    await expect.poll(async () => (await modelsInOrder(page))[0], { timeout: 10_000 }).toBe(last);
     await expect(picker.locator('optgroup[label="Pinned"]')).toHaveCount(1);
 
     // Every picker, not just this one. The swarm has its own, in a different
@@ -110,9 +110,7 @@ test('a pinned model goes to the top of every picker, and stays pinned across a 
     await goTo(page, 'build');
     await page.getByTestId('palette-researcher').click();
     await expect(page.getByTestId('node-model')).toBeVisible({ timeout: 20_000 });
-    await expect
-      .poll(async () => (await modelsInOrder(page))[0], { timeout: 20_000 })
-      .toBe(last);
+    await expect.poll(async () => (await modelsInOrder(page))[0], { timeout: 20_000 }).toBe(last);
   } finally {
     await app.close();
     removeProfile(profile);

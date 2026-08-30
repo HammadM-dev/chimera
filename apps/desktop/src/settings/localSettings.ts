@@ -61,9 +61,7 @@ export function readLocalSettings(): LocalSettings {
           ? record['hasSeenSplash']
           : DEFAULTS.hasSeenSplash,
       hasSeenTour:
-        typeof record['hasSeenTour'] === 'boolean'
-          ? record['hasSeenTour']
-          : DEFAULTS.hasSeenTour,
+        typeof record['hasSeenTour'] === 'boolean' ? record['hasSeenTour'] : DEFAULTS.hasSeenTour,
     };
   } catch {
     console.warn(`[settings] ${FILE_NAME} is not valid JSON; falling back to defaults`);

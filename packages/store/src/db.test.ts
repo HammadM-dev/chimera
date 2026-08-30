@@ -232,17 +232,7 @@ const EXPECTED_COLUMNS: Record<string, string[]> = {
   // Added by 0021. Shared ground between the person and the agents: both read
   // it and both write to it. Deliberately not `memories`, which looks similar
   // and is read by prompts rather than by people.
-  notes: [
-    'id',
-    'kind',
-    'title',
-    'body',
-    'due_at',
-    'done_at',
-    'source',
-    'created_at',
-    'updated_at',
-  ],
+  notes: ['id', 'kind', 'title', 'body', 'due_at', 'done_at', 'source', 'created_at', 'updated_at'],
   swarms: ['id', 'name', 'question', 'seed', 'created_at', 'updated_at', 'source', 'archived_at'],
   swarm_turns: [
     'id',

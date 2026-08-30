@@ -234,13 +234,7 @@ export const STARTER_ROLES: readonly Role[] = [
     // it — which is a different act from recording a memory that silently
     // changes how later runs read. `memory.recall` stays read-only for that
     // reason.
-    toolAllowlist: [
-      'workspace.*',
-      'notebook.*',
-      'memory.recall',
-      'search.web',
-      'http.request',
-    ],
+    toolAllowlist: ['workspace.*', 'notebook.*', 'memory.recall', 'search.web', 'http.request'],
     modelBinding: { tier: 'frontier', preferredModel: null },
     budget: { ...DEFAULT_BUDGET, maxTokens: 150_000, maxCostUsd: 1 },
     outputContract: { format: 'text', schemaId: null },

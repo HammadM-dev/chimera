@@ -99,7 +99,12 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
         return;
       }
       const box = node.getBoundingClientRect();
-      setSpot({ top: box.top - 6, left: box.left - 6, width: box.width + 12, height: box.height + 12 });
+      setSpot({
+        top: box.top - 6,
+        left: box.left - 6,
+        width: box.width + 12,
+        height: box.height + 12,
+      });
     };
 
     // Two frames: one for the view switch to commit, one for its layout.
@@ -165,7 +170,11 @@ export function Tour({ onView, onDone }: TourProps): JSX.Element {
     return (
       <div className="tour" data-testid="tour">
         <div className="tour__veil" />
-        <div className="tour__card tour__card--centre" data-testid="tour-skip-confirm" role="dialog">
+        <div
+          className="tour__card tour__card--centre"
+          data-testid="tour-skip-confirm"
+          role="dialog"
+        >
           <p className="tour__eyebrow">Skip the tour</p>
           <h2 className="tour__title">Sure? There is a lot here that is not obvious.</h2>
           <p className="tour__body">

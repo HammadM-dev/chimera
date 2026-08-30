@@ -2724,13 +2724,7 @@ function ModelPicker({
 
   return (
     <div className="picker">
-      <ModelOptions
-        choices={choices}
-        value={value}
-        testId="node-model"
-        onChange={onChange}
-        tiers
-      />
+      <ModelOptions choices={choices} value={value} testId="node-model" onChange={onChange} tiers />
       <PinButton modelKey={value} />
     </div>
   );
@@ -2824,9 +2818,7 @@ function AppPicker({
               data-testid={`node-app-${app.slug}`}
               aria-pressed={on}
               onClick={() => {
-                onChange(
-                  on ? chosen.filter((slug) => slug !== app.slug) : [...chosen, app.slug],
-                );
+                onChange(on ? chosen.filter((slug) => slug !== app.slug) : [...chosen, app.slug]);
               }}
             >
               {app.name}

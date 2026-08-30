@@ -64,8 +64,7 @@ for (const { name, fps, width, from, to, speed } of ANIMATIONS) {
   // setpts before fps, so the frame rate is sampled from the sped-up stream
   // rather than the original.
   const filters =
-    `setpts=PTS/${String(speed)},fps=${String(fps)},` +
-    `scale=${String(width)}:-1:flags=lanczos`;
+    `setpts=PTS/${String(speed)},fps=${String(fps)},` + `scale=${String(width)}:-1:flags=lanczos`;
 
   const pass = (args) => {
     const run = spawnSync(FFMPEG, ['-y', '-loglevel', 'error', ...args], { stdio: 'inherit' });

@@ -1179,7 +1179,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
     // failing the step would turn a heuristic into a wall, and this one is a
     // heuristic. What follows is a turn in which it can quote the source or
     // say it could not get one.
-    if (verification.verified && !challengedGrounding && !groundedInObservations(output, observations)) {
+    if (
+      verification.verified &&
+      !challengedGrounding &&
+      !groundedInObservations(output, observations)
+    ) {
       challengedGrounding = true;
       verification = {
         verified: false,

@@ -416,7 +416,8 @@ export function createHttpServer(options: HttpServerOptions): McpServer {
           try {
             await assertResolvesPublic(next.hostname);
           } catch (err) {
-            refusal = `\n[redirected to ${next.toString()}, which resolves somewhere this ` +
+            refusal =
+              `\n[redirected to ${next.toString()}, which resolves somewhere this ` +
               `automation may not reach: ${err instanceof Error ? err.message : String(err)}]`;
             break;
           }
@@ -446,7 +447,8 @@ export function createHttpServer(options: HttpServerOptions): McpServer {
 
       // Where it ended up, when that is not where it was asked to go. An agent
       // that does not know it was redirected cites the URL it asked for.
-      const arrival = reached.toString() === target.toString() ? '' : `\nfinal url: ${reached.toString()}`;
+      const arrival =
+        reached.toString() === target.toString() ? '' : `\nfinal url: ${reached.toString()}`;
       const exhausted =
         refusal === '' && REDIRECT_STATUSES.has(response.status) && hops >= MAX_REDIRECTS
           ? `\n[stopped after ${String(MAX_REDIRECTS)} redirects]`

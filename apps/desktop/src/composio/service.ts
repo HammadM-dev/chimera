@@ -294,11 +294,7 @@ export async function connectedToolkitSlugs(): Promise<string[]> {
  * this exists for — and "Composio has never heard of it" is not a reason to
  * try it.
  */
-export function refusalFor(
-  scope: readonly string[],
-  slug: string,
-  toolkit: string,
-): string {
+export function refusalFor(scope: readonly string[], slug: string, toolkit: string): string {
   if (scope.length === 0) return '';
   const named = scope.join(', ');
 
@@ -331,9 +327,9 @@ export async function toolkitOf(slug: string): Promise<string> {
     const composio = new Composio({ apiKey: key });
     const raw = (await (
       composio.tools as unknown as {
-        getRawComposioTools: (input: { tools: string[] }) => Promise<
-          { slug?: string; toolkit?: { slug?: string } }[]
-        >;
+        getRawComposioTools: (input: {
+          tools: string[];
+        }) => Promise<{ slug?: string; toolkit?: { slug?: string } }[]>;
       }
     ).getRawComposioTools({ tools: [slug] })) as { slug?: string; toolkit?: { slug?: string } }[];
     const found = raw.find((tool) => (tool.slug ?? '').toUpperCase() === slug.toUpperCase());

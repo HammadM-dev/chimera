@@ -71,7 +71,8 @@ export function UpdateBanner(): JSX.Element | null {
 
   // Nothing to say in these states, and saying nothing is the right amount.
   if (hidden) return null;
-  if (state.stage === 'idle' || state.stage === 'checking' || state.stage === 'current') return null;
+  if (state.stage === 'idle' || state.stage === 'checking' || state.stage === 'current')
+    return null;
   if (state.stage === 'error' && state.reason === '') return null;
 
   return (
@@ -84,7 +85,11 @@ export function UpdateBanner(): JSX.Element | null {
             <strong>Version {state.version} is out.</strong> You are on {state.current}.
           </>
         )}
-        {state.stage === 'downloading' && <>Downloading {state.version}… {state.percent}%</>}
+        {state.stage === 'downloading' && (
+          <>
+            Downloading {state.version}… {state.percent}%
+          </>
+        )}
         {state.stage === 'ready' && (
           <>
             <strong>Version {state.version} is ready.</strong> Restart to finish.

@@ -159,7 +159,13 @@ export async function briefFor(input: {
         // this role would be refused rather than quietly allowed.
         gated: false,
       },
-      { governor, provider: adapter, tools, callOptions: options, trace: createTraceSink(db, run.id) },
+      {
+        governor,
+        provider: adapter,
+        tools,
+        callOptions: options,
+        trace: createTraceSink(db, run.id),
+      },
     );
 
     const spend = runsRepository.listRecent(db, 50).find((row) => row.id === run.id);

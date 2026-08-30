@@ -364,9 +364,7 @@ test('every agent asked is reported starting and finishing', async () => {
 
   for (const one of asked) {
     assert.ok(
-      answered.some(
-        (other) => other.personaId === one.personaId && other.round === one.round,
-      ),
+      answered.some((other) => other.personaId === one.personaId && other.round === one.round),
       `${one.personaId} was shown thinking in round ${String(one.round)} and never finished`,
     );
   }

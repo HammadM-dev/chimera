@@ -155,7 +155,8 @@ export function update(
   if (!existing) return undefined;
 
   const kind = patch.kind ?? existing.kind;
-  const dueAt = kind === 'reminder' ? (patch.dueAt !== undefined ? patch.dueAt : existing.dueAt) : null;
+  const dueAt =
+    kind === 'reminder' ? (patch.dueAt !== undefined ? patch.dueAt : existing.dueAt) : null;
   const doneAt =
     patch.done === undefined
       ? existing.doneAt

@@ -138,7 +138,6 @@ test.describe('what one step hands the next', () => {
       const seen = all.split(MARKER).length - 1;
       expect(seen, 'the second step never received the first step’s findings').toBeGreaterThan(1);
 
-
       // The exact failure text the user saw, in any step.
       expect(all).not.toMatch(
         /never (?:reached|passed)|source data never|nothing was ever recorded/i,

@@ -34,7 +34,11 @@ export type MarkId =
  * Dropping a real asset into assets/providers/<id>.png still wins over all of
  * this — see `logoFor`.
  */
-const STROKE = { strokeWidth: 1.8, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+const STROKE = {
+  strokeWidth: 1.8,
+  strokeLinecap: 'round' as const,
+  strokeLinejoin: 'round' as const,
+};
 
 const MARKS: Record<MarkId, { tint: string; glyph: JSX.Element }> = {
   anthropic: {

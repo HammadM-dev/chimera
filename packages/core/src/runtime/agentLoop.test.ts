@@ -17,7 +17,14 @@ import { Governor } from '../governor/Governor.ts';
 import { deny } from '../governor/Governor.ts';
 import type { ModelCallAuthorization, ToolCallAuthorization } from '../governor/types.ts';
 import { STARTER_ROLES, type Role } from './roleRegistry.ts';
-import { parseVerification, runAgentLoop, type Cancellation, failureCounts, groundedInObservations, identifiersIn } from './agentLoop.ts';
+import {
+  parseVerification,
+  runAgentLoop,
+  type Cancellation,
+  failureCounts,
+  groundedInObservations,
+  identifiersIn,
+} from './agentLoop.ts';
 
 const AUTH_REF = 'vault:connection:00000000-0000-0000-0000-000000000000' as never;
 const CALL_OPTIONS: AdapterCallOptions = { authRef: AUTH_REF };
@@ -1077,12 +1084,15 @@ test('a step that runs out of turns still says what it found', async () => {
   );
 
   try {
-    const result = await runAgentLoop({ ...taskFor(role), role }, {
-      governor: new Governor('permissive'),
-      provider,
-      tools: h.tools,
-      callOptions: CALL_OPTIONS,
-    });
+    const result = await runAgentLoop(
+      { ...taskFor(role), role },
+      {
+        governor: new Governor('permissive'),
+        provider,
+        tools: h.tools,
+        callOptions: CALL_OPTIONS,
+      },
+    );
 
     assert.equal(result.status, 'exhausted');
     assert.match(result.output, /I got as far as/);

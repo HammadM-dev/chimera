@@ -76,9 +76,7 @@ const pinnedStore = (() => {
       // Newest first: the thing you just pinned is the thing you are about to
       // use, and burying it under three older pins is the problem this exists
       // to solve.
-      current = current.includes(key)
-        ? current.filter((one) => one !== key)
-        : [key, ...current];
+      current = current.includes(key) ? current.filter((one) => one !== key) : [key, ...current];
       announce();
       void bridge()
         .invoke('pinned:set', { pinned: current })

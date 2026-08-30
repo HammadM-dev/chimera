@@ -18,7 +18,9 @@ let builtAt;
 try {
   builtAt = statSync(entry).mtimeMs;
 } catch {
-  console.error('No build at apps/desktop/dist/main.js. Run: npm run build --workspace @chimera/desktop');
+  console.error(
+    'No build at apps/desktop/dist/main.js. Run: npm run build --workspace @chimera/desktop',
+  );
   process.exit(1);
 }
 
@@ -42,7 +44,9 @@ function newestSource(dir) {
   return newest;
 }
 
-const roots = ['apps/desktop/src', 'apps/ui/src', 'packages'].map((dir) => path.join(repoRoot, dir));
+const roots = ['apps/desktop/src', 'apps/ui/src', 'packages'].map((dir) =>
+  path.join(repoRoot, dir),
+);
 let newest = { path: '', at: 0 };
 for (const root of roots) {
   const found = newestSource(root);

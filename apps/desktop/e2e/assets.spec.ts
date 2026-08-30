@@ -44,9 +44,16 @@ const MODELS = ['chimera-standard', 'chimera-fast', 'chimera-deep'];
  */
 async function startGateway(): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const NAMES = [
-    'Priya, operations lead', 'Tom, warehouse shift', 'Aoife, finance',
-    'Marcus, sales', 'Lena, engineering', 'Sam, customer support',
-    'Ruth, HR', 'Dev, logistics', 'Nora, night shift', 'Ben, procurement',
+    'Priya, operations lead',
+    'Tom, warehouse shift',
+    'Aoife, finance',
+    'Marcus, sales',
+    'Lena, engineering',
+    'Sam, customer support',
+    'Ruth, HR',
+    'Dev, logistics',
+    'Nora, night shift',
+    'Ben, procurement',
   ];
   const VOICES = [
     'Four days would cost us Friday cover, and Friday is when everything breaks.',

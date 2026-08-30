@@ -170,5 +170,8 @@ test('a realistic population forms clusters and uses the canvas', () => {
   // And it should fill the stage rather than huddling in the middle.
   const xs = layout.nodes.map((node) => node.x);
   const span = Math.max(...xs) - Math.min(...xs);
-  assert.ok(span > stage.width * 0.6, `expected the layout to spread; span was ${String(Math.round(span))}`);
+  assert.ok(
+    span > stage.width * 0.6,
+    `expected the layout to spread; span was ${String(Math.round(span))}`,
+  );
 });

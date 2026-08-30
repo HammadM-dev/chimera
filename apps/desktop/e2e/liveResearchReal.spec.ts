@@ -2,7 +2,14 @@ import { test, expect } from '@playwright/test';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { dismissOnboarding, freshProfile, goTo, joinSteps, launchApp, removeProfile } from './support/app.ts';
+import {
+  dismissOnboarding,
+  freshProfile,
+  goTo,
+  joinSteps,
+  launchApp,
+  removeProfile,
+} from './support/app.ts';
 
 // The job a person actually asked for, and the one that failed four times.
 //
@@ -87,11 +94,21 @@ test.describe('a real research job, end to end', () => {
 
       // The working is visible, which is the other half of what was asked for.
       const worklog = page.getByTestId('step-worklog');
-      console.log(`[worklog] ${((await worklog.first().textContent().catch(() => '')) ?? '').slice(0, 600)}`);
+      console.log(
+        `[worklog] ${(
+          (await worklog
+            .first()
+            .textContent()
+            .catch(() => '')) ?? ''
+        ).slice(0, 600)}`,
+      );
 
       // A run that could not search must say so rather than invent. Either way,
       // it must not claim sources it never opened.
-      const admitted = /could not|unavailable|was not able|no results|search (?:is |was )?(?:un)?available/i.test(all);
+      const admitted =
+        /could not|unavailable|was not able|no results|search (?:is |was )?(?:un)?available/i.test(
+          all,
+        );
       const named = /bugatti|koenigsegg|hennessey|tuatara|rimac|chiron|jesko|venom/i.test(all);
 
       console.log(`[verdict] named-real-cars=${String(named)} admitted-a-gap=${String(admitted)}`);

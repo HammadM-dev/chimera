@@ -101,7 +101,12 @@ export function createNotebookServer(backend: NotebookBackend): McpServer {
       }
       try {
         return text(
-          backend.add({ kind, title, body: body ?? '', dueAt: kind === 'reminder' ? (dueAt ?? null) : null }),
+          backend.add({
+            kind,
+            title,
+            body: body ?? '',
+            dueAt: kind === 'reminder' ? (dueAt ?? null) : null,
+          }),
         );
       } catch (err) {
         return failure(err instanceof Error ? err.message : String(err));
