@@ -67,3 +67,20 @@ jobs:
       # sandboxed and headless — there is no true headless mode for a
       # BrowserWindow the way there is for a headless browser.
       - run: xvfb-run --auto-servernum npm run test:e2e --workspace apps/desktop
+
+      # What Playwright saw when it failed.
+      #
+      # A CI failure that reproduces on no local machine is only debuggable
+      # from the artefacts, and the log carries the assertion without the page:
+      # fifty-four tests failed on `omniroute-setup` never leaving "detected",
+      # and the message explaining why was on screen and nowhere in the log.
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            apps/desktop/test-results/
+            apps/desktop/playwright-report/
+          retention-days: 7
+          if-no-files-found: ignore
