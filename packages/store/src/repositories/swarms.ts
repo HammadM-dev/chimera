@@ -86,7 +86,7 @@ export function create(
   db: Database.Database,
   input: { name: string; question: string; source?: string },
 ): SwarmRecord {
-  const now = new Date().toISOString();
+  const now = nextUpdatedAt(db);
   const id = randomUUID();
   db.prepare(
     `INSERT INTO swarms (id, name, question, seed, created_at, updated_at, source)
@@ -113,6 +113,30 @@ export function get(db: Database.Database, id: string): SwarmRecord | undefined 
 }
 
 /** Newest first. Archived ones are left out — they are hidden, not deleted. */
+/**
+ * A timestamp that sorts after every thread already in the list.
+ *
+ * `new Date().toISOString()` has millisecond resolution, and two threads
+ * created or touched inside one millisecond carry the same value — so the list
+ * ordered by it came back differently between reads on a fast machine. A
+ * `rowid` tiebreak fixes creation order and gets touching wrong, because
+ * speaking to an old thread does not change its rowid.
+ *
+ * So the value itself is made to advance: the wall clock when that is already
+ * later than everything stored, and one millisecond past the newest otherwise.
+ * The times stay honest to within a millisecond and the order stops depending
+ * on how fast the machine is.
+ */
+function nextUpdatedAt(db: Database.Database): string {
+  const now = new Date().toISOString();
+  const top = (
+    db.prepare('SELECT MAX(updated_at) AS newest FROM swarms').get() as
+      { newest: string | null } | undefined
+  )?.newest;
+  if (top === null || top === undefined || now > top) return now;
+  return new Date(new Date(top).getTime() + 1).toISOString();
+}
+
 export function list(db: Database.Database, limit = 200): SwarmRecord[] {
   return (
     (
@@ -133,7 +157,7 @@ export function list(db: Database.Database, limit = 200): SwarmRecord[] {
 export function rename(db: Database.Database, id: string, name: string): void {
   db.prepare('UPDATE swarms SET name = ?, updated_at = ? WHERE id = ?').run(
     name,
-    new Date().toISOString(),
+    nextUpdatedAt(db),
     id,
   );
 }
@@ -178,8 +202,10 @@ export function addTurn(
   );
 
   // The thread moves up the list when it is spoken to, which is what makes the
-  // list read as "what I have been working on".
-  db.prepare('UPDATE swarms SET updated_at = ? WHERE id = ?').run(now, input.swarmId);
+  // list read as "what I have been working on". Strictly newer than everything
+  // else, so speaking to a thread created in the same millisecond as another
+  // still moves it above that one.
+  db.prepare('UPDATE swarms SET updated_at = ? WHERE id = ?').run(nextUpdatedAt(db), input.swarmId);
 
   return {
     id,

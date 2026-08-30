@@ -20,6 +20,16 @@ export default defineConfig({
   timeout: 120_000,
   retries: 0,
   reporter: [['list']],
+  // A picture and a trace, kept only when something failed.
+  //
+  // Costs nothing on a green run and is the difference between diagnosing a
+  // CI-only failure and guessing at it. Three canvas tests fail on a runner
+  // and pass on every desktop here; the assertion says a join did not draw,
+  // and what the canvas looked like at that moment is the whole question.
+  use: {
+    screenshot: 'only-on-failure',
+    trace: 'retain-on-failure',
+  },
   fullyParallel: false, // one Electron app instance per test file, avoid launch contention
   // fullyParallel: false only serialises *within* a file — Playwright still
   // runs files across workers, so two Electron apps launch concurrently.

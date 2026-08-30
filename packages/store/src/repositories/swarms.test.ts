@@ -128,3 +128,20 @@ test('threads made in the same millisecond still come back newest first', () => 
     );
   });
 });
+
+test('speaking to a thread beats one created in the same millisecond', () => {
+  // The case a `rowid` tiebreak gets wrong: touching an old thread does not
+  // change its rowid, so the newer one stayed on top however recently the old
+  // one had been used. Ordering has to come from a value that advances.
+  withDb((db) => {
+    const older = swarms.create(db, { name: 'Older', question: 'q' });
+    swarms.create(db, { name: 'Newer', question: 'q' });
+
+    swarms.addTurn(db, { swarmId: older.id, asked: 'again', answer: 'a', resultJson: '{}' });
+
+    assert.deepEqual(
+      swarms.list(db).map((row) => row.name),
+      ['Older', 'Newer'],
+    );
+  });
+});
