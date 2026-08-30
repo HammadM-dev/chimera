@@ -46,6 +46,12 @@ const READ_METHODS = ['GET', 'HEAD'];
  * outward-looking fetch becomes an inward-looking one. A host somebody put in
  * the allowlist is always permitted, because they typed it on purpose.
  */
+/** Statuses that mean "it is somewhere else now". */
+const REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
+
+/** Enough for a site's http→https→www chain, and short of a redirect loop. */
+const MAX_REDIRECTS = 5;
+
 export function isPrivateHost(host: string): boolean {
   // WHATWG URL parsing already normalises the decimal, octal, hex and short
   // forms of an IPv4 address — `http://2130706433/` arrives here as
@@ -357,16 +363,76 @@ export function createHttpServer(options: HttpServerOptions): McpServer {
         }
       }
 
-      const response = await transport(target.toString(), {
+      // Redirects are followed, and every hop is checked exactly as the first
+      // URL was.
+      //
+      // They used to be refused outright, with a note telling the agent to
+      // re-request the target itself. The security reasoning was right — a 302
+      // to a host off the allowlist would carry the request straight past the
+      // check just made — but the conclusion was not: almost every real site
+      // redirects, so a live research run spent a turn on `status: 308` from
+      // motortrend.com and another asking again, and an agent with twelve
+      // turns cannot afford two of them per link.
+      //
+      // Checking each hop keeps the property that mattered: every URL actually
+      // fetched has passed the same allowlist and the same public-address
+      // check. A redirect that leaves what this automation may reach still
+      // stops, and now says so as a refusal rather than as a status code.
+      let response = await transport(target.toString(), {
         method: method ?? 'GET',
         headers: headers ?? {},
         ...(body === undefined ? {} : { body }),
-        // Redirects are not followed. A 302 to a host outside the allowlist
-        // would otherwise carry the request straight past the check that was
-        // just made — the allowlist would hold for the URL the agent asked for
-        // and not for the one it actually reached.
         redirect: 'manual',
       });
+
+      let hops = 0;
+      let reached = target;
+      let refusal = '';
+
+      while (REDIRECT_STATUSES.has(response.status) && hops < MAX_REDIRECTS) {
+        const location = response.headers.get('location');
+        if (location === null || location.trim() === '') break;
+
+        let next: URL;
+        try {
+          // Resolved against the URL it came from, because Location is
+          // routinely a path rather than an address.
+          next = assertEgressAllowed(
+            new URL(location, reached).toString(),
+            options.egressAllowlist,
+            options.egressMode ?? 'browse',
+            // A redirect is followed as a GET unless it is one of the two that
+            // preserve the method, which is what a browser does.
+            response.status === 307 || response.status === 308 ? (method ?? 'GET') : 'GET',
+          );
+        } catch (err) {
+          refusal = `\n[redirected to ${location}, which this automation may not reach: ${
+            err instanceof Error ? err.message : String(err)
+          }]`;
+          break;
+        }
+
+        if (!isHostAllowed(next.hostname, options.egressAllowlist)) {
+          try {
+            await assertResolvesPublic(next.hostname);
+          } catch (err) {
+            refusal = `\n[redirected to ${next.toString()}, which resolves somewhere this ` +
+              `automation may not reach: ${err instanceof Error ? err.message : String(err)}]`;
+            break;
+          }
+        }
+
+        reached = next;
+        hops += 1;
+        response = await transport(next.toString(), {
+          method: response.status === 307 || response.status === 308 ? (method ?? 'GET') : 'GET',
+          headers: headers ?? {},
+          ...(body === undefined || !(response.status === 307 || response.status === 308)
+            ? {}
+            : { body }),
+          redirect: 'manual',
+        });
+      }
 
       const raw = await response.text();
       // Markup is not information. A page arrives as what it says rather than
@@ -378,11 +444,14 @@ export function createHttpServer(options: HttpServerOptions): McpServer {
           ? `${text.slice(0, cap)}\n[truncated at ${String(cap)} characters — raise the page limit on the automation if more is needed]`
           : text;
 
-      const location = response.headers.get('location');
-      const redirectNote =
-        location === null
-          ? ''
-          : `\n[redirect to ${location} was not followed — re-request it explicitly if the target is allowlisted]`;
+      // Where it ended up, when that is not where it was asked to go. An agent
+      // that does not know it was redirected cites the URL it asked for.
+      const arrival = reached.toString() === target.toString() ? '' : `\nfinal url: ${reached.toString()}`;
+      const exhausted =
+        refusal === '' && REDIRECT_STATUSES.has(response.status) && hops >= MAX_REDIRECTS
+          ? `\n[stopped after ${String(MAX_REDIRECTS)} redirects]`
+          : '';
+      const redirectNote = `${arrival}${refusal}${exhausted}`;
 
       return {
         content: [

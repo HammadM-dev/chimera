@@ -441,7 +441,17 @@ export function createSearchServer(options: SearchServerOptions = {}): McpServer
           ? 'Searches the web — but this automation is locked to named sites, so search is switched off. Work from the sites the automation names, or say that search needs turning on.'
           : 'Searches the web and returns titles, links and snippets. Use it whenever you need a fact, a page, or a source you were not given: search first, then fetch the promising links with http.request. Ask it a real question, the way you would type it.',
       inputSchema: {
-        query: z.string().describe('What to search for, in plain words.'),
+        // A string, or a list of them.
+        //
+        // Models batch queries — `{"query": ["fastest cars", "top speed"]}` is
+        // a shape they reach for unprompted, and a live run lost two of its
+        // twelve iterations to `Invalid input at query` before it guessed the
+        // shape the schema wanted. Refusing that is technically correct and
+        // practically just an expensive way to say "rephrase": the intent is
+        // unambiguous, so it is accepted and the first one is searched.
+        query: z
+          .union([z.string(), z.array(z.string()).min(1)])
+          .describe('What to search for, in plain words. One query.'),
         maxResults: z
           .number()
           .int()
@@ -451,7 +461,11 @@ export function createSearchServer(options: SearchServerOptions = {}): McpServer
           .describe('How many results to return.'),
       },
     },
-    async ({ query, maxResults }) => {
+    async ({ query: requested, maxResults }) => {
+      // A list means the first of them. Searching all of them behind one call
+      // would spend the run's budget on work it did not ask for, and returning
+      // nothing would waste the turn.
+      const query = Array.isArray(requested) ? (requested[0] ?? '') : requested;
       const wanted = maxResults ?? options.maxResults ?? DEFAULT_MAX_RESULTS;
       const trimmed = query.trim();
       const region = options.region ?? '';

@@ -261,3 +261,22 @@ test('relevance never rejects a short or unusual query', () => {
     true,
   );
 });
+
+test('a query sent as a list is searched rather than refused', async () => {
+  // Models batch. A live research run lost two of its twelve iterations to
+  // `Invalid input at query` before it guessed the shape the schema wanted,
+  // and the intent was never in doubt.
+  const { result, calls } = await search(
+    (url) => (url.includes('mojeek') ? respond(MOJEEK) : respond('<html>Captcha</html>')),
+    { query: ['a real title', 'a second query'] },
+  );
+
+  assert.equal(result.isError, false);
+  assert.match(result.text, /A real title/);
+  // The first one, and only the first: searching all of them behind one call
+  // would spend the run's budget on work it did not ask for.
+  assert.equal(
+    calls.some((url) => url.includes('second')),
+    false,
+  );
+});

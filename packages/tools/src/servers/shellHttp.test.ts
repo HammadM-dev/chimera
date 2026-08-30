@@ -176,7 +176,9 @@ test('an HTTP request to an allowlisted host succeeds against a local server', a
   }
 });
 
-test('a redirect out of the allowlist is not followed', async () => {
+test('a redirect out of the allowlist is refused, not followed', async () => {
+  // The property that matters, checked in the mode that enforces it. A 302 to
+  // a host the automation never authorised must not carry the request there.
   const server: Server = createServer((_req, res) => {
     res.writeHead(302, { location: 'https://evil.example.net/collect' });
     res.end();
@@ -187,7 +189,9 @@ test('a redirect out of the allowlist is not followed', async () => {
   const registry = createToolRegistry();
   await registry.registerServer(
     'http',
-    await connectInProcess(createHttpServer({ egressAllowlist: ['127.0.0.1'] })),
+    await connectInProcess(
+      createHttpServer({ egressAllowlist: ['127.0.0.1'], egressMode: 'allowlist' }),
+    ),
   );
 
   try {
@@ -196,14 +200,59 @@ test('a redirect out of the allowlist is not followed', async () => {
       { url: `http://127.0.0.1:${String(port)}/`, method: 'GET' },
       FULL_ACCESS,
     );
-    // The allowlist held for the URL requested; following the redirect would
-    // have carried the request to a host it never authorised.
-    assert.match(result.text, /status: 302/);
-    assert.match(result.text, /was not followed/);
-    assert.doesNotMatch(result.text, /collect.*\n.*[Bb]ody/);
+    assert.match(result.text, /evil\.example\.net/);
+    assert.match(result.text, /may not reach/);
+    // And nothing from the other side of it came back.
+    assert.equal(result.text.includes('collect-body'), false);
   } finally {
     await registry.close();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    });
+  }
+});
+
+test('a redirect to somewhere allowed is followed, and says where it landed', async () => {
+  // Almost every real site redirects. Refusing to follow cost a live research
+  // run a turn on `status: 308` from motortrend.com and another asking again —
+  // two of its twelve turns, per link.
+  const server: Server = createServer((req, res) => {
+    if (req.url === '/start') {
+      res.writeHead(308, { location: '/features/fastest-cars' });
+      res.end();
+      return;
+    }
+    res.writeHead(200, { 'content-type': 'text/plain' });
+    res.end('the actual article');
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const { port } = server.address() as AddressInfo;
+
+  const registry = createToolRegistry();
+  await registry.registerServer(
+    'http',
+    await connectInProcess(
+      createHttpServer({ egressAllowlist: ['127.0.0.1'], egressMode: 'allowlist' }),
+    ),
+  );
+
+  try {
+    const result = await registry.invoke(
+      'http.request',
+      { url: `http://127.0.0.1:${String(port)}/start`, method: 'GET' },
+      FULL_ACCESS,
+    );
+    assert.equal(result.isError, false);
+    assert.match(result.text, /the actual article/);
+    // Told where it ended up, so it cites the address it actually read.
+    assert.match(result.text, /final url:.*fastest-cars/);
+  } finally {
+    await registry.close();
+    await new Promise<void>((resolve) => {
+      server.closeAllConnections();
+      server.close(() => resolve());
+    });
   }
 });
 
