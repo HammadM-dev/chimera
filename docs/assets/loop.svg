@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" width="880" height="400" role="img" aria-label="The agent loop: plan, act, observe, verify, then either go round again or finish. Every turn is bounded by a spend cap, an iteration cap, a stall detector and a grounding check.">
+  <title>Plan, act, observe, verify</title>
+  <style>
+    .bg { fill: #0d0d0c; }
+    .node { fill: #161614; stroke: #2a2825; stroke-width: 1.2; }
+    .done { fill: #14201a; stroke: #5aa76f; stroke-width: 1.3; }
+    .hh { font: 500 14px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .h { font: 500 13px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .s { font: 400 10.5px ui-sans-serif, system-ui, sans-serif; fill: #a3a09a; }
+    .t { font: 400 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #6f6c66; }
+
+    .ring { stroke: #2a2825; stroke-width: 1.4; fill: none; }
+    .again { stroke: #d9a441; stroke-width: 1.5; fill: none; stroke-dasharray: 4 5; }
+    .exit { stroke: #5aa76f; stroke-width: 1.6; fill: none; stroke-dasharray: 5 5; }
+    .travel { fill: #4a8fd4; }
+
+    .step { opacity: .62; animation: glow 6s ease-in-out infinite; }
+    .s1 { animation-delay: 0s } .s2 { animation-delay: 1.5s }
+    .s3 { animation-delay: 3s } .s4 { animation-delay: 4.5s }
+    @keyframes glow { 0%, 16%, 100% { opacity: .62 } 4%, 12% { opacity: 1 } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .step { animation: none; opacity: 1 }
+      .travel { display: none }
+    }
+  </style>
+
+  <rect class="bg" width="880" height="400" rx="10"/>
+  <text class="hh" x="28" y="34">What one agent does, every turn</text>
+
+  <!-- The traveller's path is the whole rectangle and is never drawn: the
+       cards fade in and out as they highlight, so anything behind them shows
+       through. Only the segments between cards are visible. -->
+  <path id="ring" fill="none" stroke="none" d="M250 93 H570 V229 H250 Z"/>
+  <g class="ring">
+    <path d="M350 93 H470"/>
+    <path d="M570 122 V200"/>
+    <path d="M470 229 H350"/>
+    <path d="M250 200 V122"/>
+  </g>
+  <circle class="travel" r="4">
+    <animateMotion dur="6s" repeatCount="indefinite" rotate="auto">
+      <mpath href="#ring"/>
+    </animateMotion>
+  </circle>
+
+  <g class="step s1">
+    <rect class="node" x="150" y="64" width="200" height="58" rx="9"/>
+    <text class="h" x="166" y="88">1 · Plan</text>
+    <text class="s" x="166" y="106">Decide the next move</text>
+  </g>
+
+  <g class="step s2">
+    <rect class="node" x="470" y="64" width="200" height="58" rx="9"/>
+    <text class="h" x="486" y="88">2 · Act</text>
+    <text class="s" x="486" y="106">Call a tool — via the Governor</text>
+  </g>
+
+  <g class="step s3">
+    <rect class="node" x="470" y="200" width="200" height="58" rx="9"/>
+    <text class="h" x="486" y="224">3 · Observe</text>
+    <text class="s" x="486" y="242">Read what came back, as data</text>
+  </g>
+
+  <g class="step s4">
+    <rect class="node" x="150" y="200" width="200" height="58" rx="9"/>
+    <text class="h" x="166" y="224">4 · Verify</text>
+    <text class="s" x="166" y="242">Is it actually done?</text>
+  </g>
+
+  <!-- not yet: round again -->
+  <path class="again" d="M150 229 H96 V93 H150"/>
+  <text class="t" x="30" y="156">not yet —</text>
+  <text class="t" x="30" y="172">go round</text>
+
+  <!-- done: out of the loop -->
+  <path class="exit" d="M250 258 V300"/>
+  <rect class="done" x="150" y="300" width="230" height="52" rx="9"/>
+  <text class="h" x="166" y="324" fill="#8fd0a3">Done</text>
+  <text class="s" x="166" y="341">Answer handed to the next step</text>
+
+  <g class="t">
+    <text x="700" y="150">Every turn is bounded:</text>
+    <text x="700" y="170">· a spend cap</text>
+    <text x="700" y="188">· an iteration cap</text>
+    <text x="700" y="206">· a stall detector</text>
+    <text x="700" y="224">· a grounding check</text>
+  </g>
+
+  <text class="s" x="420" y="324">Verification is a check, not the model</text>
+  <text class="s" x="420" y="341">agreeing with itself.</text>
+</svg>

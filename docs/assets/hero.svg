@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 260" width="1000" height="260" role="img" aria-label="CHIMERA — build, run and govern teams of AI agents. A brief showing three agents working in sequence through the Governor to a finished result.">
+  <title>CHIMERA</title>
+  <style>
+    .bg { fill: #0d0d0c; }
+    .grid { stroke: #1b1917; stroke-width: 1; }
+    .name { font: 500 44px ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+            fill: #f5f3ee; letter-spacing: 0.22em; }
+    .tag  { font: 400 15px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #a3a09a; }
+    .chip { font: 500 11px ui-sans-serif, system-ui, sans-serif; fill: #c9c5bd; }
+    .tiny { font: 400 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #6f6c66; }
+
+    .card { fill: #161614; stroke: #2a2825; stroke-width: 1; }
+    .wire { stroke: #2f2c29; stroke-width: 1.5; fill: none; }
+
+    /* The pulse that travels the pipeline, once every cycle. */
+    .spark { fill: #4a8fd4; }
+    .gov   { fill: #14202e; stroke: #4a8fd4; stroke-width: 1.4; }
+    .ok    { fill: #5aa76f; }
+
+    @keyframes lift { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .in-1 { animation: lift .5s ease-out .05s both; }
+    .in-2 { animation: lift .5s ease-out .18s both; }
+    .in-3 { animation: lift .5s ease-out .31s both; }
+    .in-4 { animation: lift .5s ease-out .44s both; }
+
+    /* A dash running left to right along the whole pipeline. */
+    .flow { stroke: #4a8fd4; stroke-width: 2; fill: none; stroke-linecap: round;
+            stroke-dasharray: 10 300; animation: run 3.6s linear infinite; }
+    @keyframes run { from { stroke-dashoffset: 310; } to { stroke-dashoffset: 0; } }
+
+    .breathe { animation: breathe 3.6s ease-in-out infinite; }
+    @keyframes breathe { 0%, 62%, 100% { opacity: .25 } 74% { opacity: 1 } }
+
+    @media (prefers-reduced-motion: reduce) {
+      .flow, .breathe { animation: none; }
+      .breathe { opacity: .8 }
+      .in-1, .in-2, .in-3, .in-4 { animation: none; opacity: 1 }
+    }
+  </style>
+
+  <rect class="bg" width="1000" height="260" rx="12"/>
+  <g class="grid" opacity=".55">
+    <path d="M0 65 H1000 M0 130 H1000 M0 195 H1000"/>
+    <path d="M200 0 V260 M400 0 V260 M600 0 V260 M800 0 V260"/>
+  </g>
+
+  <!-- wordmark -->
+  <g class="in-1">
+    <text class="name" x="60" y="86">CHIMERA</text>
+    <text class="tag" x="62" y="116">Build, run and govern teams of AI agents — on your own machine</text>
+  </g>
+
+  <!-- the pipeline -->
+  <g transform="translate(60,150)">
+    <path class="wire" d="M124 30 H182 M316 30 H374 M508 30 H566 M690 30 H748"/>
+    <path class="flow" d="M124 30 H748"/>
+
+    <g class="in-2">
+      <rect class="card" x="0" y="8" width="124" height="44" rx="8"/>
+      <text class="chip" x="14" y="28">Researcher</text>
+      <text class="tiny" x="14" y="43">search · web</text>
+    </g>
+
+    <g class="in-3">
+      <rect class="gov" x="182" y="8" width="134" height="44" rx="8"/>
+      <text class="chip" x="196" y="28" fill="#8fc2f0">Governor</text>
+      <text class="tiny" x="196" y="43">allow · cap · gate</text>
+      <circle class="spark breathe" cx="302" cy="20" r="3"/>
+    </g>
+
+    <g class="in-3">
+      <rect class="card" x="374" y="8" width="134" height="44" rx="8"/>
+      <text class="chip" x="388" y="28">Summariser</text>
+      <text class="tiny" x="388" y="43">reads what was found</text>
+    </g>
+
+    <g class="in-4">
+      <rect class="card" x="566" y="8" width="124" height="44" rx="8"/>
+      <text class="chip" x="580" y="28">Approval</text>
+      <text class="tiny" x="580" y="43">a person says yes</text>
+    </g>
+
+    <g class="in-4">
+      <rect class="card" x="748" y="8" width="124" height="44" rx="8"/>
+      <text class="chip" x="762" y="28">report.md</text>
+      <text class="tiny" x="762" y="43">on your disk</text>
+      <circle class="ok breathe" cx="858" cy="20" r="3"/>
+    </g>
+  </g>
+</svg>

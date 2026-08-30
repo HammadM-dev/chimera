@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" role="img" aria-label="One normalised interface above many providers: Anthropic, OpenAI, Google, OpenRouter, OmniRoute, Ollama and LM Studio all reached through adapters, so swapping model is a dropdown rather than a rewrite.">
+  <title>Any provider, one interface</title>
+  <style>
+    .bg { fill: #0d0d0c; }
+    .card { fill: #161614; stroke: #2a2825; stroke-width: 1; }
+    .iface { fill: #14202e; stroke: #4a8fd4; stroke-width: 1.4; }
+    .h { font: 500 13px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .hh { font: 500 14px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .s { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #a3a09a; }
+    .t { font: 400 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #6f6c66; }
+    .wire { stroke: #2f2c29; stroke-width: 1.4; fill: none; }
+
+    /* Each lane lights in turn — the same request going a different way. */
+    .lane { stroke: #4a8fd4; stroke-width: 2; fill: none; stroke-linecap: round;
+            opacity: 0; animation: lane 7s ease-in-out infinite; }
+    .l1 { animation-delay: 0s } .l2 { animation-delay: 1s } .l3 { animation-delay: 2s }
+    .l4 { animation-delay: 3s } .l5 { animation-delay: 4s } .l6 { animation-delay: 5s }
+    .l7 { animation-delay: 6s }
+    @keyframes lane { 0%, 14%, 100% { opacity: 0 } 4%, 10% { opacity: .95 } }
+
+    @media (prefers-reduced-motion: reduce) { .lane { animation: none; opacity: .35 } }
+  </style>
+
+  <rect class="bg" width="880" height="300" rx="10"/>
+  <text class="hh" x="28" y="34">One interface, whatever is underneath</text>
+
+  <!-- the app side -->
+  <rect class="card" x="28" y="108" width="150" height="58" rx="9"/>
+  <text class="h" x="44" y="132">Your automation</text>
+  <text class="t" x="44" y="149">a model is a dropdown</text>
+
+  <path class="wire" d="M178 137 H262"/>
+
+  <rect class="iface" x="262" y="96" width="168" height="82" rx="10"/>
+  <text class="h" x="346" y="126" text-anchor="middle" fill="#8fc2f0">Adapters</text>
+  <text class="t" x="346" y="145" text-anchor="middle">one normalised shape</text>
+  <text class="t" x="346" y="161" text-anchor="middle">differences live only here</text>
+
+  <!-- lanes out to each provider -->
+  <g class="wire">
+    <path d="M430 137 C480 137 490 34 540 34"/>
+    <path d="M430 137 C480 137 490 68 540 68"/>
+    <path d="M430 137 C480 137 490 102 540 102"/>
+    <path d="M430 137 H540"/>
+    <path d="M430 137 C480 137 490 172 540 172"/>
+    <path d="M430 137 C480 137 490 206 540 206"/>
+    <path d="M430 137 C480 137 490 240 540 240"/>
+  </g>
+  <g fill="none">
+    <path class="lane l1" d="M430 137 C480 137 490 34 540 34"/>
+    <path class="lane l2" d="M430 137 C480 137 490 68 540 68"/>
+    <path class="lane l3" d="M430 137 C480 137 490 102 540 102"/>
+    <path class="lane l4" d="M430 137 H540"/>
+    <path class="lane l5" d="M430 137 C480 137 490 172 540 172"/>
+    <path class="lane l6" d="M430 137 C480 137 490 206 540 206"/>
+    <path class="lane l7" d="M430 137 C480 137 490 240 540 240"/>
+  </g>
+
+  <g>
+    <rect class="card" x="540" y="18" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="34" r="5" fill="#d97757"/><text class="s" x="574" y="38">Anthropic</text>
+    <rect class="card" x="540" y="52" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="68" r="5" fill="#10a37f"/><text class="s" x="574" y="72">OpenAI</text>
+    <rect class="card" x="540" y="86" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="102" r="5" fill="#4285f4"/><text class="s" x="574" y="106">Google</text>
+    <rect class="card" x="540" y="120" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="136" r="5" fill="#8b7fd4"/><text class="s" x="574" y="140">OpenRouter</text>
+    <rect class="card" x="540" y="156" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="172" r="5" fill="#5ac8c8"/><text class="s" x="574" y="176">OmniRoute</text>
+    <rect class="card" x="540" y="190" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="206" r="5" fill="#dcdcdc"/><text class="s" x="574" y="210">Ollama</text>
+    <rect class="card" x="540" y="224" width="130" height="32" rx="7"/>
+    <circle cx="558" cy="240" r="5" fill="#a3a09a"/><text class="s" x="574" y="244">LM Studio</text>
+  </g>
+
+  <g class="t">
+    <text x="694" y="38">hosted</text>
+    <text x="694" y="72">hosted</text>
+    <text x="694" y="106">hosted</text>
+    <text x="694" y="140">gateway</text>
+    <text x="694" y="176">gateway</text>
+    <text x="694" y="210">on your machine</text>
+    <text x="694" y="244">on your machine</text>
+  </g>
+
+  <text class="s" x="28" y="286">Prices and context windows are read from the live catalogue, so the cost shown is the cost charged. Local models mean no outbound traffic at all.</text>
+</svg>

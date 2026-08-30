@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 300" width="880" height="300" role="img" aria-label="The pieces an automation is built from: agents, a branch, a loop, a fan-out, an approval gate, a swarm, and a nested automation.">
+  <title>What an automation is made of</title>
+  <style>
+    .bg { fill: #0d0d0c; }
+    .card { fill: #161614; stroke: #2a2825; stroke-width: 1; }
+    .hh { font: 500 14px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .h { font: 500 12px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .s { font: 400 10.5px ui-sans-serif, system-ui, sans-serif; fill: #a3a09a; }
+    .t { font: 400 9.5px ui-monospace, Menlo, monospace; fill: #6f6c66; }
+
+    .pip { animation: pip 5s ease-in-out infinite; }
+    @keyframes pip { 0%, 100% { opacity: .3 } 50% { opacity: 1 } }
+    @media (prefers-reduced-motion: reduce) { .pip { animation: none; opacity: .8 } }
+  </style>
+
+  <rect class="bg" width="880" height="300" rx="10"/>
+  <text class="hh" x="28" y="34">The pieces you build with</text>
+
+  <g>
+    <rect class="card" x="28" y="56" width="192" height="66" rx="9"/>
+    <circle class="pip" cx="46" cy="76" r="4" fill="#4a8fd4"/>
+    <text class="h" x="60" y="80">Agent</text>
+    <text class="s" x="44" y="99">A model with an instruction,</text>
+    <text class="s" x="44" y="113">tools, and limits it cannot exceed.</text>
+
+    <rect class="card" x="236" y="56" width="192" height="66" rx="9"/>
+    <circle class="pip" cx="254" cy="76" r="4" fill="#d9a441" style="animation-delay:.4s"/>
+    <text class="h" x="268" y="80">Branch</text>
+    <text class="s" x="252" y="99">Sends the run one way or the</text>
+    <text class="s" x="252" y="113">other on what it found.</text>
+
+    <rect class="card" x="444" y="56" width="192" height="66" rx="9"/>
+    <circle class="pip" cx="462" cy="76" r="4" fill="#d9a441" style="animation-delay:.8s"/>
+    <text class="h" x="476" y="80">Loop</text>
+    <text class="s" x="460" y="99">Repeats a section, with a limit</text>
+    <text class="s" x="460" y="113">it must declare to be saved.</text>
+
+    <rect class="card" x="652" y="56" width="200" height="66" rx="9"/>
+    <circle class="pip" cx="670" cy="76" r="4" fill="#4a8fd4" style="animation-delay:1.2s"/>
+    <text class="h" x="684" y="80">Fan-out</text>
+    <text class="s" x="668" y="99">Runs the same work over a list,</text>
+    <text class="s" x="668" y="113">several at a time.</text>
+
+    <rect class="card" x="28" y="140" width="192" height="66" rx="9"/>
+    <circle class="pip" cx="46" cy="160" r="4" fill="#d4614a" style="animation-delay:1.6s"/>
+    <text class="h" x="60" y="164">Approval</text>
+    <text class="s" x="44" y="183">Stops for a person, and passes</text>
+    <text class="s" x="44" y="197">on what they approved.</text>
+
+    <rect class="card" x="236" y="140" width="192" height="66" rx="9"/>
+    <circle class="pip" cx="254" cy="160" r="4" fill="#5aa76f" style="animation-delay:2s"/>
+    <text class="h" x="268" y="164">Swarm</text>
+    <text class="s" x="252" y="183">Puts a question to a crowd</text>
+    <text class="s" x="252" y="197">and reads where they land.</text>
+
+    <rect class="card" x="444" y="140" width="192" height="66" rx="9"/>
+    <circle class="pip" cx="462" cy="160" r="4" fill="#5aa76f" style="animation-delay:2.4s"/>
+    <text class="h" x="476" y="164">Transform</text>
+    <text class="s" x="460" y="183">Reshapes what came back</text>
+    <text class="s" x="460" y="197">without a model call.</text>
+
+    <rect class="card" x="652" y="140" width="200" height="66" rx="9"/>
+    <circle class="pip" cx="670" cy="160" r="4" fill="#4a8fd4" style="animation-delay:2.8s"/>
+    <text class="h" x="684" y="164">Nested automation</text>
+    <text class="s" x="668" y="183">A whole automation used as</text>
+    <text class="s" x="668" y="197">one step of another.</text>
+  </g>
+
+  <text class="t" x="28" y="248">Every step declares what it may reach and what it may spend. The editor refuses to save a loop with no exit, a fourth</text>
+  <text class="t" x="28" y="264">input into an agent not built to combine, or a step that would reach an irreversible tool with nobody to approve it.</text>
+  <text class="s" x="28" y="288">Saved automations are documents with a schema version — they survive an upgrade, and a change to the shape bumps the version.</text>
+</svg>

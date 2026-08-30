@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 340" width="880" height="340" role="img" aria-label="Five layers of defence, outermost first: capability allowlists, egress allowlists, human approval for anything irreversible, declared bounds on every loop, and spend and step caps. Prompt wording is the last layer, not the first.">
+  <title>What stops an agent, in order</title>
+  <style>
+    .bg { fill: #0d0d0c; }
+    .hh { font: 500 14px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .h { font: 500 12.5px ui-sans-serif, system-ui, sans-serif; fill: #f5f3ee; }
+    .s { font: 400 11px ui-sans-serif, system-ui, sans-serif; fill: #a3a09a; }
+    .t { font: 400 10px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #6f6c66; }
+    .n { font: 500 11px ui-monospace, Menlo, monospace; fill: #6f6c66; }
+
+    .band { fill: #161614; stroke: #2a2825; stroke-width: 1; }
+    .hard { stroke: #5aa76f; }
+    .soft { stroke: #6f6c66; stroke-dasharray: 4 4; }
+
+    /* An attempt runs at the wall and is turned back. */
+    .try { fill: #d4614a; animation: nudge 4.4s ease-in-out infinite; }
+    @keyframes nudge {
+      0%, 100% { transform: translateX(0); opacity: .3 }
+      /* Stops at the wall rather than crossing it — the point is that it is
+         turned back, and a dot that lands on the words has crossed. */
+      35% { transform: translateX(38px); opacity: 1 }
+      50% { transform: translateX(30px); opacity: 1 }
+      70% { transform: translateX(0); opacity: .3 }
+    }
+    @media (prefers-reduced-motion: reduce) { .try { animation: none; opacity: .7 } }
+  </style>
+
+  <rect class="bg" width="880" height="340" rx="10"/>
+  <text class="hh" x="28" y="34">What stops an agent, in the order it stops it</text>
+
+  <g>
+    <rect class="band hard" x="120" y="56" width="600" height="44" rx="8"/>
+    <text class="n" x="136" y="83">1</text>
+    <text class="h" x="164" y="76">Capability allowlist</text>
+    <text class="s" x="164" y="92">It holds only the tools its role needs. The rest do not exist to it.</text>
+
+    <rect class="band hard" x="120" y="108" width="600" height="44" rx="8"/>
+    <text class="n" x="136" y="135">2</text>
+    <text class="h" x="164" y="128">Egress allowlist</text>
+    <text class="s" x="164" y="144">It reaches named hosts only. Every redirect is checked again.</text>
+
+    <rect class="band hard" x="120" y="160" width="600" height="44" rx="8"/>
+    <text class="n" x="136" y="187">3</text>
+    <text class="h" x="164" y="180">Human approval</text>
+    <text class="s" x="164" y="196">Sending, publishing, buying, deleting — a person says yes first.</text>
+
+    <rect class="band hard" x="120" y="212" width="600" height="44" rx="8"/>
+    <text class="n" x="136" y="239">4</text>
+    <text class="h" x="164" y="232">Declared bounds</text>
+    <text class="s" x="164" y="248">Every loop states its limit. The editor will not save one that does not.</text>
+
+    <rect class="band soft" x="120" y="264" width="600" height="44" rx="8"/>
+    <text class="n" x="136" y="291">5</text>
+    <text class="h" x="164" y="284">Prompt wording</text>
+    <text class="s" x="164" y="300">The outermost layer, and the only one that can be talked out of.</text>
+  </g>
+
+  <!-- the attempt -->
+  <g transform="translate(40,0)">
+    <circle class="try" cx="30" cy="78" r="6"/>
+    <circle class="try" cx="30" cy="130" r="6" style="animation-delay:.5s"/>
+    <circle class="try" cx="30" cy="182" r="6" style="animation-delay:1s"/>
+  </g>
+
+  <g class="t">
+    <text x="736" y="83">enforced</text>
+    <text x="736" y="135">enforced</text>
+    <text x="736" y="187">enforced</text>
+    <text x="736" y="239">enforced</text>
+    <text x="736" y="291">asked</text>
+  </g>
+</svg>
