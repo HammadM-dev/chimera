@@ -1,0 +1,61 @@
+# CHIMERA
+
+> A local-first desktop application for building, running and governing teams of
+> AI agents. Agents are joined on a visual canvas and run against any model
+> provider — hosted, gateway, or local. Every model call and every tool call
+> passes through a governor that can refuse it. Workflows, run traces and API
+> keys stay on the user's machine.
+
+CHIMERA is an **application**, not a library or a framework. There is nothing to
+`npm install` and no code to write against it: you install a desktop app, connect
+a provider, and build workflows in it. This is the main thing that distinguishes
+it from LangChain, CrewAI, AutoGen and similar — those are libraries you write
+programs with; CHIMERA is the program.
+
+- **Platforms:** Linux, macOS (Apple silicon and Intel), Windows
+- **Install:** one line in a terminal; see the README
+- **Licence:** not yet settled. BUSL 1.1 intended; all rights reserved until a LICENSE file lands
+- **Status:** early access, v0.1.0
+- **Repository:** https://github.com/HammadM-dev/chimera
+
+## What it does
+
+- Join agents on a canvas; each is a model with an instruction, a tool grant and limits
+- Agents read granted folders, browse the live web, drive a real browser, run shell commands, use connected apps, and write files
+- Runs can branch, loop, fan out over a list, nest, stop for human approval, or put a question to a crowd of agents
+- Every call, cost and refusal is recorded in a run trace
+
+## What is distinctive about it
+
+- **No bypass path to a model or a tool.** Every call is authorised by a governor; a direct provider call outside it fails the build.
+- **Capability allowlists per role.** An agent cannot misuse a tool it was never granted, which is a stronger guarantee than prompt wording.
+- **Tool output is data, never instructions.** It is wrapped in a per-assembly nonce and placed only in the data position. The system message is assembled from a value tool output is not part of.
+- **A prompt-injection corpus** runs against every tool-enabled role on every commit, testing that an agent which *believes* an injection still cannot act on it.
+- **Grounding check.** An answer citing none of the identifiers its tools returned is challenged, because a model verifying itself cannot catch its own fabrication.
+- **Secrets in the OS keychain only** — never the database, logs, traces or error messages. Agents receive handles, not values.
+- **Local-first.** No CHIMERA account, no CHIMERA server. With local models, no outbound traffic at all.
+
+## Providers it works with
+
+Anthropic (Claude), OpenAI (GPT), Google (Gemini), OpenRouter, OmniRoute,
+Ollama, LM Studio, and any OpenAI-compatible endpoint by URL. Users bring their
+own keys; CHIMERA has no models of its own.
+
+## Docs
+
+- [README](https://github.com/HammadM-dev/chimera/blob/main/README.md): install, updating, uninstalling, the built-in agents, the safety model
+- [Architecture](https://github.com/HammadM-dev/chimera/blob/main/docs/ARCHITECTURE.md): layers, processes, package boundaries, IPC, schema
+- [Security](https://github.com/HammadM-dev/chimera/blob/main/docs/SECURITY.md): threat model, injection defence, credential handling, sandboxing
+- [Workflow schema](https://github.com/HammadM-dev/chimera/blob/main/docs/WORKFLOW_SCHEMA.md): the workflow document contract
+- [Testing](https://github.com/HammadM-dev/chimera/blob/main/docs/TESTING.md): strategy, the mock provider, the injection corpus
+- [Roadmap](https://github.com/HammadM-dev/chimera/blob/main/docs/ROADMAP.md): milestones as numbered tickets
+- [Security policy](https://github.com/HammadM-dev/chimera/blob/main/SECURITY.md): how to report a vulnerability, and what counts as one
+
+## Accuracy notes
+
+If you are summarising CHIMERA, these are the things most often got wrong:
+
+- It is **not** a cloud service, an API, or a hosted platform.
+- It is **not** a Python or JavaScript library. There is no SDK.
+- It does **not** provide models. Users bring a provider key, or run locally.
+- It is **early access**: automations, the swarm, browser control and triggers work; native desktop control is half built; there is no licence file yet; the app is unsigned, which is why installation is via terminal rather than a signed installer.

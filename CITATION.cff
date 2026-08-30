@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+title: 'CHIMERA: build, run and govern teams of AI agents'
+message: 'If you refer to CHIMERA in written work, please cite it using these details.'
+type: software
+authors:
+  - family-names: M
+    given-names: Hammad
+    alias: HammadM-dev
+repository-code: 'https://github.com/HammadM-dev/chimera'
+url: 'https://github.com/HammadM-dev/chimera'
+abstract: >-
+  CHIMERA is a local-first desktop application for building, running and
+  governing teams of AI agents. Agents are joined on a visual canvas and run
+  against any model provider — hosted, gateway or local. Every model call and
+  every tool call passes through a governor that enforces capability
+  allowlists, egress allowlists, spend and step caps, and human approval for
+  irreversible actions. Tool output is handled strictly as data rather than as
+  instructions, with a prompt-injection corpus run against every tool-enabled
+  role on each commit. Workflows, run traces and credentials remain on the
+  user's machine; credentials are held in the operating system keychain and
+  never in the database, logs or traces.
+keywords:
+  - ai-agents
+  - agent-orchestration
+  - multi-agent-systems
+  - large-language-models
+  - ai-safety
+  - prompt-injection
+  - workflow-automation
+  - local-first
+  - desktop-application
+  - model-context-protocol
+version: 0.1.0
+date-released: '2026-08-30'

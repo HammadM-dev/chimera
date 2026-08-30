@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" role="img" aria-label="CHIMERA — build, run and govern teams of AI agents. Any model provider, local first, every call through a governor.">
+  <title>CHIMERA</title>
+  <defs>
+    <linearGradient id="fade" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#131311"/>
+      <stop offset="100%" stop-color="#0b0b0a"/>
+    </linearGradient>
+    <linearGradient id="rule" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#4a8fd4" stop-opacity="0"/>
+      <stop offset="35%" stop-color="#4a8fd4" stop-opacity=".9"/>
+      <stop offset="100%" stop-color="#5aa76f" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <style>
+    .name { font: 500 92px ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+            fill: #f5f3ee; letter-spacing: 0.2em; }
+    .tag  { font: 400 31px ui-sans-serif, system-ui, -apple-system, sans-serif; fill: #cfcbc3; }
+    .sub  { font: 400 22px ui-sans-serif, system-ui, sans-serif; fill: #8e8b85; }
+    .chip { font: 500 20px ui-sans-serif, system-ui, sans-serif; fill: #c9c5bd; }
+    .mono { font: 400 21px ui-monospace, SFMono-Regular, Menlo, monospace; fill: #7d9dc0; }
+  </style>
+
+  <rect width="1280" height="640" fill="url(#fade)"/>
+
+  <!-- a faint grid, so the flat ground has some structure -->
+  <g stroke="#1c1a18" stroke-width="1">
+    <path d="M0 160 H1280 M0 320 H1280 M0 480 H1280"/>
+    <path d="M256 0 V640 M512 0 V640 M768 0 V640 M1024 0 V640"/>
+  </g>
+
+  <!-- mark: three interlocking arcs, echoing the app icon -->
+  <g transform="translate(158,150)" fill="none" stroke="#f5f3ee" stroke-width="11">
+    <circle cx="0" cy="-21" r="27" opacity=".95"/>
+    <circle cx="18" cy="11" r="27" opacity=".78"/>
+    <circle cx="-18" cy="11" r="27" opacity=".62"/>
+  </g>
+
+  <text class="name" x="96" y="300">CHIMERA</text>
+  <path d="M98 340 H760" stroke="url(#rule)" stroke-width="4"/>
+
+  <text class="tag" x="96" y="392">Build, run and govern teams of AI agents</text>
+  <text class="sub" x="96" y="434">A desktop app. Any model provider. Local models included.</text>
+  <text class="sub" x="96" y="468">Your keys and your data never leave your machine.</text>
+
+  <!-- what it is, in the words somebody would search for -->
+  <g transform="translate(96,528)">
+    <rect x="0" y="0" width="196" height="42" rx="21" fill="#161614" stroke="#312e2a"/>
+    <circle cx="26" cy="21" r="5" fill="#4a8fd4"/>
+    <text class="chip" x="44" y="28">visual canvas</text>
+
+    <rect x="212" y="0" width="228" height="42" rx="21" fill="#161614" stroke="#312e2a"/>
+    <circle cx="238" cy="21" r="5" fill="#5aa76f"/>
+    <text class="chip" x="256" y="28">every call governed</text>
+
+    <rect x="460" y="0" width="238" height="42" rx="21" fill="#161614" stroke="#312e2a"/>
+    <circle cx="486" cy="21" r="5" fill="#d9a441"/>
+    <text class="chip" x="504" y="28">injection defences</text>
+
+    <rect x="718" y="0" width="168" height="42" rx="21" fill="#161614" stroke="#312e2a"/>
+    <circle cx="744" cy="21" r="5" fill="#8b7fd4"/>
+    <text class="chip" x="762" y="28">local first</text>
+  </g>
+
+  <!-- the install line, because it is the strongest single signal -->
+  <g transform="translate(940,120)">
+    <rect x="0" y="0" width="252" height="150" rx="14" fill="#131312" stroke="#2a2825"/>
+    <circle cx="24" cy="26" r="5" fill="#d4614a"/>
+    <circle cx="42" cy="26" r="5" fill="#d9a441"/>
+    <circle cx="60" cy="26" r="5" fill="#5aa76f"/>
+    <text class="mono" x="24" y="72">$ curl … | sh</text>
+    <text class="mono" x="24" y="104" fill="#8e8b85">$ chimera</text>
+    <text class="mono" x="24" y="134" fill="#5aa76f">▍ready</text>
+  </g>
+
+  <text class="sub" x="1184" y="600" text-anchor="end" fill="#6f6c66">github.com/HammadM-dev/chimera</text>
+</svg>

@@ -1,0 +1,60 @@
+name: Bug report
+description: Something in CHIMERA does not do what it says it does
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting this.
+
+        **If it is a security problem, please do not use this form** — see
+        [SECURITY.md](https://github.com/HammadM-dev/chimera/blob/main/SECURITY.md)
+        for private reporting.
+
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: From the update strip, or `chimera --version`
+      placeholder: '0.1.0'
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: trace
+    attributes:
+      label: The run trace, if an automation was involved
+      description: |
+        Open the run, expand the steps, and paste what it shows. This is usually
+        the fastest route to a diagnosis.
+
+        **Read it before pasting.** A trace can contain the content your agents
+        read — your files, your pages, your data. It never contains API keys.
+      render: text
+
+  - type: input
+    id: models
+    attributes:
+      label: Provider and model
+      description: Which provider and model the run used, if relevant.
+      placeholder: 'OpenRouter · some-model:free'

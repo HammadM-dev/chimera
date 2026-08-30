@@ -962,6 +962,8 @@ all rights reserved. Read it, build it, run it; ask before anything else.
 | [`docs/TESTING.md`](docs/TESTING.md)                 | Test strategy, the mock provider, the injection corpus     |
 | [`docs/ROADMAP.md`](docs/ROADMAP.md)                 | Milestones, as numbered tickets                            |
 | [`docs/DISCOVERY.md`](docs/DISCOVERY.md)             | How this repository is meant to be found                   |
+| [`SECURITY.md`](SECURITY.md)                         | Reporting a vulnerability, and what counts as one here      |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md)                 | Running it, the checks CI enforces, what a good change is   |
 | [`CLAUDE.md`](CLAUDE.md)                             | The standing contract for this repository                  |
 
 ### Building from source
