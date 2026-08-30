@@ -77,6 +77,16 @@ export interface InstructionSource {
    * which grows every turn regardless.
    */
   turnsLeft?: number;
+  /**
+   * Tools that have failed this step, and how many times each.
+   *
+   * Counts and tool ids only — never the failure text. That text came back
+   * from a tool and is attacker-controllable, and this object is the one thing
+   * that reaches the system message. A page that fails to load must not be
+   * able to write instructions into the instruction position by putting them
+   * in its error.
+   */
+  struggling?: readonly { toolId: string; failures: number }[];
 }
 
 export interface ToolSummary {
@@ -228,12 +238,45 @@ export function assembleSystemMessage(instructions: InstructionSource): string {
     ...(permissionLines(instructions).length === 0
       ? []
       : ['', ...permissionLines(instructions)]),
+    ...(recoveryLines(instructions).length === 0 ? [] : ['', ...recoveryLines(instructions)]),
     ...(outputContractLine(instructions.role) === ''
       ? []
       : ['', outputContractLine(instructions.role)]),
     '',
     ENVELOPE_EXPLANATION,
   ].join('\n');
+}
+
+/**
+ * What to do about something that has already failed.
+ *
+ * An agent that hits an error is told the error and nothing else, so it does
+ * the obvious thing: the same call again. A researcher whose search came back
+ * unusable searched again, reworded, searched again, and reached its iteration
+ * limit having learned nothing — and every one of those turns cost a model
+ * call. Being told "this has failed twice" is what turns a retry into a change
+ * of approach.
+ *
+ * Only counts and tool ids reach here. The failure text stays in the data
+ * position where it belongs.
+ */
+function recoveryLines(instructions: InstructionSource): string[] {
+  const struggling = (instructions.struggling ?? []).filter((entry) => entry.failures >= 2);
+  if (struggling.length === 0) return [];
+
+  const lines = struggling.map(
+    (entry) =>
+      `- ${entry.toolId} has failed ${String(entry.failures)} times in this step.`,
+  );
+
+  return [
+    'Some of what you have tried is not working:',
+    ...lines,
+    'Do not call it the same way again. Change the arguments, try a different tool, or work ' +
+      'with what you already have. If none of that is possible, say plainly what you could not ' +
+      'get and hand on what you did get — an honest partial answer is worth more than another ' +
+      'turn spent failing the same way, and far more than an invented one.',
+  ];
 }
 
 /**

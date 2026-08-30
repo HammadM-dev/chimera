@@ -286,6 +286,24 @@ function causeOfDenial(code: string): HaltCause {
   return 'limit';
 }
 
+/**
+ * How many times each tool has failed in this step.
+ *
+ * Ids and counts only. The failure text stays in the observations, where it is
+ * labelled untrusted; this feeds the system message, which nothing
+ * attacker-controllable may reach.
+ */
+export function failureCounts(
+  observations: readonly ToolObservation[],
+): { toolId: string; failures: number }[] {
+  const counts = new Map<string, number>();
+  for (const observation of observations) {
+    if (observation.isError !== true) continue;
+    counts.set(observation.toolId, (counts.get(observation.toolId) ?? 0) + 1);
+  }
+  return [...counts].map(([toolId, failures]) => ({ toolId, failures }));
+}
+
 /** Injectable-free on purpose: the delay is the Governor's number, not a policy here. */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -633,6 +651,11 @@ export async function runAgentLoop(task: AgentTask, deps: AgentLoopDeps): Promis
         // as on its first — which is how a researcher asked for ten cars spent
         // its whole budget looking and handed back one.
         turnsLeft: Math.max(0, task.role.maxIterations - iteration),
+        // What has gone wrong so far, so the agent can change course instead
+        // of repeating it. Counted from the observations rather than tracked
+        // separately: the observations are the record of what actually
+        // happened, and a second tally would be a second thing to keep true.
+        struggling: failureCounts(observations),
         ...(task.placement ? { placement: task.placement } : {}),
       },
       history: [...history, ...extraMessages],

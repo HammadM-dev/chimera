@@ -17,7 +17,7 @@ import { Governor } from '../governor/Governor.ts';
 import { deny } from '../governor/Governor.ts';
 import type { ModelCallAuthorization, ToolCallAuthorization } from '../governor/types.ts';
 import { STARTER_ROLES, type Role } from './roleRegistry.ts';
-import { parseVerification, runAgentLoop, type Cancellation } from './agentLoop.ts';
+import { parseVerification, runAgentLoop, type Cancellation, failureCounts } from './agentLoop.ts';
 
 const AUTH_REF = 'vault:connection:00000000-0000-0000-0000-000000000000' as never;
 const CALL_OPTIONS: AdapterCallOptions = { authRef: AUTH_REF };
@@ -1139,4 +1139,22 @@ test('a plan is an intention too, even when the acting turn says nothing', async
   } finally {
     await h.cleanup();
   }
+});
+
+test('failures are counted per tool, and successes are not', () => {
+  const counted = failureCounts([
+    { callId: '1', toolId: 'search.web', output: 'nope', isError: true },
+    { callId: '2', toolId: 'search.web', output: 'nope again', isError: true },
+    { callId: '3', toolId: 'search.web', output: 'fine', isError: false },
+    { callId: '4', toolId: 'http.request', output: '403', isError: true },
+    { callId: '5', toolId: 'filesystem.readFile', output: 'contents', isError: false },
+  ]);
+
+  assert.deepEqual(
+    [...counted].sort((a, b) => a.toolId.localeCompare(b.toolId)),
+    [
+      { toolId: 'http.request', failures: 1 },
+      { toolId: 'search.web', failures: 2 },
+    ],
+  );
 });

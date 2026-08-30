@@ -1063,3 +1063,56 @@
 .canvas__link:hover {
   color: var(--text-primary);
 }
+
+/* What a step did, inside the step.
+ *
+ * The step list showed the sentence a step ended on and nothing about how it
+ * got there, so a run that went wrong showed the complaint and hid the working.
+ * This is the working — and the failures are the half worth reading, so they
+ * are the half that is coloured. */
+
+.worklog {
+  margin: 0 0 var(--space-3);
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.worklog__line {
+  position: relative;
+  padding-left: var(--space-4);
+  font-size: var(--type-meta);
+  line-height: var(--line-height-prose);
+  color: var(--text-secondary);
+}
+
+/* A tick for everything that worked, so the eye has a column to run down and
+ * anything breaking that column is what went wrong. */
+.worklog__line::before {
+  content: '';
+  position: absolute;
+  left: var(--space-2);
+  top: 0.62em;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--border-stronger);
+}
+
+.worklog__line--problem {
+  color: var(--semantic-danger);
+}
+
+.worklog__line--problem::before {
+  content: '!';
+  left: var(--space-1);
+  top: 0;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  color: var(--semantic-danger);
+  font-weight: var(--font-weight-medium);
+}

@@ -668,6 +668,17 @@ function CanvasInner({
   const [swarmThreadId, setSwarmThreadId] = useState<string | null>(null);
   const [stepStatus, setStepStatus] = useState<Record<string, string>>({});
   const [stepOutput, setStepOutput] = useState<Record<string, string>>({});
+  /**
+   * What each step actually did, in order, as it did it.
+   *
+   * The step list used to show only the answer a step ended with, so a run that
+   * went wrong showed the sentence about going wrong and nothing about what led
+   * there. This is the working: the searches, the pages, the files — and the
+   * failures, which is the half worth reading when something did not work.
+   */
+  const [stepActivity, setStepActivity] = useState<
+    Record<string, { text: string; kind: string; at: number }[]>
+  >({});
   const [resultOpen, setResultOpen] = useState(false);
   const [runNote, setRunNote] = useState('');
   const [runOutput, setRunOutput] = useState('');
@@ -1001,6 +1012,17 @@ function CanvasInner({
             [detail.nodeId]: detail.outcome?.output ?? '',
           }));
         }
+      } else if (event.type === 'activity') {
+        const line = event.data as { nodeId: string; text: string; kind: string; at: number };
+        if (typeof line.nodeId !== 'string' || line.nodeId === '') return;
+        setStepActivity((current) => {
+          const existing = current[line.nodeId] ?? [];
+          const last = existing[existing.length - 1];
+          // The same line twice running is one line. A page fetched in a loop
+          // otherwise fills the panel with the same sentence.
+          if (last && last.text === line.text && last.kind === line.kind) return current;
+          return { ...current, [line.nodeId]: [...existing, line] };
+        });
       } else if (event.type === 'approval:requested') {
         setPending(event.data as PendingApproval);
         setApprovalNote('');
@@ -1378,6 +1400,7 @@ function CanvasInner({
     setRunOutput('');
     setStepStatus({});
     setStepOutput({});
+    setStepActivity({});
     setResultOpen(false);
     setPending(null);
     try {
@@ -1948,6 +1971,21 @@ function CanvasInner({
                             {stepStatus[node.id] ?? ''}
                           </span>
                         </summary>
+                        {(stepActivity[node.id] ?? []).length > 0 && (
+                          <ol className="worklog" data-testid="step-worklog">
+                            {(stepActivity[node.id] ?? []).map((line, index) => (
+                              <li
+                                key={`${String(line.at)}-${String(index)}`}
+                                className={`worklog__line${
+                                  line.kind === 'problem' ? ' worklog__line--problem' : ''
+                                }`}
+                                data-kind={line.kind}
+                              >
+                                {line.text}
+                              </li>
+                            ))}
+                          </ol>
+                        )}
                         <pre className="result__answer">{stepOutput[node.id]}</pre>
                       </details>
                     ))}
