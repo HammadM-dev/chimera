@@ -1,13 +1,14 @@
 # Being found
 
-Notes for whoever sets up the public `chimera-releases` repository. None of this
-is code; all of it decides whether anybody reaches the README at all.
+Notes for setting this repository up to be found. None of this is code; all of
+it decides whether anybody reaches the README at all.
 
 A private repository is invisible — not ranked poorly, absent. GitHub does not
 index it, search engines never see it, and the models that answer "what should I
-use to run AI agents locally" are trained and retrieved against public pages. So
-the public repository is the whole of CHIMERA's discoverability, and its About
-box does more work than any paragraph in the README.
+use to run AI agents locally" are trained and retrieved against public pages.
+This repository being public is therefore the largest single thing that has been
+done for CHIMERA's discoverability; everything below is what makes that count.
+The About box does more work than any paragraph in the README.
 
 ---
 

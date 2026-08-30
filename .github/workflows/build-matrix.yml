@@ -60,6 +60,8 @@ jobs:
 
   build:
     needs: plan
+    permissions:
+      contents: write
     strategy:
       # Each platform reports independently. A Windows packaging failure must
       # not hide whether macOS and Linux are healthy — that is most of the
@@ -96,13 +98,13 @@ jobs:
       # people can download and an updater that never fires, which is the half
       # of shipping that fails quietly.
       #
-      # The token is a PAT, not the workflow's own GITHUB_TOKEN: releases go to
-      # a different repository (see electron-builder.yml) and the built-in
-      # token is scoped to this one.
+      # The workflow's own token, because releases are published to this same
+      # repository. `contents: write` is granted below rather than at the top
+      # of the file so that every other job keeps the read-only default.
       - name: Publish release (unsigned)
         if: ${{ startsWith(github.ref, 'refs/tags/v') }}
         env:
-          GH_TOKEN: ${{ secrets.RELEASES_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release --workspace @chimera/desktop
 
       # Electron needs a display server on Linux even to open a window it never

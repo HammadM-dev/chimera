@@ -1,6 +1,6 @@
 # CHIMERA installer for Windows.
 #
-#   irm https://raw.githubusercontent.com/HammadM-dev/chimera-releases/main/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.ps1 | iex
 #
 # Downloads the latest release into the user's own profile and puts `chimera`
 # on PATH. No admin rights, nothing in Program Files, nothing in the registry
@@ -13,7 +13,7 @@
 
 $ErrorActionPreference = 'Stop'
 
-$Repo = 'HammadM-dev/chimera-releases'
+$Repo = 'HammadM-dev/chimera'
 $Root = Join-Path $env:LOCALAPPDATA 'Programs\CHIMERA'
 
 function Fail($message) {
@@ -28,7 +28,7 @@ try {
     $release = Invoke-RestMethod -Uri "https://api.github.com/repos/$Repo/releases/latest" `
         -Headers @{ 'User-Agent' = 'chimera-installer' }
 } catch {
-    Fail "could not read $Repo's releases. If that repository is private, its assets cannot be downloaded without a token."
+    Fail "could not read $Repo's releases — there may not be one published yet."
 }
 
 $version = $release.tag_name

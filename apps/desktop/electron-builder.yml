@@ -17,12 +17,16 @@ executableName: chimera
 
 # Where updates come from, and where downloads come from.
 #
-# A *public* repository holding nothing but releases, while the source stays
-# private. Both halves of shipping need this feed reachable without a
-# credential: a private repo's release assets return 404 to anyone without a
-# token, so the one-line installer would fail for every user and the updater
-# would report "could not check for updates" forever — on every machine, with
-# the app looking broken rather than private.
+# This repository, which is public. Both halves of shipping need the feed
+# reachable without a credential: a private repo's release assets return 404 to
+# anyone without a token, so the one-line installer would fail for every user
+# and the updater would say "could not check for updates" on every machine,
+# with the app looking broken rather than private.
+#
+# Publishing here rather than to a separate releases repository is what lets
+# the workflow use its own GITHUB_TOKEN. A second repo would need a personal
+# access token stored as a secret — a long-lived credential to maintain, and
+# one more thing to get wrong.
 #
 # `electron-updater` reads this same block at runtime — see
 # `src/updates/service.ts` — so publishing a release is the whole of shipping
@@ -30,7 +34,7 @@ executableName: chimera
 publish:
   provider: github
   owner: HammadM-dev
-  repo: chimera-releases
+  repo: chimera
 
 directories:
   output: release

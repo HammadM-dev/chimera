@@ -32,13 +32,13 @@ One line. No admin rights, nothing outside your home directory.
 **Linux and macOS**
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera-releases/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.sh | sh
 ```
 
 **Windows** (PowerShell)
 
 ```powershell
-irm https://raw.githubusercontent.com/HammadM-dev/chimera-releases/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.ps1 | iex
 ```
 
 Then start it:
@@ -200,6 +200,15 @@ Linux, macOS (Apple silicon and Intel) and Windows.
 the whole product against live models on two different providers on every
 change — but it is young, and the surfaces are still moving. If you hit
 something, the run trace will usually tell you exactly where it went wrong.
+
+<br>
+
+## Licence
+
+Not yet settled. The intended licence is BUSL 1.1 — source-available, with
+commercial restrictions that lapse on a fixed date — and the grant wording is
+with a lawyer. Until a `LICENSE` file lands here, the ordinary default applies:
+all rights reserved. Read it, build it, run it; ask before anything else.
 
 <br>
 

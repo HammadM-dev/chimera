@@ -1,7 +1,7 @@
 #!/bin/sh
 # CHIMERA installer.
 #
-#   curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera-releases/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/HammadM-dev/chimera/main/scripts/install.sh | sh
 #
 # Downloads the latest release, puts it somewhere sensible, and leaves a
 # `chimera` command on PATH. No root, no package manager, nothing outside the
@@ -22,7 +22,7 @@
 
 set -eu
 
-REPO="HammadM-dev/chimera-releases"
+REPO="HammadM-dev/chimera"
 PREFIX="${CHIMERA_PREFIX:-$HOME/.local}"
 LIB="$PREFIX/share/chimera"
 BIN="$PREFIX/bin"
@@ -55,15 +55,16 @@ esac
 
 say "Looking for the latest release..."
 
-# The releases repo is public, so this needs no token. If it ever 404s, that is
-# the repo being private rather than the network — worth saying, because the
-# generic "not found" sends people looking in the wrong place.
-# Overridable so the installer itself can be tested against a local release
-# before a real one exists, and so a mirror is possible later without a second
-# copy of this script. Defaults to GitHub, which is what every user gets.
+# The repository is public, so this needs no token — a 404 here means there is
+# no release yet rather than that something is wrong with the network, and the
+# message below says so.
+#
+# Overridable so the installer can be tested against a local release before a
+# real one exists, and so a mirror is possible later without a second copy of
+# this script. Defaults to GitHub, which is what every user gets.
 api="${CHIMERA_RELEASES_API:-https://api.github.com/repos/$REPO/releases/latest}"
 release="$(curl -fsSL "$api" 2>/dev/null)" || die \
-  "could not read $REPO's releases. If that repository is private, its assets cannot be downloaded without a token."
+  "could not read $REPO's releases — there may not be one published yet."
 
 version="$(printf '%s' "$release" | sed -n 's/.*"tag_name": *"\([^"]*\)".*/\1/p' | head -1)"
 [ -n "$version" ] || die "no released version found yet."
