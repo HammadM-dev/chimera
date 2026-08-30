@@ -115,10 +115,19 @@ export function get(db: Database.Database, id: string): SwarmRecord | undefined 
 /** Newest first. Archived ones are left out — they are hidden, not deleted. */
 export function list(db: Database.Database, limit = 200): SwarmRecord[] {
   return (
-    db
-      .prepare('SELECT * FROM swarms WHERE archived_at IS NULL ORDER BY updated_at DESC LIMIT ?')
-      .all(limit) as SwarmRow[]
-  ).map(toSwarm);
+    (
+      db
+        // `rowid` breaks the tie, and the tie is not hypothetical: two threads
+        // created in the same millisecond sort arbitrarily, so the list flipped
+        // order between reads on a fast machine. Insertion order is the right
+        // answer when the timestamps are equal — the later row is the later
+        // thread, whatever the clock managed to record.
+        .prepare(
+          'SELECT * FROM swarms WHERE archived_at IS NULL ORDER BY updated_at DESC, rowid DESC LIMIT ?',
+        )
+        .all(limit) as SwarmRow[]
+    ).map(toSwarm)
+  );
 }
 
 export function rename(db: Database.Database, id: string, name: string): void {
@@ -196,7 +205,7 @@ export function turnsOf(db: Database.Database, swarmId: string): SwarmTurnRecord
 /** The swarm an automation run created, if it created one. */
 export function bySource(db: Database.Database, source: string): SwarmRecord | undefined {
   const row = db
-    .prepare('SELECT * FROM swarms WHERE source = ? ORDER BY created_at DESC LIMIT 1')
+    .prepare('SELECT * FROM swarms WHERE source = ? ORDER BY created_at DESC, rowid DESC LIMIT 1')
     .get(source) as SwarmRow | undefined;
   return row === undefined ? undefined : toSwarm(row);
 }

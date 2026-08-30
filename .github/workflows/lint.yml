@@ -66,7 +66,16 @@ jobs:
       # Electron needs a real (if virtual) display server on Linux even
       # sandboxed and headless — there is no true headless mode for a
       # BrowserWindow the way there is for a headless browser.
-      - run: xvfb-run --auto-servernum npm run test:e2e --workspace apps/desktop
+      #
+      # The screen is given a size and a colour depth rather than taking
+      # xvfb's defaults, which are small and 8-bit. The canvas tests place five
+      # nodes and drag between their handles: on a cramped screen the fourth
+      # one lands where the drag cannot reach it, and three tests failed here
+      # while passing on every real desktop. A display the size of a laptop's
+      # is what those tests were written against.
+      - run: >-
+          xvfb-run --auto-servernum --server-args="-screen 0 1920x1080x24"
+          npm run test:e2e --workspace apps/desktop
 
       # What Playwright saw when it failed.
       #

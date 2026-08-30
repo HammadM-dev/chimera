@@ -113,3 +113,18 @@ test('deleting a thread takes its turns with it', () => {
     assert.equal(swarms.turnsOf(db, swarm.id).length, 0);
   });
 });
+
+test('threads made in the same millisecond still come back newest first', () => {
+  // The clock is not fine enough to order these on a fast machine, and this
+  // failed on a CI runner while passing everywhere it was written. Ordering by
+  // timestamp alone leaves it to whatever SQLite feels like returning.
+  withDb((db) => {
+    const names = ['First', 'Second', 'Third', 'Fourth'];
+    for (const name of names) swarms.create(db, { name, question: 'q' });
+
+    assert.deepEqual(
+      swarms.list(db).map((row) => row.name),
+      [...names].reverse(),
+    );
+  });
+});
