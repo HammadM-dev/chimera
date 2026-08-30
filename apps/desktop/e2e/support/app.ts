@@ -449,37 +449,35 @@ export async function joinAllInto(
   sourceTestId: string,
   toTestId: string,
 ): Promise<void> {
-  const handles = page.locator(`[data-testid^="${sourceTestId}"] .react-flow__handle-right`);
-  const count = await handles.count();
-
-  const ordered: { index: number; y: number }[] = [];
-  for (let index = 0; index < count; index += 1) {
-    const box = await handles.nth(index).boundingBox();
-    ordered.push({ index, y: box?.y ?? 0 });
-  }
-  ordered.sort((a, b) => a.y - b.y);
+  // Identified by React Flow's own node id rather than by where a handle sits.
+  //
+  // Position was how this worked, and it fails the moment a join moves the
+  // graph: each source was re-found as "the handle nearest the y I remembered",
+  // so once the layout shifted, the fourth of four matched a node already
+  // joined. Joining it again draws no new line, which reads exactly like a drag
+  // that missed — three tests failed on a runner for that reason and passed on
+  // every desktop, where the layout happened not to move.
+  //
+  // `data-id` is on the node wrapper, it is the id React Flow knows the node
+  // by, and it does not change when the node does.
+  const ids = await page.evaluate((testId: string) => {
+    const found: string[] = [];
+    for (const node of Array.from(document.querySelectorAll('.react-flow__node'))) {
+      const id = node.getAttribute('data-id');
+      if (id !== null && node.querySelector(`[data-testid^="${testId}"]`) !== null) found.push(id);
+    }
+    return found;
+  }, sourceTestId);
 
   const target = page.locator(`[data-testid="${toTestId}"] .react-flow__handle-left`);
-  for (const { y } of ordered) {
-    // Re-found by position each time: a join can move what is on the canvas,
-    // and an index captured before the first drag would not survive it.
-    const fresh = page.locator(`[data-testid^="${sourceTestId}"] .react-flow__handle-right`);
-    const total = await fresh.count();
-    let pick = 0;
-    let best = Number.POSITIVE_INFINITY;
-    for (let index = 0; index < total; index += 1) {
-      const box = await fresh.nth(index).boundingBox();
-      const distance = Math.abs((box?.y ?? 0) - y);
-      if (distance < best) {
-        best = distance;
-        pick = index;
-      }
-    }
+
+  for (const id of ids) {
+    const source = page.locator(`.react-flow__node[data-id="${id}"] .react-flow__handle-right`);
     await joinHandles(
       page,
-      () => fresh.nth(pick),
+      () => source,
       () => target,
-      `joining a ${sourceTestId} to ${toTestId}`,
+      `joining ${sourceTestId} ${id} to ${toTestId}`,
     );
   }
 }
