@@ -242,6 +242,59 @@ test('an approval gate waits, and a refusal stops the run', async () => {
   }
 });
 
+test('approving something passes it on rather than replacing it', async () => {
+  // Reported from a real run: a researcher gathered, a summariser wrote it up,
+  // a person approved it, and the writer downstream reported that "the previous
+  // step's output to me was only the literal string 'approved' with no
+  // summariser content provided" — then wrote the file from its own invention,
+  // because its instruction was to copy the text exactly and there was no text.
+  //
+  // The gate recorded the decision and threw away the work.
+  const { db, dir } = open('run-approve-passthrough');
+  const tools = await toolsFor(dir, 'run-approve-passthrough');
+
+  const brief: RunBrief = {
+    name: 'passthrough',
+    instruction: 'draft, approve, use',
+    attachments: [],
+    steps: [
+      agent('draft', 'researcher', 'Draft the message.'),
+      shaping('gate', {
+        type: 'approval',
+        approval: { prompt: 'Send this?', showSource: 'draft' },
+      }),
+      agent('use', 'coder', 'Use it.'),
+    ],
+    edges: [
+      ['draft', 'gate'],
+      ['gate', 'use'],
+    ],
+  };
+
+  try {
+    let shown = '';
+    const outcome = await runAutomation({
+      ...deps(db, 'run-approve-passthrough', brief, tools),
+      requestApproval: (input) => {
+        shown = input.context;
+        return Promise.resolve({ approved: true, note: '' });
+      },
+    });
+
+    const gate = outcome.steps.find((step) => step.nodeId === 'gate');
+    assert.equal(gate?.status, 'succeeded');
+    assert.ok(shown.length > 0, 'the person should have been shown something to approve');
+
+    // The whole point: what the person approved is what travels on.
+    assert.equal(gate?.output, shown);
+    assert.notEqual(gate?.output, 'approved');
+  } finally {
+    await tools.close();
+    db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('an approval nobody can answer is a stop, not a pass', async () => {
   const { db, dir } = open('run-4');
   const tools = await toolsFor(dir, 'run-4');

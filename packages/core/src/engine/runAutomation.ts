@@ -368,9 +368,15 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
 
       const already = deps.resume === true ? priorApproval(db, runId, step.nodeId) : null;
       if (already) {
-        outputs.set(step.nodeId, already.approved ? 'approved' : 'refused');
+        // Resumed, and passing on the same material a live approval would.
+        // Answering this from the journal and handing on "approved" would make
+        // a resumed run quietly lose what the original was carrying.
+        const resumed =
+          approval.showSource === '' ? carried : (outputs.get(approval.showSource) ?? carried);
+        const passedOn = resumed.trim() === '' ? 'approved' : resumed;
+        outputs.set(step.nodeId, already.approved ? passedOn : 'refused');
         return already.approved
-          ? { ...base, status: 'succeeded', haltCause: 'completed', output: 'approved' }
+          ? { ...base, status: 'succeeded', haltCause: 'completed', output: passedOn }
           : {
               ...base,
               status: 'cancelled',
@@ -421,9 +427,23 @@ export async function runAutomation(deps: RunAutomationDeps): Promise<RunOutcome
         },
       });
 
-      outputs.set(step.nodeId, answer.approved ? 'approved' : 'refused');
+      // Approving something passes it on. It does not replace it.
+      //
+      // This used to hand the literal string "approved" to whatever came next,
+      // which destroyed the work of every step before it: a summariser wrote a
+      // document, a person approved it, and the writer downstream was given the
+      // word "approved" and nothing else. It said so — "the previous step's
+      // output to me was only the literal string 'approved'" — and then wrote
+      // the file from its own invention, which is the worst available outcome
+      // for a step whose instruction was to copy the text exactly.
+      //
+      // The decision is not the payload. Whether a person said yes is recorded
+      // in the trace above, where the audit needs it; what travels down the
+      // graph is the material they said yes to.
+      const passed = context.trim() === '' ? 'approved' : context;
+      outputs.set(step.nodeId, answer.approved ? passed : 'refused');
       return answer.approved
-        ? { ...base, status: 'succeeded', haltCause: 'completed', output: 'approved' }
+        ? { ...base, status: 'succeeded', haltCause: 'completed', output: passed }
         : {
             ...base,
             status: 'cancelled',

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createSearchServer, unwrapBing } from './search.ts';
+import { createSearchServer, looksRelevant, unwrapBing } from './search.ts';
+import type { SearchResult } from './search.ts';
 import { connectInProcess } from '../mcpClient.ts';
 
 // No network (CLAUDE.md: "never hit a real API in CI"). The markup below is
@@ -45,7 +46,11 @@ async function search(
 }
 
 test('a result carries its title, its real link, and its snippet', async () => {
-  const { result } = await search(() => respond(BING));
+  // Bing's page answered only at Bing's URL. Answering every engine with it
+  // was fine while Bing was tried first and became a fiction the moment the
+  // order changed: Mojeek's parser reads Bing's markup well enough to produce
+  // a result, so the assertions below were checking the wrong engine.
+  const { result } = await search((url) => respond(url.includes('bing') ? BING : ''));
 
   assert.equal(result.isError, false);
   assert.match(result.text, /Rates for 2026/);
@@ -61,12 +66,12 @@ test('a result carries its title, its real link, and its snippet', async () => {
 test('an engine that answers with nothing is passed over, not reported as an empty web', async () => {
   // What a captcha page looks like from here: HTTP 200, no results in it.
   const { result, calls } = await search((url) =>
-    url.includes('bing') ? respond('<html>Captcha</html>') : respond(MOJEEK),
+    url.includes('mojeek') ? respond(MOJEEK) : respond('<html>Captcha</html>'),
   );
 
   assert.equal(result.isError, false);
   assert.match(result.text, /A real title/);
-  assert.equal(calls.length, 2, 'the second engine should have been tried');
+  assert.ok(calls.length >= 2, 'a later engine should have been tried');
 });
 
 test('when no engine answers, it says so rather than saying there is nothing', async () => {
@@ -181,4 +186,78 @@ test('the built-in search says it is the built-in search', async () => {
     { provider: 'brave', apiKey: 'k' },
   );
   assert.equal(keyed.result.text.includes('not always accurate'), false);
+});
+
+// The results below are verbatim what Bing returned to this scraper for two
+// real queries, reported by a user whose research runs kept coming back empty.
+// Bing answered 200, with the query in the page title, and results for roughly
+// the first word of it. Because that parsed, the engine loop accepted it and
+// never reached DuckDuckGo, which answers the same queries with actual cars.
+const BING_DEGRADED_TOP: SearchResult[] = [
+  {
+    title: "TopCashback Official Site | The UK's #1 Cashback Site",
+    url: 'https://www.topcashback.co.uk/',
+    snippet: 'compare cheap broadband deals and insurance policies',
+  },
+  {
+    title: 'TOP | English meaning - Cambridge Dictionary',
+    url: 'https://dictionary.cambridge.org/dictionary/english/top',
+    snippet: 'TOP definition: 1. the highest place or part',
+  },
+  {
+    title: 'TOPS ONLINE Shop Grocery with Free & Fast Delivery',
+    url: 'https://www.tops.co.th/en',
+    snippet: 'Get max value at Tops Online with partner deals',
+  },
+];
+
+const BING_DEGRADED_FAST: SearchResult[] = [
+  {
+    title: 'Internet Speed Test | Fast.com',
+    url: 'https://fast.com/',
+    snippet: 'two different latency measurements for your Internet connection',
+  },
+  {
+    title: 'Usain Bolt - Wikipedia',
+    url: 'https://en.wikipedia.org/wiki/Usain_Bolt',
+    snippet: 'the only sprinter to win Olympic 100 m and 200 m titles',
+  },
+  {
+    title: '10 of the fastest things ever and how they compare',
+    url: 'https://www.guinnessworldrecords.com/news/',
+    snippet: 'the fastest speed possible is the speed of light in a vacuum',
+  },
+];
+
+const REAL_CARS: SearchResult[] = [
+  {
+    title: 'The Fastest Production Cars in the World',
+    url: 'https://www.caranddriver.com/features/fastest-cars',
+    snippet: 'Bugatti Chiron Super Sport 300+, Koenigsegg Jesko Absolut, SSC Tuatara',
+  },
+];
+
+test('an engine that answers with the wrong subject is not treated as an answer', () => {
+  const q1 = 'top 10 fastest production cars in the world 2025 top speed ranking';
+  const q2 = 'fastest production car top speed 2025 mph Chiron Jesko Valkyrie';
+
+  assert.equal(looksRelevant(q1, BING_DEGRADED_TOP), false);
+  // The one that a looser rule missed: these do contain "speed" and "fastest",
+  // and are still about an internet speed test, a sprinter and the speed of
+  // light. Judged on "production" and "valkyrie" instead, they fail.
+  assert.equal(looksRelevant(q2, BING_DEGRADED_FAST), false);
+
+  assert.equal(looksRelevant(q1, REAL_CARS), true);
+  assert.equal(looksRelevant(q2, REAL_CARS), true);
+});
+
+test('relevance never rejects a short or unusual query', () => {
+  // The guard exists to catch a degraded engine, not to second-guess ranking.
+  assert.equal(looksRelevant('rates', [{ title: 'x', url: 'https://x/', snippet: 'y' }]), true);
+  assert.equal(
+    looksRelevant('best pizza in Rome', [
+      { title: 'The best pizza in Rome', url: 'https://x/', snippet: 'our favourite pizzerias' },
+    ]),
+    true,
+  );
 });

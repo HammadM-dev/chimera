@@ -185,9 +185,11 @@ test('the last step waits for a pin when there is one to give, and never traps',
     await expect(page.getByTestId('tour-waiting')).toBeVisible();
 
     // Pin one, and it unlocks without a refresh.
-    // The catalogue is behind the connection's own toggle, which is where the
-    // step's text sends them: "Open a connection below and press Pin".
-    await page.getByTestId('connection-models').first().click();
+    // Already open, without being asked. The step says "press Pin next to a
+    // model", and every model action lives inside a catalogue — so a collapsed
+    // row left somebody reading an instruction about a button that was nowhere
+    // on their screen, with Finish disabled and nothing to click. Clicking the
+    // toggle here would now close it.
     await expect(page.getByTestId('model-catalogue')).toBeVisible({ timeout: 30_000 });
     await page.getByTestId('model-pin').first().click();
     await expect(page.getByTestId('tour-next')).toBeEnabled({ timeout: 20_000 });

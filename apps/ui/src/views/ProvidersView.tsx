@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { JSX } from 'react';
 import { bridge, type ConnectionSummary } from '../chat/useChimera.ts';
 import { ConnectionForm } from '../connections/ConnectionForm.tsx';
@@ -28,6 +28,13 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
   const [kinds, setKinds] = useState<string[]>([]);
   /** Which connection's catalogue is open. One at a time. */
   const [opened, setOpened] = useState<string | null>(null);
+  /**
+   * Whether the first catalogue has been opened for them already.
+   *
+   * A ref rather than state: this must happen once and never fight the person
+   * who then closes it.
+   */
+  const revealed = useRef(false);
   const [confirming, setConfirming] = useState<ConnectionSummary | null>(null);
 
   const load = useCallback(async () => {
@@ -38,6 +45,20 @@ export function ProvidersView({ refreshToken, onChanged }: Props): JSX.Element {
       }>('connection:list', {});
       setConnections(result.connections);
       setKinds(result.kinds);
+
+      // The first connection's models are shown without being asked for.
+      //
+      // Every model action lives inside a catalogue — pinning especially — and
+      // a collapsed row gives no sign of that. The tour's last step says "open
+      // a connection below and press Pin next to a model", and somebody who
+      // does not spot that the row is a button reads an instruction about a
+      // button that is nowhere on their screen, with Finish disabled and
+      // nothing to click. Opening it is also just what somebody wants after
+      // connecting a provider: to see what they now have.
+      if (!revealed.current && result.connections.length > 0) {
+        revealed.current = true;
+        setOpened((current) => current ?? result.connections[0]?.id ?? null);
+      }
     } catch {
       // Rendered empty rather than taking the view down; the status bar and the
       // chat panel both surface the same failure with a message.

@@ -225,7 +225,70 @@ const DDG_LITE: Engine = {
  * A captcha parses to zero results, which is why "zero results" moves to the
  * next engine instead of being reported as an empty web.
  */
-const ENGINES: readonly Engine[] = [BING, MOJEEK, DDG_LITE];
+/**
+ * Tried in this order, and the order is the whole difference between search
+ * working and not.
+ *
+ * Bing was first. It answers a scraper with HTTP 200, a page whose title is the
+ * query, and results for roughly the first word of it: "top 10 fastest
+ * production cars in the world 2025" returned TopCashback, the Cambridge
+ * Dictionary entry for "top", and a Thai grocery called TOPS. Because that is a
+ * 200 with parseable results, the loop below accepted it and never reached an
+ * engine that would have answered properly — so every research run in the
+ * product was working from junk, and the agents kept saying so.
+ *
+ * DuckDuckGo answers the same query with actual cars. It is first now, Bing is
+ * a fallback rather than the default, and `looksRelevant` below stops any of
+ * them handing back a page that merely parsed.
+ */
+const ENGINES: readonly Engine[] = [DDG_LITE, MOJEEK, BING];
+
+/**
+ * Whether results have anything to do with what was asked.
+ *
+ * An engine that degrades for scrapers does not fail — it succeeds, with the
+ * wrong page. Nothing above this could tell the difference, so the check is
+ * here: at least one result has to mention at least one of the query's
+ * substantial words, or the engine is treated as having failed and the next one
+ * is tried.
+ *
+ * Deliberately a low bar. It is here to catch "the dictionary definition of
+ * 'top'" when the query was about cars, not to judge ranking — a stricter rule
+ * would start discarding good results for narrow queries, which is worse.
+ */
+export function looksRelevant(query: string, results: readonly SearchResult[]): boolean {
+  const words = [
+    ...new Set(
+      query
+        .toLowerCase()
+        .split(/[^a-z0-9]+/)
+        .filter((word) => word.length >= 4),
+    ),
+  ];
+  // Three words before this is willing to judge anything.
+  //
+  // A one-word query cannot be assessed this way: search "rates" and a page
+  // correctly titled "Pricing" mentions the word nowhere, and rejecting it
+  // would throw away a good answer to protect against a bad one. A degraded
+  // engine gives itself away on a long query — the more the person asked for,
+  // the more obvious it is that none of it came back.
+  if (words.length < 3 || results.length === 0) return true;
+
+  // Judged on the longest words rather than any word, because length is a
+  // decent proxy for how distinctive a term is and the common ones are exactly
+  // what a degraded engine matches by accident. "fastest production car top
+  // speed 2025 Chiron Jesko Valkyrie" against Bing's junk matched on "speed"
+  // and "fastest" — an internet speed test and a Guinness page about the speed
+  // of light — while matching nothing on "production" or "valkyrie", which are
+  // the words that say what the question was actually about.
+  const distinctive = [...words].sort((a, b) => b.length - a.length).slice(0, 2);
+
+  const haystack = results
+    .map((result) => `${result.title} ${result.snippet} ${result.url}`.toLowerCase())
+    .join(' ');
+
+  return distinctive.some((word) => haystack.includes(word));
+}
 
 /**
  * A search API the workspace holds a key for.
@@ -454,6 +517,15 @@ export function createSearchServer(options: SearchServerOptions = {}): McpServer
             tried.push(`${engine.id} (HTTP ${String(response.status)})`);
             continue;
           }
+          // 202 is not an answer. DuckDuckGo returns it, with a body and no
+          // results, when it decides a caller is asking too often — and
+          // `response.ok` is true for the whole 2xx range, so it read as a
+          // successful search that happened to find nothing. Named here so the
+          // agent is told it was rate-limited rather than told the web is empty.
+          if (response.status === 202) {
+            tried.push(`${engine.id} (rate limited)`);
+            continue;
+          }
           html = await response.text();
         } catch (err) {
           tried.push(`${engine.id} (${err instanceof Error ? err.message : String(err)})`);
@@ -465,6 +537,14 @@ export function createSearchServer(options: SearchServerOptions = {}): McpServer
           tried.push(`${engine.id} (no results)`);
           continue;
         }
+        if (!looksRelevant(trimmed, results)) {
+          // Parsed, but about something else entirely. Treated as a failure so
+          // the next engine gets a turn, because handing this back is worse
+          // than handing back nothing: an agent given plausible-looking results
+          // about the wrong subject spends its whole budget fetching them.
+          tried.push(`${engine.id} (results unrelated to the query)`);
+          continue;
+        }
         return {
           content: [{ type: 'text' as const, text: render(results, engine.id, trimmed, false) }],
         };
@@ -474,7 +554,22 @@ export function createSearchServer(options: SearchServerOptions = {}): McpServer
         content: [
           {
             type: 'text' as const,
-            text: `No search engine answered: ${tried.join(', ')}. Try a different wording, or work from what you already have and say that search was unavailable.`,
+            text:
+              `No search engine answered: ${tried.join(', ')}.\n\n` +
+              // Said plainly, because the agent's next move depends on which
+              // of these it is. Rate limiting passes on its own and is worth
+              // one retry; the free engines being unusable is not something a
+              // different wording fixes, and an agent that keeps rephrasing
+              // spends its whole budget discovering that.
+              'The built-in search reads public engines without an account, and they rate-limit ' +
+              'and degrade under repeated use. This is a limit of the search, not of the ' +
+              'question.\n\n' +
+              'Do not keep rewording the query — try once more if it was rate limited, then work ' +
+              'from what you already have and say plainly that search was unavailable. If a page ' +
+              'you already know the address of would answer it, fetch that directly with ' +
+              'http.request.\n\n' +
+              'For research that has to work every time, add a search key in Providers → Search ' +
+              '(Brave has a free tier); keyed search is tried first and does not rate-limit like this.',
           },
         ],
         isError: true as const,
