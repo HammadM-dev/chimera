@@ -22,7 +22,7 @@
     "@chimera/providers": "*",
     "@chimera/store": "*",
     "@types/nodemailer": "^8.0.1",
-    "electron": "43.3.0",
+    "electron": "43.5.0",
     "zod": "^4.4.3"
   },
   "dependencies": {
