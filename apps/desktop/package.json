@@ -32,7 +32,7 @@
     "better-sqlite3": "^13.0.3",
     "electron-updater": "^6.8.9",
     "imapflow": "^1.7.1",
-    "nodemailer": "^9.0.5",
+    "nodemailer": "^10.0.9",
     "playwright": "^1.62.1"
   }
 }
