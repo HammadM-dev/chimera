@@ -23,7 +23,7 @@
     "@chimera/store": "*",
     "@types/nodemailer": "^8.0.1",
     "electron": "43.3.0",
-    "zod": "^4.4.3"
+    "zod": "^4.6.7"
   },
   "dependencies": {
     "@chimera/core": "*",
